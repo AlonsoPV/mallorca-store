@@ -1,0 +1,994 @@
+==================================================
+MÓDULO MULTI-SUCURSAL + INVENTARIO + RESPONSABLES
+==================================================
+
+Quiero que la tienda funcione con una lógica REAL de múltiples sucursales.
+
+Cada sucursal debe tener:
+- sus propios productos disponibles
+- su propio inventario
+- sus propios pedidos
+- su propio contacto responsable
+- sus propias alertas
+- su propia operación
+
+El sistema debe permitir administrar todo esto desde el panel Admin.
+
+==================================================
+1. PRODUCTOS — CARGA INDIVIDUAL
+==================================================
+
+Debe existir:
+
+Admin
+→ Productos
+→ Nuevo producto
+
+Al crear un producto individualmente permitir definir:
+
+- nombre
+- SKU
+- categoría
+- descripción
+- precio
+- variantes
+- imágenes
+- ingredientes
+- alérgenos
+- conservación
+- estado
+- destacado
+- temporada
+
+Y después asignarlo a una o varias sucursales.
+
+Ejemplo:
+
+Panettone Tradicional
+
+Disponible en:
+
+☑ Mallorca Reforma
+☑ Mallorca Lomas
+
+Para cada sucursal permitir configurar:
+
+Mallorca Reforma
+- activo/inactivo
+- precio local opcional
+- inventario
+- stock mínimo
+- pickup
+- delivery
+- tiempo de preparación
+
+Mallorca Lomas
+- activo/inactivo
+- precio local opcional
+- inventario
+- stock mínimo
+- pickup
+- delivery
+- tiempo de preparación
+
+NO duplicar el producto.
+
+Debe existir un solo producto maestro y una relación por sucursal.
+
+==================================================
+2. PRODUCTOS — CARGA MASIVA
+==================================================
+
+Debe existir:
+
+Admin
+→ Productos
+→ Importar
+
+Permitir subir:
+
+CSV
+y preferentemente XLSX.
+
+Debe permitir crear o actualizar productos masivamente.
+
+Campos sugeridos:
+
+sku
+name
+category
+description
+price
+branch_reforma_enabled
+branch_reforma_stock
+branch_reforma_min_stock
+branch_lomas_enabled
+branch_lomas_stock
+branch_lomas_min_stock
+image_url
+
+Ejemplo:
+
+PAN001
+Panettone Tradicional
+Panadería
+...
+750
+TRUE
+10
+3
+TRUE
+6
+2
+
+El importador debe:
+
+1. Validar archivo.
+2. Mostrar preview.
+3. Detectar errores.
+4. Detectar SKU duplicado.
+5. Permitir actualizar productos existentes por SKU.
+6. Mostrar filas correctas / incorrectas.
+7. Confirmar antes de importar.
+8. Generar resumen final.
+
+Ejemplo:
+
+48 productos procesados
+45 correctos
+3 con errores
+
+NO importar silenciosamente datos incorrectos.
+
+==================================================
+3. RESPONSABLE POR SUCURSAL
+==================================================
+
+Cada sucursal debe tener un responsable operativo configurable.
+
+Entidad Branch:
+
+- manager_name
+- manager_email
+- manager_phone
+- manager_whatsapp
+- notification_preferences
+
+Ejemplo:
+
+Mallorca Reforma
+
+Encargado:
+María Pérez
+
+Correo:
+maria@mallorca.mx
+
+WhatsApp:
+55...
+
+Mallorca Lomas
+
+Encargado:
+Carlos...
+
+Esto debe poder editarse desde:
+
+Admin
+→ Sucursales
+→ Editar sucursal
+
+==================================================
+4. RESPONSABLE POR PRODUCTO OPCIONAL
+==================================================
+
+Además del encargado general de sucursal, permitir opcionalmente definir responsable específico por producto o categoría.
+
+Ejemplo:
+
+Panadería → responsable producción
+
+Pasteles → responsable pastelería
+
+Si no existe responsable específico:
+usar encargado general de la sucursal.
+
+Jerarquía de notificación:
+
+1. responsable de producto/categoría si existe
+2. encargado de sucursal
+3. admin general como fallback
+
+==================================================
+5. INVENTARIO POR SUCURSAL
+==================================================
+
+Inventario debe ser independiente.
+
+Ejemplo:
+
+Panettone Tradicional
+
+Reforma:
+8 piezas
+
+Lomas:
+3 piezas
+
+Una venta en Reforma NO debe afectar inventario de Lomas.
+
+Una venta en Lomas NO debe afectar Reforma.
+
+Modelo recomendado:
+
+products
+
+branches
+
+branch_products
+
+branch_products:
+- product_id
+- branch_id
+- active
+- stock
+- min_stock
+- reserved_stock
+- price_override
+- pickup_available
+- delivery_available
+
+==================================================
+6. DESCUENTO DE INVENTARIO
+==================================================
+
+Cuando un pedido se confirma:
+
+restar inventario SOLO de la sucursal seleccionada.
+
+Ejemplo:
+
+Pedido:
+Mallorca Reforma
+
+2 × Panettone
+
+Reforma:
+10 → 8
+
+Lomas:
+6 → 6
+
+No tocar otras sucursales.
+
+==================================================
+7. RESERVA TEMPORAL DE INVENTARIO
+==================================================
+
+Durante checkout evitar overselling.
+
+Cuando el cliente entra en proceso de pago:
+
+reservar temporalmente inventario.
+
+Ejemplo:
+
+stock:
+5
+
+reserved:
+2
+
+available:
+3
+
+Si pago falla o expira:
+liberar reserva.
+
+Si pago se confirma:
+convertir reserva en consumo real.
+
+==================================================
+8. ALERTA DE STOCK BAJO
+==================================================
+
+Cada producto por sucursal debe tener:
+
+min_stock
+
+Ejemplo:
+
+Panettone Reforma:
+
+stock:
+5
+
+min_stock:
+3
+
+Cuando stock <= 3:
+
+generar alerta.
+
+Tipos:
+
+LOW STOCK
+
+Cuando stock = 0:
+
+OUT OF STOCK
+
+==================================================
+9. NOTIFICACIÓN AUTOMÁTICA
+==================================================
+
+Cuando un producto llegue a stock mínimo o se agote:
+
+notificar automáticamente al encargado correspondiente.
+
+Ejemplo:
+
+Mallorca Reforma
+
+"Stock bajo: Panettone Tradicional"
+
+Stock actual:
+2
+
+Stock mínimo:
+3
+
+SKU:
+PAN001
+
+Sucursal:
+Mallorca Reforma
+
+==================================================
+10. CANALES DE NOTIFICACIÓN
+==================================================
+
+Fase 1:
+
+Email
+
+Preparar arquitectura para:
+
+WhatsApp
+push interno
+SMS opcional
+
+Permitir configurar:
+
+☑ Email
+☑ WhatsApp
+
+por sucursal.
+
+No hardcodear canal.
+
+==================================================
+11. EVITAR NOTIFICACIONES REPETIDAS
+==================================================
+
+No mandar una notificación por cada venta una vez ya existe stock bajo.
+
+Crear lógica de estado.
+
+Ejemplo:
+
+NORMAL
+→ LOW_STOCK
+→ OUT_OF_STOCK
+
+Notificar sólo cuando cambia de estado.
+
+Si stock vuelve arriba del mínimo:
+
+LOW_STOCK
+→ NORMAL
+
+y queda habilitado para alertar otra vez en el futuro.
+
+==================================================
+12. HISTORIAL DE ALERTAS
+==================================================
+
+Admin
+→ Alertas
+
+Mostrar:
+
+Fecha
+Producto
+SKU
+Sucursal
+Stock
+Tipo
+Responsable
+Estado
+
+Ejemplo:
+
+11 Sep 2026
+Panettone Tradicional
+PAN001
+Reforma
+2
+Stock bajo
+María Pérez
+Enviada
+
+==================================================
+13. VISTA ADMIN — PRODUCTOS POR SUCURSAL
+==================================================
+
+Debe existir:
+
+Admin
+→ Inventario
+
+con filtros:
+
+Sucursal:
+[ Todas ]
+[ Reforma ]
+[ Lomas ]
+
+Estado:
+[ Todos ]
+[ Disponible ]
+[ Stock bajo ]
+[ Agotado ]
+
+Categoría
+
+Buscar
+
+Tabla:
+
+Producto
+SKU
+Sucursal
+Stock
+Stock mínimo
+Reservado
+Disponible
+Estado
+Acciones
+
+Ejemplo:
+
+Panettone
+PAN001
+Reforma
+3
+5
+1
+2
+STOCK BAJO
+
+==================================================
+14. VISTA MATRIZ
+==================================================
+
+También crear una vista útil tipo matriz:
+
+Producto            Reforma       Lomas
+------------------------------------------------
+Panettone            8             3
+Croissant            12            9
+Tarta Santiago       Agotado       4
+
+Permitir editar stock rápido desde aquí.
+
+Muy importante para operación diaria.
+
+==================================================
+15. EDICIÓN RÁPIDA DE STOCK
+==================================================
+
+Desde Inventario:
+
+permitir:
+
++ aumentar
+- disminuir
+editar directo
+
+Ejemplo:
+
+Panettone / Reforma
+
+[ - ] 8 [ + ]
+
+o
+
+[Editar]
+
+Registrar quién hizo el ajuste.
+
+==================================================
+16. HISTORIAL DE MOVIMIENTOS
+==================================================
+
+Crear stock_movements.
+
+Campos:
+
+- id
+- product_id
+- branch_id
+- type
+- quantity
+- previous_stock
+- new_stock
+- reference
+- order_id opcional
+- user_id
+- created_at
+
+Tipos:
+
+sale
+manual_adjustment
+restock
+refund
+cancellation
+import
+correction
+
+==================================================
+17. PEDIDOS POR SUCURSAL
+==================================================
+
+Admin
+→ Pedidos
+
+Permitir filtrar por:
+
+Sucursal
+
+Ejemplo:
+
+[ Todas ]
+[ Reforma ]
+[ Lomas ]
+
+Estados:
+
+Pending
+Paid
+Preparing
+Ready
+Out for delivery
+Delivered
+Cancelled
+
+Tabla:
+
+Pedido
+Cliente
+Sucursal
+Método
+Fecha
+Hora
+Total
+Estado
+
+==================================================
+18. DASHBOARD POR SUCURSAL
+==================================================
+
+Admin principal debe poder ver:
+
+Ventas hoy
+Pedidos hoy
+Ticket promedio
+Stock bajo
+Agotados
+
+con selector:
+
+Sucursal:
+Todas / Reforma / Lomas
+
+==================================================
+19. DASHBOARD DEL ENCARGADO
+==================================================
+
+Si entra un manager de sucursal:
+
+SOLO debe ver su sucursal.
+
+Ejemplo:
+
+María → Reforma
+
+Puede ver:
+
+- pedidos Reforma
+- inventario Reforma
+- alertas Reforma
+- productos Reforma
+
+NO debe poder editar Lomas.
+
+==================================================
+20. ROLES
+==================================================
+
+Crear roles:
+
+admin
+operations_manager
+branch_manager
+staff
+
+Admin:
+todo
+
+Operations manager:
+todas las sucursales operativamente
+
+Branch manager:
+sólo su sucursal
+
+Staff:
+pedidos e inventario según permisos
+
+==================================================
+21. PERMISOS
+==================================================
+
+Aplicar permisos también en backend.
+
+NO sólo ocultar botones.
+
+Ejemplo:
+
+branch_manager de Reforma:
+
+NO puede consultar API de inventario Lomas.
+
+Debe existir control de acceso real.
+
+==================================================
+22. PRODUCTO AGOTADO EN UNA SUCURSAL
+==================================================
+
+Si:
+
+Reforma stock = 0
+
+Lomas stock = 5
+
+Frontend debe mostrar:
+
+Mallorca Reforma:
+Agotado
+
+Mallorca Lomas:
+Disponible
+
+NO marcar producto globalmente como agotado.
+
+==================================================
+23. CAMBIO DE SUCURSAL EN FRONTEND
+==================================================
+
+Si usuario cambia sucursal:
+
+actualizar disponibilidad.
+
+Ejemplo:
+
+Tu Mallorca:
+Reforma
+
+Panettone:
+Agotado
+
+Cambiar a:
+Lomas
+
+Panettone:
+Disponible
+
+==================================================
+24. PEDIDO SIEMPRE ASOCIADO A SUCURSAL
+==================================================
+
+Todo pedido debe tener:
+
+branch_id
+
+obligatorio.
+
+No permitir pedido sin sucursal.
+
+Esto aplica tanto a:
+
+pickup
+delivery
+
+==================================================
+25. PICKUP
+==================================================
+
+Pickup siempre debe mostrar:
+
+Sucursal
+Dirección
+Fecha
+Hora
+
+Pedido queda asignado automáticamente a esa sucursal.
+
+==================================================
+26. DELIVERY
+==================================================
+
+Delivery debe asignarse a una sucursal válida según lógica geográfica.
+
+Una vez asignada:
+
+todos los productos del carrito deben tener disponibilidad en esa sucursal.
+
+Si no:
+
+mostrar mensaje claro.
+
+==================================================
+27. NO MEZCLAR SUCURSALES
+==================================================
+
+Para MVP:
+
+un pedido sólo puede pertenecer a UNA sucursal.
+
+No permitir:
+
+Producto A de Reforma
++
+Producto B de Lomas
+
+en el mismo checkout.
+
+Si usuario cambia sucursal:
+
+avisar.
+
+==================================================
+28. ADMIN — PÁGINA SUCURSAL
+==================================================
+
+Admin
+→ Sucursales
+→ Reforma
+
+Tabs:
+
+GENERAL
+CONTACTO
+HORARIOS
+PRODUCTOS
+INVENTARIO
+PEDIDOS
+ALERTAS
+CONFIGURACIÓN
+
+==================================================
+29. SUCURSAL — PRODUCTOS
+==================================================
+
+Dentro de:
+
+Reforma
+→ Productos
+
+mostrar:
+
+Producto
+SKU
+Precio
+Stock
+Estado
+Pickup
+Delivery
+
+Permitir activar/desactivar productos.
+
+==================================================
+30. SUCURSAL — PEDIDOS
+==================================================
+
+Dentro de:
+
+Reforma
+→ Pedidos
+
+mostrar sólo pedidos de Reforma.
+
+Filtros por:
+
+fecha
+estado
+pickup/delivery
+
+==================================================
+31. NOTIFICACIONES INTERNAS
+==================================================
+
+Además de email:
+
+crear centro de notificaciones en Admin.
+
+Icono campana.
+
+Ejemplo:
+
+3 alertas
+
+- Panettone Reforma stock bajo
+- Croissant Lomas agotado
+- Pedido #142 listo
+
+==================================================
+32. IMPORTACIÓN MASIVA POR SUCURSAL
+==================================================
+
+Permitir que CSV también pueda actualizar inventario.
+
+Ejemplo:
+
+sku,branch,stock
+
+PAN001,REFORMA,12
+PAN001,LOMAS,6
+
+Esto permite al equipo actualizar rápidamente stock.
+
+==================================================
+33. SEGURIDAD DE IMPORTACIÓN
+==================================================
+
+No permitir nombres ambiguos de sucursal.
+
+Usar:
+
+branch_code
+
+Ejemplo:
+
+REF
+LOM
+
+CSV:
+
+sku,branch_code,stock
+
+PAN001,REF,12
+PAN001,LOM,6
+
+==================================================
+34. CÓDIGOS DE SUCURSAL
+==================================================
+
+Cada sucursal debe tener código único.
+
+Mallorca Reforma:
+REF
+
+Mallorca Lomas:
+LOM
+
+Usarlo internamente para:
+
+imports
+reportes
+integraciones
+
+==================================================
+35. REPORTES
+==================================================
+
+Admin debe poder comparar:
+
+Ventas por sucursal
+
+Pedidos por sucursal
+
+Productos vendidos
+
+Stock
+
+Agotados
+
+Ejemplo:
+
+Reforma
+Ventas mes: $xxx
+
+Lomas
+Ventas mes: $xxx
+
+==================================================
+36. ARQUITECTURA
+==================================================
+
+NO guardar stock directamente en products.
+
+Stock debe vivir por sucursal.
+
+Modelo:
+
+products
+branches
+branch_products
+stock_movements
+orders
+order_items
+notifications
+users
+branch_users
+
+Esto es obligatorio para que el sistema escale correctamente.
+
+==================================================
+37. CRITERIO FINAL
+==================================================
+
+La operación debe permitir contestar fácilmente:
+
+¿Qué productos tiene Reforma?
+
+¿Cuánto stock tiene cada uno?
+
+¿Qué productos tiene Lomas?
+
+¿Cuáles están por agotarse?
+
+¿Quién es responsable?
+
+¿Qué pedidos tiene cada sucursal?
+
+¿Qué alertas existen?
+
+¿Qué sucursal vendió cada producto?
+
+Todo esto debe poder verse desde Admin sin entrar a base de datos.
+
+==================================================
+38. IMPLEMENTACIÓN
+==================================================
+
+Antes de implementar:
+
+1. Revisa arquitectura actual.
+2. Identifica modelo de productos.
+3. Identifica modelo de sucursales.
+4. Identifica inventario actual.
+5. Identifica pedidos.
+6. Propón migración de DB si es necesaria.
+
+Después implementa sin romper:
+
+- ecommerce
+- carrito
+- checkout
+- pagos
+- auth
+- pickup
+- delivery
+
+Agregar pruebas para:
+
+- inventario independiente
+- decremento correcto
+- stock bajo
+- agotado
+- alertas
+- permisos por sucursal
+- importación masiva
+- pedidos por sucursal
