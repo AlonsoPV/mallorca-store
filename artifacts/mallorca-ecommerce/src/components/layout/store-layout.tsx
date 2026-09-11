@@ -126,18 +126,18 @@ export function StoreLayout({ children }: { children: ReactNode }) {
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-b border-border bg-background px-5 py-4 flex flex-col gap-2 animate-in slide-in-from-top-2">
-            <Link href="/tienda" className="block py-2 text-lg font-serif border-b border-border" onClick={toggleMenu}>
+          <div className="md:hidden flex flex-col gap-2 border-b border-border bg-background px-5 py-4 text-foreground animate-in slide-in-from-top-2">
+            <Link href="/tienda" className="block border-b border-border py-2 text-lg font-serif text-foreground transition-colors hover:text-primary" onClick={toggleMenu}>
               Descubre la pastelería
             </Link>
-            <Link href="/sucursales" className="block py-2 text-lg font-serif border-b border-border" onClick={toggleMenu}>
+            <Link href="/sucursales" className="block border-b border-border py-2 text-lg font-serif text-foreground transition-colors hover:text-primary" onClick={toggleMenu}>
               Sucursales
             </Link>
-            <Link href={isSignedIn ? "/cuenta" : "/sign-in"} className="block py-2 text-lg font-serif border-b border-border" onClick={toggleMenu}>
+            <Link href={isSignedIn ? "/cuenta" : "/sign-in"} className="block border-b border-border py-2 text-lg font-serif text-foreground transition-colors hover:text-primary" onClick={toggleMenu}>
               Mi Cuenta
             </Link>
             {isAdmin && (
-              <Link href="/admin" className="block py-2 text-lg font-serif" onClick={toggleMenu}>
+              <Link href="/admin" className="block py-2 text-lg font-serif text-foreground transition-colors hover:text-primary" onClick={toggleMenu}>
                 Administración
               </Link>
             )}
@@ -145,7 +145,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
         )}
 
         {isSearchOpen && (
-          <div className="absolute inset-x-0 top-full border-b border-border bg-[var(--mallorca-ivory)] px-5 py-8 shadow-lg animate-in slide-in-from-top-2">
+          <div className="absolute inset-x-0 top-full border-b border-border bg-[var(--mallorca-ivory)] px-5 py-8 text-foreground shadow-lg animate-in slide-in-from-top-2">
             <form onSubmit={submitSearch} className="container mx-auto max-w-4xl">
               <div className="mb-5 flex items-center justify-between">
                 <span className="mallorca-kicker text-primary">Buscar en Mallorca</span>
