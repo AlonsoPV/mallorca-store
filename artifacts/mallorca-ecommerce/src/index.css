@@ -296,3 +296,105 @@
     inset: -1px;
   }
 }
+
+/* Mallorca editorial storefront */
+:root {
+  --mallorca-cream: #f6f0e6;
+  --mallorca-ivory: #fffdf8;
+  --mallorca-burgundy: #6f1d2f;
+  --mallorca-cherry: #a83f4f;
+  --mallorca-butter: #e8c875;
+  --mallorca-cacao: #271a18;
+  --mallorca-olive: #7d8360;
+  --mallorca-ink: #211815;
+}
+
+::selection {
+  background: var(--mallorca-burgundy);
+  color: var(--mallorca-ivory);
+}
+
+.mallorca-display {
+  font-family: var(--app-font-serif);
+  letter-spacing: -0.045em;
+}
+
+.mallorca-kicker {
+  font-family: var(--app-font-sans);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.editorial-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.editorial-link::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -0.28rem;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0.25);
+  transform-origin: left;
+  transition: transform 220ms ease;
+}
+
+.editorial-link:hover::after,
+.editorial-link:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.mallorca-reveal {
+  animation: mallorca-reveal 700ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+.mallorca-reveal-delay {
+  animation-delay: 120ms;
+}
+
+.mallorca-reveal-delay-2 {
+  animation-delay: 240ms;
+}
+
+.mallorca-float {
+  animation: mallorca-float 7s ease-in-out infinite;
+}
+
+.mallorca-dotted-rule {
+  background-image: radial-gradient(circle, currentColor 1px, transparent 1.2px);
+  background-position: left center;
+  background-size: 7px 1px;
+}
+
+.mallorca-paper-edge {
+  clip-path: polygon(0 2%, 98% 0, 100% 97%, 2% 100%);
+}
+
+@keyframes mallorca-reveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes mallorca-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(0.5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mallorca-reveal,
+  .mallorca-float {
+    animation: none;
+  }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
