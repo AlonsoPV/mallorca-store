@@ -225,26 +225,26 @@ export function StoreLayout({ children }: { children: ReactNode }) {
       </main>
 
       <footer className="mt-auto bg-black text-white">
-        <div className="mx-auto max-w-[1180px] px-6 pb-7 pt-12 sm:px-8 md:px-10 md:pt-14">
-          <div className="grid gap-10 md:grid-cols-[1.05fr_1.05fr_1.55fr_1.55fr] md:gap-8 lg:gap-12">
-            <div className="flex flex-col items-start">
+        <div className="mx-auto max-w-[1180px] px-5 pb-6 pt-10 sm:px-8 sm:py-12 md:px-10 md:py-14">
+          <div className="grid gap-9 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-10 md:grid-cols-[1.05fr_1.05fr_1.55fr_1.55fr] md:gap-8 lg:gap-12">
+            <div className="flex flex-col items-center text-center sm:col-span-2 md:col-span-1 md:items-start md:text-left">
               <Link href="/" aria-label="Pastelería Mallorca" className="inline-flex items-center">
-                <img src={footerLogo} alt="Mallorca Pastelería" className="h-auto w-[180px] max-w-full object-contain" />
+                <img src={footerLogo} alt="Mallorca Pastelería" className="h-auto w-[170px] max-w-full object-contain md:w-[180px]" />
               </Link>
               <a
                 href="https://www.tripadvisor.com.mx/Restaurant_Review-g150800-d11706469-Reviews-Pasteleria_Mallorca-Mexico_City_Central_Mexico_and_Gulf_Coast.html"
                 target="_blank"
                 rel="noreferrer"
-                className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/80 px-5 py-2 text-[11px] font-medium tracking-[0.02em] text-white transition-colors hover:border-[var(--mallorca-red)] hover:text-[var(--mallorca-red)]"
+                className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/80 px-4 py-2 text-[11px] font-medium tracking-[0.02em] text-white transition-colors hover:border-[var(--mallorca-red)] hover:text-[var(--mallorca-red)] sm:px-5"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
                 Déjanos tus comentarios
               </a>
             </div>
 
-            <div>
+            <div className="sm:col-span-2 md:col-span-1">
               <h2 className="mb-4 text-[15px] font-semibold">Conoce más</h2>
-              <ul className="space-y-2.5 text-[13px] leading-snug text-white/90">
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px] leading-snug text-white/90 sm:grid-cols-3 sm:gap-x-8 md:block md:space-y-2.5">
                 <li>
                   <a href="https://www.instagram.com/mallorcamx/?hl=es" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 transition-colors hover:text-[var(--mallorca-red)]">
                     <Instagram className="h-4 w-4" /> Instagram
@@ -278,9 +278,9 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               </ul>
             </div>
 
-            <div>
+            <div className="sm:col-span-1">
               <h2 className="mb-4 text-[15px] font-semibold">Mallorca Lomas</h2>
-              <div className="space-y-3 text-[13px] leading-relaxed text-white/90">
+              <div className="space-y-3 text-[12px] leading-relaxed text-white/90 sm:text-[13px]">
                 <a href="tel:+525591317108" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
                   <Phone className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>55 9131 7108</span>
@@ -296,9 +296,9 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
 
-            <div>
+            <div className="sm:col-span-1">
               <h2 className="mb-4 text-[15px] font-semibold">Mallorca Reforma</h2>
-              <div className="space-y-3 text-[13px] leading-relaxed text-white/90">
+              <div className="space-y-3 text-[12px] leading-relaxed text-white/90 sm:text-[13px]">
                 <a href="tel:+525512685557" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
                   <Phone className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>55 1268 5557</span>
@@ -315,10 +315,10 @@ export function StoreLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <div className="mt-10 flex items-center gap-4 border-t border-white/70 pt-3 text-[10px] text-white/35 md:mt-9">
+          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/45 pt-3 text-[10px] text-white/55 md:mt-9">
             <span>Aviso de Privacidad</span>
             <span>Términos y condiciones</span>
-            <span className="ml-auto hidden items-center gap-2 md:flex">
+            <span className="ml-auto flex items-center gap-2">
               <Info className="h-5 w-5 rounded-full bg-[var(--mallorca-red)] p-0.5 text-white" />
               <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Volver arriba" className="text-white transition-colors hover:text-[var(--mallorca-red)]">
                 <ChevronUp className="h-4 w-4" />
