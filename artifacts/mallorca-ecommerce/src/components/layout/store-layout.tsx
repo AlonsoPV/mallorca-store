@@ -1,12 +1,13 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { ShoppingBag, Menu, X, User, Search, MapPin, ArrowUpRight } from "lucide-react";
+import { ShoppingBag, Menu, X, User, Search, MapPin, ArrowUpRight, Instagram, Linkedin, Phone, Mail, MessageCircle, BriefcaseBusiness, FileText, Globe2, ChevronUp, Info } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
-import { useGetCart, useGetMe, useListBranches, getGetCartQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
+import { useGetCart, useGetMe, getGetCartQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/react";
+import footerLogo from "@assets/MallorcaFooter_1789166205501.webp";
 
 export function StoreLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -20,8 +21,6 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   
   const { cartId } = useCart();
   const { data: cart } = useGetCart(cartId!, { query: { enabled: !!cartId, queryKey: getGetCartQueryKey(cartId!) } });
-  const { data: branches } = useListBranches();
-
   const toggleMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const isAdmin = !!user && ["staff", "branch_manager", "operations_manager", "operations", "manager", "admin"].includes(user.role);
@@ -225,36 +224,107 @@ export function StoreLayout({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      <footer className="bg-foreground text-background py-16 mt-auto">
-        <div className="container mx-auto px-4 md:px-6 grid grid-cols-1 md:grid-cols-4 gap-10">
-          <div className="md:col-span-2">
-            <Link href="/" className="font-serif text-3xl font-bold tracking-tight mb-4 inline-block">
-              MALLORCA
-            </Link>
-            <p className="text-background/70 max-w-sm font-sans mt-4 text-sm leading-relaxed">
-              Mallorca, de Madrid a México. Pastelería, panadería y sobremesa en Ciudad de México desde 2016.
-            </p>
+      <footer className="mt-auto bg-black text-white">
+        <div className="mx-auto max-w-[1180px] px-6 pb-7 pt-12 sm:px-8 md:px-10 md:pt-14">
+          <div className="grid gap-10 md:grid-cols-[1.05fr_1.05fr_1.55fr_1.55fr] md:gap-8 lg:gap-12">
+            <div className="flex flex-col items-start">
+              <Link href="/" aria-label="Pastelería Mallorca" className="inline-flex items-center">
+                <img src={footerLogo} alt="Mallorca Pastelería" className="h-auto w-[180px] max-w-full object-contain" />
+              </Link>
+              <a
+                href="https://www.tripadvisor.com.mx/Restaurant_Review-g150800-d11706469-Reviews-Pasteleria_Mallorca-Mexico_City_Central_Mexico_and_Gulf_Coast.html"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/80 px-5 py-2 text-[11px] font-medium tracking-[0.02em] text-white transition-colors hover:border-[var(--mallorca-red)] hover:text-[var(--mallorca-red)]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Déjanos tus comentarios
+              </a>
+            </div>
+
+            <div>
+              <h2 className="mb-4 text-[15px] font-semibold">Conoce más</h2>
+              <ul className="space-y-2.5 text-[13px] leading-snug text-white/90">
+                <li>
+                  <a href="https://www.instagram.com/mallorcamx/?hl=es" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                    <Instagram className="h-4 w-4" /> Instagram
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.linkedin.com/company/55180564/admin/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                    <Linkedin className="h-4 w-4" /> LinkedIn
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.tripadvisor.com.mx/Restaurant_Review-g150800-d11706469-Reviews-Pasteleria_Mallorca-Mexico_City_Central_Mexico_and_Gulf_Coast.html" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                    <MessageCircle className="h-4 w-4" /> Trip Advisor
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.pasteleria-mallorca.com/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                    <Globe2 className="h-4 w-4" /> Mallorca España
+                  </a>
+                </li>
+                <li>
+                  <a href="https://xetux-e.com/facturacion/webFact" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                    <FileText className="h-4 w-4" /> Factura
+                  </a>
+                </li>
+                <li>
+                  <a href="https://pasteleria-mallorca.mx/bolsa-de-trabajo" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                    <BriefcaseBusiness className="h-4 w-4" /> Bolsa de trabajo
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h2 className="mb-4 text-[15px] font-semibold">Mallorca Lomas</h2>
+              <div className="space-y-3 text-[13px] leading-relaxed text-white/90">
+                <a href="tel:+525591317108" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>55 9131 7108</span>
+                </a>
+                <a href="mailto:explanada@pasteleria-mallorca.mx" className="flex items-start gap-3 break-all transition-colors hover:text-[var(--mallorca-red)]">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>explanada@pasteleria-mallorca.mx</span>
+                </a>
+                <a href="https://www.google.com.mx/maps/place/Av.+Explanada+710,+Lomas+-+Virreyes,+Lomas+de+Chapultepec+IV+Secc,+Miguel+Hidalgo,+11000+Ciudad+de+M%C3%A9xico,+CDMX/@19.4208159,-99.2133058,17z/data=!3m1!4b1!4m5!3m4!1s0x85d201f326971107:0x100907e0f999f89c!8m2!3d19.4208109!4d-99.2111171" target="_blank" rel="noreferrer" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Av. Explanada 710, Lomas - Virreyes, Lomas de Chapultepec IV Secc, Miguel Hidalgo, 11000</span>
+                </a>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="mb-4 text-[15px] font-semibold">Mallorca Reforma</h2>
+              <div className="space-y-3 text-[13px] leading-relaxed text-white/90">
+                <a href="tel:+525512685557" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>55 1268 5557</span>
+                </a>
+                <a href="mailto:reforma@pasteleria-mallorca.mx" className="flex items-start gap-3 break-all transition-colors hover:text-[var(--mallorca-red)]">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>reforma@pasteleria-mallorca.mx</span>
+                </a>
+                <a href="https://www.google.com.mx/maps/search/Av.+Paseo+de+la+Reforma+365,+Cuauht%C3%A9moc,+06500,+Ciudad+de+M%C3%A9xico" target="_blank" rel="noreferrer" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Av. Paseo de la Reforma 365, Cuauhtémoc, 06500</span>
+                </a>
+              </div>
+            </div>
           </div>
-          <div>
-            <h4 className="font-serif text-lg mb-4">Navegación</h4>
-            <ul className="space-y-3 text-sm text-background/70">
-              <li><Link href="/tienda" className="hover:text-white transition-colors">Pastelería</Link></li>
-              <li><Link href="/sucursales" className="hover:text-white transition-colors">Sucursales</Link></li>
-              <li><Link href="/nosotros" className="hover:text-white transition-colors">Nuestra Historia</Link></li>
-            </ul>
+
+          <div className="mt-10 flex items-center gap-4 border-t border-white/70 pt-3 text-[10px] text-white/35 md:mt-9">
+            <span>Aviso de Privacidad</span>
+            <span>Términos y condiciones</span>
+            <span className="ml-auto hidden items-center gap-2 md:flex">
+              <Info className="h-5 w-5 rounded-full bg-[var(--mallorca-red)] p-0.5 text-white" />
+              <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Volver arriba" className="text-white transition-colors hover:text-[var(--mallorca-red)]">
+                <ChevronUp className="h-4 w-4" />
+              </button>
+            </span>
           </div>
-          <div>
-            <h4 className="font-serif text-lg mb-4">Nuestras casas</h4>
-            <ul className="space-y-3 text-sm text-background/70">
-              {branches?.slice(0, 2).map((branch) => (
-                <li key={branch.id}><Link href={`/sucursales/${branch.slug}`} className="hover:text-white transition-colors">{branch.name}</Link></li>
-              ))}
-              {!branches?.length && <li>Ciudad de México</li>}
-            </ul>
-          </div>
-        </div>
-        <div className="container mx-auto px-4 md:px-6 mt-16 pt-8 border-t border-background/10 text-xs text-background/50 flex flex-col md:flex-row justify-between items-center">
-          <p>&copy; {new Date().getFullYear()} Pastelería Mallorca México. Todos los derechos reservados.</p>
         </div>
       </footer>
     </div>
