@@ -1,0 +1,509 @@
+==================================================
+FLUJO PRINCIPAL — ELEGIR SUCURSAL PRIMERO
+==================================================
+
+La experiencia de compra debe comenzar SIEMPRE con la selección de sucursal.
+
+ANTES de mostrar catálogo, precios, disponibilidad, pickup o delivery, el usuario debe elegir desde qué sucursal quiere comprar.
+
+La sucursal elegida se convierte en el CONTEXTO PRINCIPAL de toda la experiencia.
+
+Ejemplo:
+
+¿Desde qué Mallorca quieres pedir?
+
+[ Mallorca Reforma ]
+Paseo de la Reforma 365
+Cuauhtémoc
+
+[ Mallorca Lomas ]
+Av. Explanada 710
+Lomas de Chapultepec
+
+Una vez seleccionada:
+
+guardar:
+
+selected_branch_id
+
+en sesión/local storage y, si el usuario tiene cuenta, opcionalmente recordar su última sucursal elegida.
+
+==================================================
+1. ENTRADA INICIAL
+==================================================
+
+Cuando el usuario entra por primera vez:
+
+mostrar selector de sucursal antes de catálogo.
+
+Preferencia visual:
+
+pantalla / modal elegante
+o
+landing inicial breve
+
+No usar un popup pequeño genérico.
+
+Debe sentirse parte de la marca.
+
+Ejemplo:
+
+MALLORCA
+
+¿Desde qué sucursal quieres pedir?
+
+REFORMA
+[ Elegir Reforma ]
+
+LOMAS
+[ Elegir Lomas ]
+
+Debajo:
+
+"Puedes cambiarla después."
+
+==================================================
+2. NO MOSTRAR PRODUCTOS SIN SUCURSAL
+==================================================
+
+No cargar catálogo genérico con disponibilidad mezclada.
+
+Si no existe selected_branch:
+
+redirigir o abrir selector.
+
+El catálogo debe partir siempre de:
+
+branch_id.
+
+==================================================
+3. TODO DEPENDE DE LA SUCURSAL
+==================================================
+
+Después de elegir sucursal:
+
+mostrar solamente:
+
+- productos disponibles en esa sucursal
+- stock de esa sucursal
+- precio correspondiente
+- variantes disponibles
+- promociones aplicables
+- pickup disponible
+- delivery disponible
+- horarios
+- tiempos de preparación
+
+Ejemplo:
+
+Usuario elige:
+Mallorca Reforma
+
+Entonces:
+
+/tienda
+
+sólo muestra productos activos de Reforma.
+
+==================================================
+4. HEADER
+==================================================
+
+Una vez elegida:
+
+mostrar permanentemente:
+
+Tu Mallorca:
+Reforma ▾
+
+en header.
+
+Debe ser visible pero discreto.
+
+Ejemplo desktop:
+
+TIENDA   PASTELERÍA   RESTAURANTE
+
+MALLORCA
+
+Tu Mallorca: Reforma ▾
+Buscar
+Cuenta
+Carrito
+
+Mobile:
+
+Mallorca
+Reforma ▾
+cart
+
+==================================================
+5. CAMBIAR SUCURSAL
+==================================================
+
+Al pulsar:
+
+Tu Mallorca: Reforma ▾
+
+abrir selector:
+
+¿Quieres cambiar de sucursal?
+
+○ Reforma
+○ Lomas
+
+Mostrar:
+
+dirección
+horario
+pickup
+delivery
+
+==================================================
+6. SI EL CARRITO ESTÁ VACÍO
+==================================================
+
+Permitir cambio directamente.
+
+Reforma
+→
+Lomas
+
+Actualizar:
+
+catálogo
+inventario
+pickup
+delivery
+
+==================================================
+7. SI EL CARRITO TIENE PRODUCTOS
+==================================================
+
+NO cambiar sucursal silenciosamente.
+
+Mostrar:
+
+"Tienes productos de Mallorca Reforma en tu bolsa."
+
+"Si cambias a Mallorca Lomas tendremos que revisar tu carrito."
+
+Botones:
+
+[ Seguir con Reforma ]
+[ Cambiar a Lomas ]
+
+==================================================
+8. REVALIDAR CARRITO
+==================================================
+
+Si usuario confirma cambio:
+
+comparar cada producto contra nueva sucursal.
+
+Ejemplo:
+
+Croissant:
+disponible en Lomas
+
+Panettone:
+no disponible en Lomas
+
+Mostrar:
+
+"Algunos productos no están disponibles en Mallorca Lomas."
+
+Croissant
+✓ Disponible
+
+Panettone
+× No disponible
+
+Opciones:
+
+[Eliminar no disponibles y cambiar]
+[Cancelar]
+
+No borrar productos sin consentimiento.
+
+==================================================
+9. PRODUCT PAGE
+==================================================
+
+La ficha de producto debe heredar la sucursal.
+
+Ejemplo:
+
+Mallorca Reforma
+
+Panettone Tradicional
+
+$750
+
+Disponible
+8 piezas
+
+[ Añadir ]
+
+No volver a preguntar sucursal en cada producto.
+
+==================================================
+10. PRODUCTOS AGOTADOS
+==================================================
+
+Si producto pertenece a sucursal pero stock = 0:
+
+mostrar:
+
+Agotado en Mallorca Reforma
+
+Opcionalmente:
+
+"Disponible en Mallorca Lomas"
+
+[ Ver en Lomas ]
+
+Pero si usuario cambia a Lomas:
+
+aplicar lógica de cambio de sucursal y carrito.
+
+==================================================
+11. URLS
+==================================================
+
+Mantener URLs limpias.
+
+Preferencia:
+
+/tienda
+/producto/panettone-tradicional
+
+No necesariamente:
+
+/reforma/tienda
+
+La sucursal puede mantenerse mediante session state.
+
+Pero permitir compartir enlaces de sucursal:
+
+/?branch=reforma
+
+para campañas.
+
+Ejemplo:
+
+campaña Reforma:
+mallorca.mx/?branch=reforma
+
+Al entrar:
+seleccionar Reforma automáticamente.
+
+==================================================
+12. PICKUP
+==================================================
+
+Como la sucursal ya está definida:
+
+NO preguntar de nuevo:
+
+"¿En qué sucursal?"
+
+Sólo:
+
+¿Cómo quieres recibirlo?
+
+○ Paso por él
+○ Envíenmelo
+
+Si pickup:
+
+Mostrar:
+
+Recoger en:
+Mallorca Reforma
+Paseo de la Reforma 365
+
+Fecha
+
+Hora
+
+==================================================
+13. DELIVERY
+==================================================
+
+Si selecciona Delivery:
+
+validar que la dirección esté dentro de la cobertura de la sucursal seleccionada.
+
+Ejemplo:
+
+Sucursal seleccionada:
+Reforma
+
+Dirección:
+Polanco
+
+Si Reforma entrega ahí:
+continuar.
+
+Si no:
+
+mostrar:
+
+"Esta dirección está fuera de la zona de entrega de Mallorca Reforma."
+
+Opciones:
+
+[Elegir otra dirección]
+
+o
+
+"Puede que Mallorca Lomas sí entregue aquí."
+
+[Consultar Lomas]
+
+No cambiar sucursal automáticamente.
+
+==================================================
+14. SUCURSAL COMO PARTE DEL PEDIDO
+==================================================
+
+Todo pedido debe guardar obligatoriamente:
+
+branch_id
+
+Ejemplo:
+
+order:
+#1428
+
+branch_id:
+REF
+
+Así todo pedido pertenece a una sucursal.
+
+==================================================
+15. ADMIN
+==================================================
+
+Admin debe reflejar este modelo.
+
+Pedidos:
+
+Pedido
+Sucursal
+Cliente
+Tipo
+Total
+Estado
+
+Ejemplo:
+
+#1428
+Reforma
+Ana López
+Pickup
+$1,250
+Preparing
+
+==================================================
+16. ANALYTICS
+==================================================
+
+Registrar evento:
+
+branch_selected
+
+con:
+
+branch_id
+branch_name
+
+También:
+
+branch_changed
+
+Esto permitirá saber:
+
+- cuántos usuarios eligen Reforma
+- cuántos eligen Lomas
+- conversión por sucursal
+- ticket por sucursal
+
+==================================================
+17. EXPERIENCIA DEL USUARIO
+==================================================
+
+Flujo final obligatorio:
+
+ENTRO
+
+↓
+
+¿DESDE QUÉ MALLORCA QUIERES PEDIR?
+
+↓
+
+REFORMA / LOMAS
+
+↓
+
+CATÁLOGO DE ESA SUCURSAL
+
+↓
+
+PRODUCTO
+
+↓
+
+CARRITO
+
+↓
+
+PICKUP / DELIVERY
+
+↓
+
+PAGO
+
+↓
+
+PEDIDO ASIGNADO A ESA SUCURSAL
+
+==================================================
+18. PRINCIPIO
+==================================================
+
+La sucursal no es un filtro.
+
+La sucursal es el CONTEXTO OPERATIVO de la compra.
+
+Nunca tratarla simplemente como:
+
+"filtrar productos por tienda".
+
+Debe gobernar:
+
+- catálogo
+- inventario
+- stock
+- horarios
+- pickup
+- delivery
+- pedidos
+- promociones
+- responsables
+- alertas
+
+==================================================
+19. CRITERIO DE ACEPTACIÓN
+==================================================
+
+No debe existir ningún flujo donde:
+
+- usuario compre sin sucursal
+- producto no tenga contexto de sucursal
+- pedido no tenga branch_id
+- stock se mezcle entre sucursales
+
+Toda la aplicación debe operar con selected_branch como contexto obligatorio.
