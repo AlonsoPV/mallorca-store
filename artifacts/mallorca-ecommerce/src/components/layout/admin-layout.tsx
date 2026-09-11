@@ -1,16 +1,49 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Package, LayoutDashboard, MapPin, Store, LogOut, FilePlus } from "lucide-react";
+import { Package, LayoutDashboard, FilePlus, LogOut, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useGetMe } from "@workspace/api-client-react";
+import { useClerk } from "@clerk/react";
 
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { data: user, isLoading } = useGetMe();
+  const { signOut } = useClerk();
 
   const navItems = [
     { href: "/admin", label: "Resumen", icon: LayoutDashboard },
     { href: "/admin/productos", label: "Productos", icon: Package },
     { href: "/admin/productos/nuevo", label: "Nuevo Producto", icon: FilePlus },
+    { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-muted-foreground font-serif">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || (user.role !== "staff" && user.role !== "manager" && user.role !== "admin")) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background px-4 text-center">
+        <h1 className="text-4xl font-serif text-foreground mb-4">Acceso Denegado</h1>
+        <p className="text-muted-foreground mb-8">No tienes permisos para acceder a la administración.</p>
+        <div className="flex gap-4">
+          <Link href="/">
+            <span className="px-6 py-2 bg-primary text-primary-foreground font-medium cursor-pointer">Volver a Tienda</span>
+          </Link>
+          <button onClick={() => signOut({ redirectUrl: "/" })} className="px-6 py-2 border border-border text-foreground hover:bg-muted font-medium cursor-pointer">
+            Cerrar Sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-muted/30">
@@ -46,12 +79,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         </nav>
         
         <div className="p-4 border-t border-border mt-auto">
-          <Link href="/">
+          <button onClick={() => signOut({ redirectUrl: "/" })} className="w-full">
             <span className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
               <LogOut className="h-4 w-4" />
-              Volver a Tienda
+              Cerrar Sesión
             </span>
-          </Link>
+          </button>
         </div>
       </aside>
 

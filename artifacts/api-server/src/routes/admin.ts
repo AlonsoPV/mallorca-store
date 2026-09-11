@@ -16,12 +16,58 @@ import {
   UpdateProductParams,
   UpdateProductResponse,
 } from "@workspace/api-zod";
+import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable } from "@workspace/db";
+import { desc } from "drizzle-orm";
+import { ListAdminOrdersQueryParams, ListAdminOrdersResponse, UpdateAdminOrderParams, UpdateAdminOrderBody, UpdateAdminOrderResponse } from "@workspace/api-zod";
 import {
   getProductDetailBySlug,
   listProductCards,
 } from "../lib/catalog";
 
 const router: IRouter = Router();
+
+router.get("/admin/orders", async (req, res): Promise<void> => {
+  const q = ListAdminOrdersQueryParams.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
+  const rows = await db.select({ id: ordersTable.id, orderNumber: ordersTable.orderNumber, status: ordersTable.status, total: ordersTable.total, createdAt: ordersTable.createdAt })
+    .from(ordersTable).where(q.data.status ? eq(ordersTable.status, q.data.status as any) : undefined).orderBy(desc(ordersTable.createdAt));
+  res.json(ListAdminOrdersResponse.parse(rows));
+});
+
+router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
+  const p = UpdateAdminOrderParams.safeParse(req.params), b = UpdateAdminOrderBody.safeParse(req.body);
+  if (!p.success || !b.success) { res.status(400).json({ error: "Invalid order update" }); return; }
+  let updated;
+  try {
+    updated = await db.transaction(async (tx) => {
+    const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, p.data.id)).for("update");
+    if (!order) throw new Error("ORDER_NOT_FOUND");
+    const valid: Record<string, string[]> = { pending_payment: ["paid", "cancelled"], paid: ["preparing", "cancelled"], preparing: ["ready", "cancelled"], ready: ["completed", "cancelled"], completed: [], cancelled: [] };
+    if (!valid[order.status].includes(b.data.status) && order.status !== b.data.status) throw new Error("INVALID_TRANSITION");
+    if (b.data.status === "paid" && order.status !== "paid") {
+      await tx.update(inventoryReservationsTable)
+        .set({ status: "committed" })
+        .where(and(eq(inventoryReservationsTable.orderId, order.id), eq(inventoryReservationsTable.status, "active")));
+    }
+    if (b.data.status === "cancelled" && order.status !== "cancelled") {
+      const reservations = await tx.update(inventoryReservationsTable).set({ status: "released" }).where(and(eq(inventoryReservationsTable.orderId, order.id), sql`${inventoryReservationsTable.status} in ('active','committed')`)).returning();
+      for (const r of reservations) {
+        const [bp] = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` }).where(eq(branchProductsTable.id, r.branchProductId)).returning({ inventory: branchProductsTable.inventory });
+        await tx.insert(inventoryLedgerTable).values({ branchProductId: r.branchProductId, orderId: order.id, movement: "release", quantityDelta: r.quantity, balanceAfter: bp.inventory, reason: "Order cancelled" });
+      }
+    }
+    const [o] = await tx.update(ordersTable).set({ status: b.data.status, paymentStatus: b.data.status === "paid" ? "paid" : order.paymentStatus }).where(and(eq(ordersTable.id, order.id), eq(ordersTable.status, order.status))).returning();
+    if (!o) throw new Error("INVALID_TRANSITION");
+    return o;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "ORDER_NOT_FOUND") { res.status(404).json({ error: "Order not found" }); return; }
+    if (error instanceof Error && error.message === "INVALID_TRANSITION") { res.status(409).json({ error: "Invalid status transition" }); return; }
+    throw error;
+  }
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, updated.id));
+  res.json(UpdateAdminOrderResponse.parse({ ...updated, items }));
+});
 
 router.get("/admin/summary", async (_req, res): Promise<void> => {
   const [productCounts] = await db

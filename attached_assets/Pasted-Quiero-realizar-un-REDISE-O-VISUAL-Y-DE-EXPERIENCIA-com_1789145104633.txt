@@ -1,0 +1,1382 @@
+Quiero realizar un REDISEÑO VISUAL Y DE EXPERIENCIA completo de la tienda online de Pastelería Mallorca.
+
+IMPORTANTE:
+
+La plataforma ecommerce y su arquitectura funcional ya existen o están siendo desarrolladas.
+
+NO quiero reconstruir la lógica de negocio desde cero.
+
+El objetivo de esta iteración es transformar radicalmente la EXPERIENCIA VISUAL, INTERACTIVA Y EMOCIONAL del storefront para conseguir un verdadero:
+
+WOW FACTOR.
+
+La nueva web debe sentirse:
+
+CÁLIDA
++
+DELICIOSA
++
+SOFISTICADA
++
+AMIGABLE
++
+EDITORIAL
++
+INTERACTIVA
++
+DINÁMICA
++
+MUY FÁCIL DE COMPRAR
+
+Debe diferenciarse claramente de:
+
+- una tienda WooCommerce genérica
+- una cafetería minimalista común
+- una web corporativa
+- un ecommerce de lujo demasiado serio
+- una plantilla Shopify genérica
+
+Quiero una experiencia digital propia de Mallorca.
+
+==================================================
+1. CONCEPTO CREATIVO
+==================================================
+
+Concepto rector:
+
+"ENTRAR A MALLORCA"
+
+La web no debe sentirse como abrir un catálogo.
+
+Debe sentirse como entrar físicamente a una pastelería:
+
+ves algo que te llama la atención,
+descubres sabores,
+te acercas,
+te antojas,
+eliges,
+y terminas comprando.
+
+La experiencia debe generar:
+
+ANTOJO
+DESCUBRIMIENTO
+CALIDEZ
+CURIOSIDAD
+
+antes de vender.
+
+El producto es el protagonista absoluto.
+
+==================================================
+2. EVITAR EL LUJO FRÍO
+==================================================
+
+Actualmente muchas marcas premium utilizan:
+
+- mucho beige
+- tipografía serif
+- fotografías estáticas
+- grandes espacios vacíos
+
+y terminan pareciéndose entre ellas.
+
+NO quiero eso.
+
+Mallorca puede seguir siendo premium pero debe sentirse:
+
+viva
+humana
+cálida
+sensorial
+alegre
+
+Introducir momentos visuales más atrevidos sin perder elegancia.
+
+==================================================
+3. PERSONALIDAD VISUAL
+==================================================
+
+Mantener el ADN:
+
+- tradición española
+- CDMX
+- pastelería artesanal
+- historia
+- producto premium
+
+Pero llevarlo hacia una interpretación contemporánea.
+
+Inspiración conceptual:
+
+editorial gastronómico europeo
++
+pastelería boutique
++
+mercado mediterráneo
++
+diseño contemporáneo mexicano
+
+NO copiar ninguna marca específica.
+
+==================================================
+4. COLOR
+==================================================
+
+Mantener una base cálida:
+
+crema
+marfil
+mantequilla
+
+Pero ampliar la paleta.
+
+Color principal oscuro:
+borgoña / vino profundo
+
+Complementarios posibles:
+
+rojo cereza
+terracota
+verde oliva
+amarillo mantequilla
+rosa pastel muy tenue
+
+Utilizarlos con moderación para generar ritmo.
+
+No usar todo simultáneamente.
+
+Los colores pueden cambiar según:
+
+categoría
+temporada
+colección
+
+Ejemplo:
+
+Panadería → mantequilla
+Chocolate → cacao
+Frutas → cereza
+Navidad → borgoña
+Primavera → rosa suave
+
+==================================================
+5. TIPOGRAFÍA
+==================================================
+
+Mantener una serif con mucha personalidad para titulares.
+
+Pero evitar que toda la experiencia dependa de serif.
+
+Combinar:
+
+Editorial Serif
++
+Sans moderna y extremadamente legible
+
+Introducir ocasionalmente:
+
+tipografía manuscrita
+o
+detalles gráficos tipo nota artesanal
+
+SOLAMENTE como acento.
+
+Nunca para información funcional.
+
+==================================================
+6. HERO — MOMENTO WOW
+==================================================
+
+Rediseñar completamente el hero.
+
+NO quiero:
+
+foto rectangular
++
+headline
++
+botón
+
+Crear una composición mucho más visual.
+
+Concepto:
+
+Producto protagonista flotando o desbordando visualmente el layout.
+
+Ejemplo:
+
+              Panettone
+
+     fotografía enorme recortada
+
+        "La temporada
+         sabe a Mallorca."
+
+              ↓
+
+       Descubre la colección
+
+El producto puede cruzar parcialmente bloques o columnas.
+
+Usar composición asimétrica.
+
+Debe sentirse editorial.
+
+==================================================
+7. HERO INTERACTIVO
+==================================================
+
+Agregar movimiento MUY sutil.
+
+Por ejemplo:
+
+al mover cursor:
+
+producto:
+translate 4–8px
+
+decoraciones:
+parallax extremadamente ligero
+
+texto:
+entrada suave
+
+scroll indicator:
+animación discreta
+
+NO utilizar:
+
+animaciones agresivas
+3D pesado
+scroll hijacking
+efectos que ralenticen mobile.
+
+==================================================
+8. EL PRODUCTO COMO OBJETO
+==================================================
+
+Las fotografías no deben sentirse encerradas siempre dentro de cards.
+
+Permitir que algunos productos aparezcan:
+
+recortados
+flotando
+ocupando gran parte de una sección
+superpuestos ligeramente
+
+Ejemplo:
+
+──────────────
+
+  "Algo dulce
+   para hoy."
+
+             [CROISSANT
+              GIGANTE]
+
+   Ver bollería →
+
+──────────────
+
+Esto genera mucho más carácter.
+
+==================================================
+9. PRODUCT CARDS DIFERENTES
+==================================================
+
+Eliminar sensación de:
+
+[imagen]
+[nombre]
+[precio]
+[botón]
+
+repetida infinitamente.
+
+Crear cards editoriales.
+
+La imagen debe dominar.
+
+Mostrar:
+
+imagen
+
+categoría pequeña
+
+nombre
+
+precio
+
+CTA rápido
+
+Ejemplo:
+
+PANADERÍA
+
+Croissant de almendra
+
+$95
+
+＋ Añadir
+
+En desktop:
+
+al hover:
+
+- imagen scale 1.02
+- aparece CTA
+- pequeña descripción opcional
+
+Nada más.
+
+==================================================
+10. QUICK ADD
+==================================================
+
+Comprar debe sentirse extremadamente rápido.
+
+Desde catálogo:
+
+[ + ]
+
+o
+
+[ Añadir ]
+
+Sin obligar a entrar al producto.
+
+Después:
+
+microfeedback:
+
+"Añadido a tu bolsa"
+
+y abrir mini-cart discretamente.
+
+==================================================
+11. ANIMACIÓN DEL CARRITO
+==================================================
+
+Crear un momento agradable.
+
+Cuando se agrega producto:
+
+producto o thumbnail puede hacer una pequeña transición visual hacia carrito.
+
+MUY rápida:
+
+300–500ms.
+
+Después mostrar:
+
+"Ya es tuyo."
+
+o
+
+"Añadido a tu bolsa."
+
+Evitar mensajes técnicos como:
+
+"Product successfully added to cart".
+
+==================================================
+12. COPY MÁS HUMANO
+==================================================
+
+La interfaz no debe sonar como software.
+
+Evitar cuando sea posible:
+
+"Seleccionar ubicación"
+"Confirmar método de fulfillment"
+
+Utilizar:
+
+¿Dónde quieres recogerlo?
+
+¿Cómo quieres recibir tu pedido?
+
+¿Se te antoja algo más?
+
+Tu Mallorca está casi lista.
+
+¿Para hoy o para después?
+
+==================================================
+13. HOME COMO RECORRIDO
+==================================================
+
+La homepage NO debe ser una lista estándar de secciones.
+
+Debe tener ritmo.
+
+Propuesta:
+
+01 HERO
+
+↓ pequeño movimiento
+
+02 "¿Qué se te antoja hoy?"
+
+Categorías visuales
+
+↓ transición
+
+03 PRODUCTO ESTRELLA
+
+composición grande editorial
+
+↓ transición
+
+04 MÁS VENDIDOS
+
+productos
+
+↓ transición
+
+05 MOMENTO MALLORCA
+
+fotografía lifestyle + storytelling
+
+↓ transición
+
+06 TEMPORADA
+
+colección
+
+↓ transición
+
+07 SUCURSALES
+
+Lomas / Reforma
+
+↓ transición
+
+08 INSTAGRAM / comunidad
+
+↓ footer
+
+==================================================
+14. ¿QUÉ SE TE ANTOJA?
+==================================================
+
+Crear una sección muy amigable.
+
+Título:
+
+¿Qué se te antoja hoy?
+
+Opciones grandes y visuales:
+
+PASTELES
+
+PANADERÍA
+
+BOLLERÍA
+
+CHOCOLATE
+
+SALADO
+
+TEMPORADA
+
+No utilizar pequeños botones.
+
+Cada categoría debe sentirse casi como portada editorial.
+
+==================================================
+15. CATEGORÍAS INTERACTIVAS
+==================================================
+
+Desktop:
+
+hover sobre categoría puede:
+
+- cambiar imagen principal
+- cambiar ligeramente fondo
+- mostrar producto representativo
+
+Ejemplo:
+
+PANADERÍA →
+
+hover
+
+aparece croissant grande.
+
+Mobile:
+
+scroll horizontal natural o grid.
+
+Sin depender de hover.
+
+==================================================
+16. SCROLL HORIZONTAL CONTROLADO
+==================================================
+
+Para ciertas colecciones:
+
+"Nuestras favoritas"
+
+usar carrusel horizontal táctil.
+
+Pero evitar plugins pesados.
+
+Desktop:
+
+arrastre con mouse opcional.
+
+Mobile:
+
+native swipe.
+
+Mostrar parcialmente la siguiente card para invitar al usuario a explorar.
+
+==================================================
+17. STORYTELLING DEL PRODUCTO
+==================================================
+
+Crear secciones puntuales tipo:
+
+"Hecho para compartir.
+Aunque entendemos si no quieres."
+
+junto a fotografía de pastel.
+
+o:
+
+"Una mañana mejor empieza aquí."
+
+con bollería.
+
+Copy corto.
+
+Emocional.
+
+No largos párrafos corporativos.
+
+==================================================
+18. MICROINTERACCIONES
+==================================================
+
+Agregar detalles pequeños en toda la web:
+
+Links:
+underline animado.
+
+Botones:
+ligero movimiento / fill.
+
+Cards:
+scale mínimo.
+
+Imágenes:
+zoom sutil.
+
+Carrito:
+contador animado.
+
+Cambiar sucursal:
+transición suave.
+
+Accordions:
+animación.
+
+NO animar todo.
+
+El usuario debe sentir fluidez, no espectáculo.
+
+==================================================
+19. CURSOR DESKTOP
+==================================================
+
+Opcional:
+
+En zonas de producto permitir cursor contextual discreto.
+
+Ejemplo al hover:
+
+VER
+
+o:
+
+AÑADIR
+
+No reemplazar cursor globalmente.
+
+Sólo hacerlo si no perjudica accesibilidad.
+
+==================================================
+20. HEADER
+==================================================
+
+Header inicialmente transparente o integrado visualmente al hero cuando sea posible.
+
+Al hacer scroll:
+
+background crema ligeramente translúcido
+
+backdrop blur MUY sutil
+
+altura se reduce ligeramente.
+
+Debe sentirse fluido.
+
+Mantener:
+
+Tienda
+Pastelería
+Restaurante
+Nuestra historia
+
+Logo central cuando desktop permita.
+
+Sucursales
+Search
+Cuenta
+Carrito
+
+==================================================
+21. SEARCH EXPERIENCE
+==================================================
+
+No abrir una página de búsqueda aburrida.
+
+Al pulsar search:
+
+overlay elegante.
+
+Texto:
+
+¿Qué estás buscando?
+
+Input grande.
+
+Debajo:
+
+Búsquedas populares
+
+Pasteles
+Panettone
+Croissant
+Chocolate
+
+Mientras escribe:
+
+mostrar resultados instantáneos con imagen.
+
+==================================================
+22. MINI CART
+==================================================
+
+Carrito lateral.
+
+Animación:
+
+slide-in suave.
+
+No modal central.
+
+Mostrar:
+
+Tu bolsa
+
+Producto
+cantidad
+precio
+
+subtotal
+
+[Terminar compra]
+
+Debajo:
+
+"¿Algo más?"
+
+1–2 recomendaciones pequeñas.
+
+==================================================
+23. PRODUCT PAGE WOW
+==================================================
+
+La ficha debe ser altamente visual.
+
+Desktop:
+
+55% fotografía
+45% información
+
+La fotografía puede ocupar casi toda la altura inicial.
+
+Summary sticky.
+
+Contenido:
+
+Categoría
+
+Nombre grande
+
+Descripción corta
+
+Precio
+
+Sucursal
+
+Variantes
+
+Cantidad
+
+Añadir
+
+Pickup / delivery
+
+==================================================
+24. PRODUCT STORY
+==================================================
+
+Después de compra inicial:
+
+No repetir descripción.
+
+Crear bloques editoriales cuando exista contenido:
+
+"Lo que lo hace especial"
+
+Ingredientes
+
+Historia
+
+Elaboración
+
+Conservación
+
+Fotografías lifestyle.
+
+Sólo si existe contenido.
+
+==================================================
+25. IMÁGENES
+==================================================
+
+Dar enorme prioridad a fotografía.
+
+Necesitamos tres tipos:
+
+A. PRODUCT
+fondo limpio
+
+B. EDITORIAL
+producto en mesa / entorno
+
+C. DETAIL
+textura / ingredientes
+
+Permitir en admin identificar tipo de imagen.
+
+Utilizar cada una donde corresponda.
+
+==================================================
+26. SUCURSALES
+==================================================
+
+No mostrar Lomas / Reforma como simples cards.
+
+Crear sección:
+
+"¿Dónde nos vemos?"
+
+Split editorial.
+
+LEFT:
+Mallorca Lomas
+fotografía
+
+RIGHT:
+Mallorca Reforma
+fotografía
+
+Al hover/click:
+
+horario
+ubicación
+WhatsApp
+OpenTable
+
+[Conocer sucursal]
+
+==================================================
+27. MAPA
+==================================================
+
+Mapa no debe dominar visualmente.
+
+Mostrar después de información.
+
+Mantener experiencia de marca antes que Google Maps.
+
+==================================================
+28. CAMBIO DE SUCURSAL
+==================================================
+
+Hacerlo amigable.
+
+En lugar de:
+
+"Select store"
+
+usar:
+
+Tu Mallorca:
+Lomas ▾
+
+Al pulsar:
+
+¿Desde dónde quieres pedir?
+
+Mallorca Lomas
+Av. Explanada...
+
+Mallorca Reforma
+Paseo de la Reforma...
+
+==================================================
+29. CHECKOUT
+==================================================
+
+Aunque sea funcional, checkout también debe sentirse Mallorca.
+
+Eliminar distracciones.
+
+Header mínimo.
+
+Logo.
+
+Indicador:
+
+Bolsa
+→
+Entrega
+→
+Pago
+
+Copy:
+
+¿Cómo quieres recibirlo?
+
+○ Paso por él
+○ Llévenmelo
+
+Si pickup:
+
+¿En qué Mallorca?
+
+¿Cuándo pasas?
+
+Si delivery:
+
+¿A dónde te lo llevamos?
+
+==================================================
+30. CONFIRMACIÓN
+==================================================
+
+NO mostrar simplemente:
+
+"Order #1234 confirmed."
+
+Crear:
+
+"Todo listo."
+
+Tu pedido ya está en manos de Mallorca.
+
+Pedido #1234
+
+Mallorca Reforma
+Pickup · sábado 12:30
+
+[Ver pedido]
+
+Y una imagen o ilustración sutil.
+
+==================================================
+31. MOBILE FIRST
+==================================================
+
+La experiencia WOW debe sobrevivir en móvil.
+
+No construir wow exclusivamente con hover.
+
+Mobile:
+
+- imágenes grandes
+- swipe
+- sticky add to cart
+- bottom sheets
+- navegación sencilla
+- botones accesibles
+- animaciones reducidas
+
+==================================================
+32. BOTTOM SHEETS MOBILE
+==================================================
+
+Utilizar bottom sheets para:
+
+seleccionar sucursal
+variantes
+pickup time
+filtros
+
+En lugar de enormes modales.
+
+Debe sentirse parecido a una app moderna.
+
+==================================================
+33. STICKY MOBILE CART
+==================================================
+
+Product page:
+
+sticky inferior:
+
+$750          Añadir
+
+Después de añadir:
+
+1 producto     Ver bolsa
+
+No tapar navegación.
+
+==================================================
+34. EMPTY STATES
+==================================================
+
+Incluso estados vacíos deben tener personalidad.
+
+Carrito vacío:
+
+"Tu bolsa está un poco triste."
+
+"Vamos a arreglarlo."
+
+[Ver pastelería]
+
+Sin excederse con humor.
+
+==================================================
+35. LOADING
+==================================================
+
+No usar spinners genéricos siempre que sea posible.
+
+Usar skeleton loaders.
+
+Para imágenes:
+blur-up.
+
+Mantener layout estable.
+
+==================================================
+36. TRANSICIONES ENTRE PÁGINAS
+==================================================
+
+Aplicar transición extremadamente rápida:
+
+fade
+150–250ms
+
+No bloquear navegación.
+
+Si framework soporta View Transitions API de manera estable, aprovecharla progresivamente.
+
+==================================================
+37. ELEMENTOS GRÁFICOS
+==================================================
+
+Crear un pequeño sistema visual inspirado en:
+
+- papel de pastelería
+- sellos
+- líneas dibujadas
+- etiquetas
+- ingredientes
+- trazos artesanales
+
+MUY sutil.
+
+Ejemplos:
+
+flecha manuscrita
+
+"favorito"
+
+pequeño sello Mallorca
+
+No convertirlo en scrapbook.
+
+==================================================
+38. FORMAS
+==================================================
+
+Evitar que absolutamente todo sean rectángulos.
+
+Fotografías editoriales pueden:
+
+- romper grid
+- tener crop orgánico
+- superponerse
+- usar marcos ligeramente irregulares
+
+Pero componentes funcionales deben seguir siendo claros.
+
+==================================================
+39. TEMPORADAS
+==================================================
+
+Diseñar sistema para que el sitio pueda cambiar emocionalmente según temporada.
+
+Ejemplo:
+
+NAVIDAD
+
+Hero:
+Panettone
+
+paleta:
+borgoña + crema
+
+SAN VALENTÍN
+
+paleta:
+crema + cereza suave
+
+DÍA DE LAS MADRES
+
+fotografía floral/editorial
+
+NO cambiar estructura completa.
+
+Usar theme tokens / campaign settings.
+
+==================================================
+40. ADMIN
+==================================================
+
+Permitir configurar desde admin:
+
+Hero
+headline
+subheadline
+imagen/video
+CTA
+
+Featured categories
+
+Featured products
+
+Editorial banners
+
+Seasonal campaign
+
+Background accent
+
+Featured collection
+
+No hardcodear contenido.
+
+==================================================
+41. ANIMACIONES
+==================================================
+
+Crear un sistema consistente.
+
+Duraciones:
+
+micro:
+150–200ms
+
+normal:
+250–400ms
+
+hero:
+500–800ms máximo
+
+Easing natural.
+
+Soportar:
+
+prefers-reduced-motion.
+
+Si está activo:
+eliminar parallax y animaciones no esenciales.
+
+==================================================
+42. PERFORMANCE
+==================================================
+
+WOW NO significa sitio pesado.
+
+Priorizar:
+
+CSS transforms
+opacity
+
+Evitar:
+
+animar width
+height
+top
+left
+
+Optimizar imágenes.
+
+Lazy-load debajo del fold.
+
+No cargar librerías de animación enormes si CSS/IntersectionObserver pueden resolverlo.
+
+Si se utiliza Framer Motion:
+hacerlo selectivamente.
+
+==================================================
+43. PERSONALIDAD DEL COPY
+==================================================
+
+Revisar microcopy de toda la aplicación.
+
+Tono:
+
+cálido
+elegante
+natural
+directo
+
+Nunca infantil.
+
+Nunca pretencioso.
+
+Nunca corporativo.
+
+Ejemplos:
+
+ANTES:
+View products
+
+DESPUÉS:
+Descubre la pastelería
+
+ANTES:
+Select store
+
+DESPUÉS:
+¿Desde qué Mallorca pides?
+
+ANTES:
+Related products
+
+DESPUÉS:
+También se te puede antojar
+
+ANTES:
+Continue shopping
+
+DESPUÉS:
+Seguir descubriendo
+
+==================================================
+44. EVITAR
+==================================================
+
+NO:
+
+glassmorphism excesivo
+gradientes AI
+blob shapes SaaS
+scroll hijacking
+3D pesado
+animaciones constantes
+marquee por todas partes
+cards con sombra
+border-radius 24px en todo
+hero genérico
+texto gigante sin propósito
+parallax agresivo
+cursor custom global
+ruido visual
+
+==================================================
+45. REFERENCIA DE CALIDAD
+==================================================
+
+El resultado debería sentirse como si un:
+
+estudio editorial
++
+director creativo gastronómico
++
+diseñador ecommerce
+
+hubieran diseñado juntos Mallorca.
+
+No como una plantilla adaptada.
+
+==================================================
+46. DISEÑO SISTÉMICO
+==================================================
+
+Crear tokens:
+
+--color-cream
+--color-burgundy
+--color-cherry
+--color-butter
+--color-olive
+--color-cacao
+--color-ink
+
+--font-editorial
+--font-ui
+
+--space-*
+--radius-*
+--motion-fast
+--motion-normal
+--motion-slow
+
+Mantener coherencia.
+
+==================================================
+47. IMPLEMENTACIÓN
+==================================================
+
+ANTES de cambiar código:
+
+1. Audita el storefront actual.
+2. Detecta todas las páginas existentes.
+3. Detecta componentes reutilizables.
+4. Identifica problemas actuales de UX.
+5. Mantén toda lógica ecommerce existente.
+6. No rompas:
+   - auth
+   - productos
+   - sucursales
+   - carrito
+   - checkout
+   - pedidos
+   - pagos
+   - pickup
+   - delivery
+
+Después implementar el nuevo sistema visual.
+
+==================================================
+48. ORDEN DE IMPLEMENTACIÓN
+==================================================
+
+ETAPA 1
+Design system
+
+ETAPA 2
+Header + navigation
+
+ETAPA 3
+Homepage
+
+ETAPA 4
+Catalog + cards
+
+ETAPA 5
+Product page
+
+ETAPA 6
+Cart
+
+ETAPA 7
+Checkout
+
+ETAPA 8
+Branches
+
+ETAPA 9
+Account
+
+ETAPA 10
+Microinteractions + polish
+
+==================================================
+49. AUDITORÍA VISUAL
+==================================================
+
+Después de implementar:
+
+Probar:
+
+1920
+1440
+1280
+1024
+768
+430
+390
+375
+320
+
+Evaluar:
+
+jerarquía
+ritmo
+legibilidad
+calidez
+facilidad de compra
+motion
+performance
+
+No debe existir overflow horizontal.
+
+==================================================
+50. PREGUNTA QUE DEBE GUIAR TODO
+==================================================
+
+Cada decisión debe responder:
+
+"¿Esto hace que Mallorca se sienta más deliciosa,
+más humana y más fácil de comprar?"
+
+Si la respuesta es no:
+eliminarlo.
+
+==================================================
+51. RESULTADO ESPERADO
+==================================================
+
+Quiero que alguien entre al sitio y durante los primeros segundos piense:
+
+"Esta pastelería se siente diferente."
+
+Después:
+
+"Quiero probar eso."
+
+Y finalmente:
+
+"Fue muy fácil comprarlo."
+
+Ese es el objetivo.
+
+No busques impresionar mediante complejidad.
+
+Busca impresionar mediante:
+
+producto
+composición
+fotografía
+ritmo
+movimiento
+detalle
+copy
+facilidad de uso.
+
+Primero genera una auditoría breve del diseño actual y un plan visual.
+
+Después IMPLEMENTA directamente el rediseño.

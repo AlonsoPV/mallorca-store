@@ -236,6 +236,165 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /cart/session:
+    post:
+      operationId: createCartSession
+      tags: [storefront]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CartSessionInput" }
+      responses:
+        "200": { description: Cart, content: { application/json: { schema: { $ref: "#/components/schemas/Cart" } } } }
+  /cart/{id}:
+    get:
+      operationId: getCart
+      tags: [storefront]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Cart, content: { application/json: { schema: { $ref: "#/components/schemas/Cart" } } } }
+  /cart/{id}/items:
+    post:
+      operationId: addCartItem
+      tags: [storefront]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CartItemInput" }
+      responses:
+        "200": { description: Cart, content: { application/json: { schema: { $ref: "#/components/schemas/Cart" } } } }
+  /cart/{id}/items/{itemId}:
+    patch:
+      operationId: updateCartItem
+      tags: [storefront]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CartItemUpdate" }
+      responses:
+        "200": { description: Cart, content: { application/json: { schema: { $ref: "#/components/schemas/Cart" } } } }
+    delete:
+      operationId: deleteCartItem
+      tags: [storefront]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Cart, content: { application/json: { schema: { $ref: "#/components/schemas/Cart" } } } }
+  /fulfillment/delivery-validation:
+    post:
+      operationId: validateDelivery
+      tags: [storefront]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliveryValidationInput" }
+      responses:
+        "200": { description: Delivery validation, content: { application/json: { schema: { $ref: "#/components/schemas/DeliveryValidation" } } } }
+  /fulfillment/slots:
+    get:
+      operationId: listFulfillmentSlots
+      tags: [storefront]
+      parameters:
+        - { name: branchId, in: query, required: true, schema: { type: integer } }
+        - { name: date, in: query, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+        - { name: method, in: query, required: true, schema: { type: string, enum: [pickup, delivery] } }
+        - { name: cartId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Slots, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/FulfillmentSlot" } } } } }
+  /orders:
+    post:
+      operationId: createOrder
+      tags: [storefront]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "201": { description: Order, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+        "409": { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+  /orders/{id}/payment:
+    post:
+      operationId: startOrderPayment
+      tags: [storefront]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentStartInput" }
+      responses:
+        "200": { description: Payment session, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentStart" } } } }
+        "503": { description: Payment provider unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentStart" } } } }
+  /orders/{id}:
+    get:
+      operationId: getOrderDetails
+      tags: [storefront]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Order, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+  /guest/orders/{id}/{token}:
+    get:
+      operationId: getGuestOrderDetails
+      tags: [storefront]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Guest order, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+  /me:
+    get:
+      operationId: getMe
+      tags: [storefront]
+      responses:
+        "200": { description: Profile, content: { application/json: { schema: { $ref: "#/components/schemas/UserProfile" } } } }
+    patch:
+      operationId: updateMe
+      tags: [storefront]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserProfileUpdate" }
+      responses:
+        "200": { description: Profile, content: { application/json: { schema: { $ref: "#/components/schemas/UserProfile" } } } }
+  /me/orders:
+    get:
+      operationId: listMyOrders
+      tags: [storefront]
+      responses:
+        "200": { description: Orders, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrderSummary" } } } } }
+  /admin/orders:
+    get:
+      operationId: listAdminOrders
+      tags: [admin]
+      parameters: [{ name: status, in: query, required: false, schema: { type: string } }]
+      responses:
+        "200": { description: Orders, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrderSummary" } } } } }
+  /admin/orders/{id}:
+    patch:
+      operationId: updateAdminOrder
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderStatusUpdate" }
+      responses:
+        "200": { description: Order, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
 components:
   schemas:
     HealthStatus:
@@ -649,4 +808,142 @@ components:
         - totalBranches
         - lowStockProducts
         - branchSummaries
+    CartSessionInput:
+      type: object
+      properties:
+        cartId: { type: ["string", "null"] }
+        branchId: { type: integer }
+      required: [branchId]
+    CartItemInput:
+      type: object
+      properties:
+        productId: { type: integer }
+        variantId: { type: ["integer", "null"] }
+        quantity: { type: integer, minimum: 1 }
+      required: [productId, quantity]
+    CartItemUpdate:
+      type: object
+      properties: { quantity: { type: integer, minimum: 1 } }
+      required: [quantity]
+    CartLineItem:
+      type: object
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        variantId: { type: ["integer", "null"] }
+        sku: { type: string }
+        name: { type: string }
+        variantLabel: { type: ["string", "null"] }
+        quantity: { type: integer }
+        unitPrice: { type: number }
+        lineTotal: { type: number }
+      required: [id, productId, variantId, sku, name, variantLabel, quantity, unitPrice, lineTotal]
+    Cart:
+      type: object
+      properties:
+        id: { type: string }
+        branch: { $ref: "#/components/schemas/Branch" }
+        items: { type: array, items: { $ref: "#/components/schemas/CartLineItem" } }
+        subtotal: { type: number }
+        quantity: { type: integer }
+        maxLeadTimeMinutes: { type: integer }
+      required: [id, branch, items, subtotal, quantity, maxLeadTimeMinutes]
+    DeliveryValidationInput:
+      type: object
+      properties:
+        branchId: { type: integer }
+        latitude: { type: number }
+        longitude: { type: number }
+        subtotal: { type: number }
+      required: [branchId, latitude, longitude, subtotal]
+    DeliveryValidation:
+      type: object
+      properties:
+        eligible: { type: boolean }
+        distanceKm: { type: number }
+        radiusKm: { type: number }
+        deliveryFee: { type: number }
+        reason: { type: ["string", "null"] }
+      required: [eligible, distanceKm, radiusKm, deliveryFee, reason]
+    FulfillmentSlot:
+      type: object
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        available: { type: boolean }
+        remainingCapacity: { type: integer }
+      required: [start, end, available, remainingCapacity]
+    OrderInput:
+      type: object
+      properties:
+        cartId: { type: string }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+        scheduledStart: { type: string, format: date-time }
+        customerEmail: { type: string, format: email }
+        customerName: { type: string }
+        customerPhone: { type: string }
+        notes: { type: ["string", "null"] }
+        deliveryAddress: { type: ["string", "null"] }
+        deliveryLatitude: { type: ["number", "null"] }
+        deliveryLongitude: { type: ["number", "null"] }
+      required: [cartId, fulfillmentMethod, scheduledStart, customerEmail, customerName, customerPhone]
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        guestAccessToken: { type: string }
+        status: { type: string }
+        paymentStatus: { type: string }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+        scheduledStart: { type: string, format: date-time }
+        scheduledEnd: { type: string, format: date-time }
+        customerEmail: { type: string }
+        customerName: { type: string }
+        customerPhone: { type: string }
+        deliveryAddress: { type: ["string", "null"] }
+        subtotal: { type: number }
+        deliveryFee: { type: number }
+        total: { type: number }
+        items: { type: array, items: { $ref: "#/components/schemas/CartLineItem" } }
+      required: [id, orderNumber, guestAccessToken, status, paymentStatus, fulfillmentMethod, scheduledStart, scheduledEnd, customerEmail, customerName, customerPhone, deliveryAddress, subtotal, deliveryFee, total, items]
+    OrderSummary:
+      type: object
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        total: { type: number }
+        createdAt: { type: string, format: date-time }
+      required: [id, orderNumber, status, total, createdAt]
+    PaymentStart:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string, enum: [PAYMENT_PROVIDER_NOT_CONFIGURED] }
+      required: [error, code]
+    PaymentStartInput:
+      type: object
+      properties:
+        guestAccessToken: { type: string }
+    UserProfile:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        role: { type: string, enum: [customer, staff, manager, admin] }
+      required: [id, email, firstName, lastName, phone, role]
+    UserProfileUpdate:
+      type: object
+      properties:
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+    OrderStatusUpdate:
+      type: object
+      properties: { status: { type: string, enum: [pending_payment, paid, preparing, ready, completed, cancelled] } }
+      required: [status]
 

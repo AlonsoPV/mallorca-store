@@ -228,6 +228,195 @@ export interface AdminSummary {
   branchSummaries: BranchSummary[];
 }
 
+export interface CartSessionInput {
+  /** @nullable */
+  cartId?: string | null;
+  branchId: number;
+}
+
+export interface CartItemInput {
+  productId: number;
+  /** @nullable */
+  variantId?: number | null;
+  /** @minimum 1 */
+  quantity: number;
+}
+
+export interface CartItemUpdate {
+  /** @minimum 1 */
+  quantity: number;
+}
+
+export interface CartLineItem {
+  id: number;
+  productId: number;
+  /** @nullable */
+  variantId: number | null;
+  sku: string;
+  name: string;
+  /** @nullable */
+  variantLabel: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface Cart {
+  id: string;
+  branch: Branch;
+  items: CartLineItem[];
+  subtotal: number;
+  quantity: number;
+  maxLeadTimeMinutes: number;
+}
+
+export interface DeliveryValidationInput {
+  branchId: number;
+  latitude: number;
+  longitude: number;
+  subtotal: number;
+}
+
+export interface DeliveryValidation {
+  eligible: boolean;
+  distanceKm: number;
+  radiusKm: number;
+  deliveryFee: number;
+  /** @nullable */
+  reason: string | null;
+}
+
+export interface FulfillmentSlot {
+  start: string;
+  end: string;
+  available: boolean;
+  remainingCapacity: number;
+}
+
+export type OrderInputFulfillmentMethod = typeof OrderInputFulfillmentMethod[keyof typeof OrderInputFulfillmentMethod];
+
+
+export const OrderInputFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface OrderInput {
+  cartId: string;
+  fulfillmentMethod: OrderInputFulfillmentMethod;
+  scheduledStart: string;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  deliveryAddress?: string | null;
+  /** @nullable */
+  deliveryLatitude?: number | null;
+  /** @nullable */
+  deliveryLongitude?: number | null;
+}
+
+export type OrderFulfillmentMethod = typeof OrderFulfillmentMethod[keyof typeof OrderFulfillmentMethod];
+
+
+export const OrderFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  guestAccessToken: string;
+  status: string;
+  paymentStatus: string;
+  fulfillmentMethod: OrderFulfillmentMethod;
+  scheduledStart: string;
+  scheduledEnd: string;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  /** @nullable */
+  deliveryAddress: string | null;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  items: CartLineItem[];
+}
+
+export interface OrderSummary {
+  id: string;
+  orderNumber: string;
+  status: string;
+  total: number;
+  createdAt: string;
+}
+
+export type PaymentStartCode = typeof PaymentStartCode[keyof typeof PaymentStartCode];
+
+
+export const PaymentStartCode = {
+  PAYMENT_PROVIDER_NOT_CONFIGURED: 'PAYMENT_PROVIDER_NOT_CONFIGURED',
+} as const;
+
+export interface PaymentStart {
+  error: string;
+  code: PaymentStartCode;
+}
+
+export interface PaymentStartInput {
+  guestAccessToken?: string;
+}
+
+export type UserProfileRole = typeof UserProfileRole[keyof typeof UserProfileRole];
+
+
+export const UserProfileRole = {
+  customer: 'customer',
+  staff: 'staff',
+  manager: 'manager',
+  admin: 'admin',
+} as const;
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  phone: string | null;
+  role: UserProfileRole;
+}
+
+export interface UserProfileUpdate {
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  phone?: string | null;
+}
+
+export type OrderStatusUpdateStatus = typeof OrderStatusUpdateStatus[keyof typeof OrderStatusUpdateStatus];
+
+
+export const OrderStatusUpdateStatus = {
+  pending_payment: 'pending_payment',
+  paid: 'paid',
+  preparing: 'preparing',
+  ready: 'ready',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface OrderStatusUpdate {
+  status: OrderStatusUpdateStatus;
+}
+
 export type ListProductsParams = {
 branchSlug?: string;
 categorySlug?: string;
@@ -248,4 +437,26 @@ export const ListAdminProductsStatus = {
   active: 'active',
   inactive: 'inactive',
 } as const;
+
+export type ListFulfillmentSlotsParams = {
+branchId: number;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+date: string;
+method: ListFulfillmentSlotsMethod;
+cartId: string;
+};
+
+export type ListFulfillmentSlotsMethod = typeof ListFulfillmentSlotsMethod[keyof typeof ListFulfillmentSlotsMethod];
+
+
+export const ListFulfillmentSlotsMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export type ListAdminOrdersParams = {
+status?: string;
+};
 

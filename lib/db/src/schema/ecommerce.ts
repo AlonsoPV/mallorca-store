@@ -61,6 +61,13 @@ export const branchesTable = pgTable(
       .notNull()
       .default(30),
     deliveryTimeMinutes: integer("delivery_time_minutes").notNull().default(60),
+    pickupSlotIntervalMinutes: integer("pickup_slot_interval_minutes")
+      .notNull()
+      .default(30),
+    pickupSlotCapacity: integer("pickup_slot_capacity").notNull().default(8),
+    deliveryFee: numeric("delivery_fee", { mode: "number" })
+      .notNull()
+      .default(90),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
