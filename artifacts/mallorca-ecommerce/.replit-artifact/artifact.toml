@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Mallorca Ecommerce"
+description = "Nueva tienda online de Pastelería Mallorca México, con catálogo por sucursal, fichas de producto y un espacio administrativo para operar contenido y disponibilidad."
+version = "1.0.0"
+id = "artifacts/mallorca-ecommerce"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19488
+
+[services.development]
+run = "pnpm --filter @workspace/mallorca-ecommerce run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mallorca-ecommerce", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mallorca-ecommerce/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19488"
+BASE_PATH = "/"

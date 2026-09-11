@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Core API for the Mallorca ecommerce storefront and admin.
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: storefront
+    description: Public catalog and branch operations
+  - name: admin
+    description: Internal catalog operations
 paths:
   /healthz:
     get:
@@ -24,6 +28,219 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /branches:
+    get:
+      operationId: listBranches
+      tags: [storefront]
+      summary: List active branches
+      responses:
+        "200":
+          description: Active Mallorca branches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Branch"
+  /branches/{slug}:
+    get:
+      operationId: getBranch
+      tags: [storefront]
+      summary: Get a branch and its available products
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Branch detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchDetail"
+        "404":
+          description: Branch not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [storefront]
+      summary: List catalog categories
+      responses:
+        "200":
+          description: Catalog categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [storefront]
+      summary: List products for the storefront
+      parameters:
+        - name: branchSlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: categorySlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: featured
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Products filtered for the selected branch
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductCard"
+  /products/{slug}:
+    get:
+      operationId: getProduct
+      tags: [storefront]
+      summary: Get a product with branch availability and variants
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: branchSlug
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/summary:
+    get:
+      operationId: getAdminSummary
+      tags: [admin]
+      summary: Get the admin overview metrics
+      responses:
+        "200":
+          description: Admin overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSummary"
+  /admin/products:
+    get:
+      operationId: listAdminProducts
+      tags: [admin]
+      summary: List products for catalog administration
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [draft, active, inactive]
+      responses:
+        "200":
+          description: Admin product list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas<AdminProduct>"
+    post:
+      operationId: createProduct
+      tags: [admin]
+      summary: Create a catalog product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "400":
+          description: Invalid product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/products/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [admin]
+      summary: Update a catalog product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "400":
+          description: Invalid product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +250,408 @@ components:
           type: string
       required:
         - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    BranchHour:
+      type: object
+      properties:
+        day:
+          type: string
+        label:
+          type: string
+        open:
+          type: string
+        close:
+          type: string
+        closed:
+          type: boolean
+      required: [day, label, open, close, closed]
+    Branch:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        shortName:
+          type: string
+        description:
+          type: ["string", "null"]
+        address:
+          type: string
+        neighborhood:
+          type: string
+        borough:
+          type: ["string", "null"]
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        phone:
+          type: string
+        whatsapp:
+          type: ["string", "null"]
+        email:
+          type: string
+        mapsUrl:
+          type: string
+        openTableUrl:
+          type: ["string", "null"]
+        instagramUrl:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        gallery:
+          type: array
+          items:
+            type: string
+        hours:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchHour"
+        pickupAvailable:
+          type: boolean
+        deliveryAvailable:
+          type: boolean
+        deliveryRadiusKm:
+          type: ["number", "null"]
+        minimumOrder:
+          type: ["number", "null"]
+        preparationTimeMinutes:
+          type: integer
+        deliveryTimeMinutes:
+          type: integer
+        active:
+          type: boolean
+      required:
+        - id
+        - name
+        - slug
+        - shortName
+        - description
+        - address
+        - neighborhood
+        - borough
+        - city
+        - state
+        - postalCode
+        - country
+        - latitude
+        - longitude
+        - phone
+        - whatsapp
+        - email
+        - mapsUrl
+        - openTableUrl
+        - instagramUrl
+        - imageUrl
+        - gallery
+        - hours
+        - pickupAvailable
+        - deliveryAvailable
+        - deliveryRadiusKm
+        - minimumOrder
+        - preparationTimeMinutes
+        - deliveryTimeMinutes
+        - active
+    BranchDetail:
+      allOf:
+        - $ref: "#/components/schemas/Branch"
+        - type: object
+          properties:
+            products:
+              type: array
+              items:
+                $ref: "#/components/schemas<ProductCard"
+          required: [products]
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        productCount:
+          type: integer
+      required: [id, name, slug, description, imageUrl, productCount]
+    BranchAvailability:
+      type: object
+      properties:
+        branchId:
+          type: integer
+        branchSlug:
+          type: string
+        branchName:
+          type: string
+        available:
+          type: boolean
+        inventory:
+          type: integer
+        price:
+          type: number
+        salePrice:
+          type: ["number", "null"]
+        preparationTimeMinutes:
+          type: integer
+        pickupAvailable:
+          type: boolean
+        deliveryAvailable:
+          type: boolean
+      required:
+        - branchId
+        - branchSlug
+        - branchName
+        - available
+        - inventory
+        - price
+        - salePrice
+        - preparationTimeMinutes
+        - pickupAvailable
+        - deliveryAvailable
+    ProductVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        value:
+          type: string
+        sku:
+          type: string
+        price:
+          type: number
+        salePrice:
+          type: ["number", "null"]
+      required: [id, name, value, sku, price, salePrice]
+    ProductCard:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        shortDescription:
+          type: string
+        price:
+          type: number
+        salePrice:
+          type: ["number", "null"]
+        categoryName:
+          type: string
+        categorySlug:
+          type: string
+        imageUrl:
+          type: ["string", "null"]
+        featured:
+          type: boolean
+        seasonal:
+          type: boolean
+        availability:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchAvailability"
+      required:
+        - id
+        - sku
+        - name
+        - slug
+        - shortDescription
+        - price
+        - salePrice
+        - categoryName
+        - categorySlug
+        - imageUrl
+        - featured
+        - seasonal
+        - availability
+    ProductDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProductCard"
+        - type: object
+          properties:
+            description:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+            gallery:
+              type: array
+              items:
+                type: string
+            ingredients:
+              type: ["string", "null"]
+            allergens:
+              type: ["string", "null"]
+            conservation:
+              type: ["string", "null"]
+            weight:
+              type: ["string", "null"]
+            portions:
+              type: ["string", "null"]
+            minimumLeadTimeHours:
+              type: integer
+            variants:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductVariant"
+          required:
+            - description
+            - tags
+            - gallery
+            - ingredients
+            - allergens
+            - conservation
+            - weight
+            - portions
+            - minimumLeadTimeHours
+            - variants
+    ProductInput:
+      type: object
+      properties:
+        sku:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+        shortDescription:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          minimum: 0
+        salePrice:
+          type: ["number", "null"]
+        categoryId:
+          type: integer
+        imageUrl:
+          type: ["string", "null"]
+        featured:
+          type: boolean
+        seasonal:
+          type: boolean
+        status:
+          type: string
+          enum: [draft, active, inactive]
+        minimumLeadTimeHours:
+          type: integer
+          minimum: 0
+      required:
+        - sku
+        - name
+        - slug
+        - shortDescription
+        - description
+        - price
+        - salePrice
+        - categoryId
+        - imageUrl
+        - featured
+        - seasonal
+        - status
+        - minimumLeadTimeHours
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        shortDescription:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          minimum: 0
+        salePrice:
+          type: ["number", "null"]
+        categoryId:
+          type: integer
+        imageUrl:
+          type: ["string", "null"]
+        featured:
+          type: boolean
+        seasonal:
+          type: boolean
+        status:
+          type: string
+          enum: [draft, active, inactive]
+        minimumLeadTimeHours:
+          type: integer
+          minimum: 0
+    AdminProduct:
+      allOf:
+        - $ref: "#/components/schemas/ProductCard"
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [draft, active, inactive]
+            updatedAt:
+              type: string
+              format: date-time
+          required: [status, updatedAt]
+    BranchSummary:
+      type: object
+      properties:
+        branchId:
+          type: integer
+        branchName:
+          type: string
+        activeProducts:
+          type: integer
+        lowStockProducts:
+          type: integer
+      required: [branchId, branchName, activeProducts, lowStockProducts]
+    AdminSummary:
+      type: object
+      properties:
+        totalProducts:
+          type: integer
+        activeProducts:
+          type: integer
+        totalBranches:
+          type: integer
+        lowStockProducts:
+          type: integer
+        branchSummaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchSummary"
+      required:
+        - totalProducts
+        - activeProducts
+        - totalBranches
+        - lowStockProducts
+        - branchSummaries
 
