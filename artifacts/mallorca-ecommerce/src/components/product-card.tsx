@@ -67,7 +67,7 @@ export function ProductCard({ product, className, showBranchAvailability = false
             <img
               src={product.imageUrl} 
               alt={product.name} 
-              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
+               className="mallorca-image h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
               loading="lazy"
             />
           ) : (
@@ -103,11 +103,11 @@ export function ProductCard({ product, className, showBranchAvailability = false
         <Link href={`/producto/${product.slug}`} className="block">
           <span className="mallorca-kicker text-primary">{product.categoryName}</span>
           <div className="mb-1 mt-2 flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 font-serif text-xl leading-tight text-foreground transition-colors group-hover:text-primary">
+             <h3 className="line-clamp-2 font-serif text-base leading-tight text-foreground transition-colors group-hover:text-primary sm:text-xl">
               {product.name}
             </h3>
           </div>
-          <p className="mb-3 line-clamp-1 text-sm text-muted-foreground">
+           <p className="mb-3 line-clamp-2 text-[11px] leading-snug text-muted-foreground sm:line-clamp-1 sm:text-sm">
             {product.shortDescription}
           </p>
         </Link>
@@ -116,20 +116,20 @@ export function ProductCard({ product, className, showBranchAvailability = false
           <div className="flex items-center gap-2">
             {product.salePrice ? (
               <>
-                <span className="font-medium text-primary">{formatPrice(product.salePrice)}</span>
-                <span className="text-sm text-muted-foreground line-through">{formatPrice(product.price)}</span>
+               <span className="text-xs font-medium text-primary sm:text-base">{formatPrice(product.salePrice)}</span>
+               <span className="hidden text-sm text-muted-foreground line-through sm:inline">{formatPrice(product.price)}</span>
               </>
             ) : (
-              <span className="font-medium text-foreground">{formatPrice(product.price)}</span>
+               <span className="text-xs font-medium text-foreground sm:text-base">{formatPrice(product.price)}</span>
             )}
           </div>
           {canQuickAdd ? (
-            <Button type="button" variant="ghost" size="sm" onClick={handleQuickAdd} disabled={isAdding} className="h-9 gap-1 px-2 text-primary hover:bg-primary/10 hover:text-primary">
+             <Button type="button" variant="ghost" size="sm" onClick={handleQuickAdd} disabled={isAdding} className="h-8 gap-1 px-1 text-primary hover:bg-primary/10 hover:text-primary sm:h-9 sm:px-2">
               <Plus className="h-4 w-4" />
-              <span className="text-xs font-bold tracking-wide">{isAdding ? "Añadiendo" : "Añadir"}</span>
+               <span className="hidden text-xs font-bold tracking-wide sm:inline">{isAdding ? "Añadiendo" : "Añadir"}</span>
             </Button>
           ) : (
-            <Link href={`/producto/${product.slug}`} className="editorial-link text-xs font-bold tracking-wide text-primary">
+             <Link href={`/producto/${product.slug}`} className="editorial-link whitespace-nowrap text-[10px] font-bold tracking-wide text-primary sm:text-xs">
               Ver opciones
             </Link>
           )}
