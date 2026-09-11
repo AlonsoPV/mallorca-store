@@ -372,9 +372,12 @@ export function StoreLayout({ children }: { children: ReactNode }) {
           aria-label={isQuickLinksOpen ? "Ocultar accesos rápidos" : "Mostrar accesos rápidos"}
           aria-expanded={isQuickLinksOpen}
           onClick={() => setIsQuickLinksOpen((open) => !open)}
-          className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)]"
+          className={`group pointer-events-auto flex h-12 w-12 items-center justify-center gap-3 rounded-full border border-white/70 bg-black/90 px-1 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:h-11 sm:w-auto sm:pl-4 sm:pr-1 ${isQuickLinksOpen ? "bg-[var(--mallorca-red)] hover:bg-[var(--mallorca-red-dark)]" : ""}`}
         >
-          <Info className="h-5 w-5" />
+          <span className="hidden text-[10px] font-bold tracking-[0.2em] sm:inline">INFO</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white shadow-inner transition-transform group-hover:scale-105 sm:h-9 sm:w-9">
+            <Info className="h-5 w-5" />
+          </span>
         </button>
       </nav>
     </div>
