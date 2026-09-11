@@ -517,6 +517,60 @@ export interface OrderStatusUpdate {
   status: OrderStatusUpdateStatus;
 }
 
+export interface SafeUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface AssignmentInput {
+  userId: string;
+}
+
+export interface CategoryResponsibleInput {
+  branchId: number;
+  categoryId: number;
+  userId: string;
+}
+
+export type AdminBranchDetailGeneral = { [key: string]: unknown };
+
+export type AdminBranchDetailContact = { [key: string]: unknown };
+
+export type AdminBranchDetailProductsItem = { [key: string]: unknown };
+
+export type AdminBranchDetailInventoryItem = { [key: string]: unknown };
+
+export type AdminBranchDetailOrdersItem = { [key: string]: unknown };
+
+export type AdminBranchDetailAlertsItem = { [key: string]: unknown };
+
+export type AdminBranchDetailNotificationSettings = { [key: string]: unknown };
+
+export interface AdminBranchDetail {
+  branch: AdminBranch;
+  general: AdminBranchDetailGeneral;
+  contact: AdminBranchDetailContact;
+  hours: BranchHour[];
+  products: AdminBranchDetailProductsItem[];
+  inventory: AdminBranchDetailInventoryItem[];
+  orders: AdminBranchDetailOrdersItem[];
+  alerts: AdminBranchDetailAlertsItem[];
+  notificationSettings: AdminBranchDetailNotificationSettings;
+}
+
+export interface BranchReport {
+  branchId: number;
+  branchName: string;
+  orderCount: number;
+  revenue: string;
+  inventoryCount: number;
+  inventoryValue: string;
+  lowStockCount: number;
+  outOfStockCount: number;
+}
+
 export type ListProductsParams = {
 branchSlug?: string;
 categorySlug?: string;
@@ -582,4 +636,21 @@ export type GetInventoryMatrix200Item = { [key: string]: unknown };
 export type UpdateAdminInventory200 = { [key: string]: unknown };
 
 export type ListInventoryMovements200Item = { [key: string]: unknown };
+
+export type ListBranchAssignments200Item = { [key: string]: unknown };
+
+export type CreateBranchAssignment201 = { [key: string]: unknown };
+
+export type ListCategoryResponsiblesParams = {
+branchId?: number;
+};
+
+export type ListCategoryResponsibles200Item = { [key: string]: unknown };
+
+export type UpsertCategoryResponsible200 = { [key: string]: unknown };
+
+export type GetBranchReportParams = {
+from?: string;
+to?: string;
+};
 

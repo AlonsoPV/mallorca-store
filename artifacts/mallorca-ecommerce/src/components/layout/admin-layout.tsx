@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Package, LayoutDashboard, FilePlus, LogOut, ShoppingCart, Boxes, Upload, Store, Bell } from "lucide-react";
+import { Package, LayoutDashboard, FilePlus, LogOut, ShoppingCart, Boxes, Upload, Store, Bell, BarChart3, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useListInventoryAlerts } from "@workspace/api-client-react";
 import { useClerk } from "@clerk/react";
@@ -20,6 +20,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     { href: "/admin/importar", label: "Importar", icon: Upload },
     { href: "/admin/sucursales", label: "Sucursales", icon: Store },
     { href: "/admin/alertas", label: "Alertas", icon: Bell },
+    { href: "/admin/reportes", label: "Reportes", icon: BarChart3 },
+    { href: "/admin/responsables", label: "Responsables", icon: Users },
   ];
 
   if (isLoading) {

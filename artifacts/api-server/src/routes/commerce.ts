@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
 import { and, eq, sql, desc, lt } from "drizzle-orm";
 import {
-  db, branchesTable, cartsTable, cartItemsTable, productsTable,
+  db, branchesTable, cartsTable, cartItemsTable, productsTable, categoriesTable,
   productVariantsTable, branchProductsTable, ordersTable, orderItemsTable,
-  inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, internalNotificationsTable, usersTable,
+  inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, internalNotificationsTable, usersTable, categoryResponsibleAssignmentsTable, branchUserAssignmentsTable,
 } from "@workspace/db";
 import {
   CreateCartSessionBody, CreateCartSessionResponse, GetCartParams, GetCartResponse,
@@ -38,8 +38,17 @@ export async function applyInventoryAlert(tx: any, bp: typeof branchProductsTabl
   const [responsible] = bp.responsibleUserId
     ? await tx.select().from(usersTable).where(eq(usersTable.id, bp.responsibleUserId))
     : [];
-  const [fallback] = responsible ? [] : await tx.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
-  const recipient = responsible ?? fallback;
+  const [product] = responsible ? [] : await tx.select({ categoryId: productsTable.categoryId }).from(productsTable).where(eq(productsTable.id, bp.productId));
+  const [categoryResponsible] = responsible || !product ? [] : await tx.select({ user: usersTable })
+    .from(categoryResponsibleAssignmentsTable)
+    .innerJoin(usersTable, eq(categoryResponsibleAssignmentsTable.userId, usersTable.id))
+    .where(and(eq(categoryResponsibleAssignmentsTable.branchId, bp.branchId), eq(categoryResponsibleAssignmentsTable.categoryId, product.categoryId)));
+  const [branchManager] = responsible || categoryResponsible ? [] : await tx.select({ user: usersTable })
+    .from(branchUserAssignmentsTable)
+    .innerJoin(usersTable, eq(branchUserAssignmentsTable.userId, usersTable.id))
+    .where(and(eq(branchUserAssignmentsTable.branchId, bp.branchId), eq(usersTable.role, "branch_manager"))).limit(1);
+  const [fallback] = responsible || categoryResponsible || branchManager ? [] : await tx.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
+  const recipient = responsible ?? categoryResponsible?.user ?? branchManager?.user ?? fallback;
   const prefs = branch?.notificationPreferences ?? { email: false, inApp: true };
   const channels = [prefs.inApp !== false ? "in_app" : null, prefs.email ? "email_pending" : null].filter(Boolean) as string[];
   const [alert] = await tx.insert(inventoryAlertsTable).values({

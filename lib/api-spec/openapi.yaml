@@ -392,6 +392,12 @@ paths:
       responses:
         "200": { description: Branches, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AdminBranch" } } } } }
   /admin/branches/{id}:
+    get:
+      operationId: getAdminBranch
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: Branch detail tabs, content: { application/json: { schema: { $ref: "#/components/schemas/AdminBranchDetail" } } } }
     patch:
       operationId: updateAdminBranch
       tags: [admin]
@@ -461,6 +467,62 @@ paths:
             schema: { $ref: "#/components/schemas/OrderStatusUpdate" }
       responses:
         "200": { description: Order, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      responses:
+        "200": { description: Safe staff directory, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SafeUser" } } } } }
+  /admin/branches/{id}/assignments:
+    get:
+      operationId: listBranchAssignments
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: Branch assignments, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    put:
+      operationId: createBranchAssignment
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AssignmentInput" } } } }
+      responses:
+        "201": { description: Assignment, content: { application/json: { schema: { type: object } } } }
+  /admin/branches/{id}/assignments/{userId}:
+    delete:
+      operationId: deleteBranchAssignment
+      tags: [admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses: { "204": { description: Deleted } }
+  /admin/category-responsibles:
+    get:
+      operationId: listCategoryResponsibles
+      tags: [admin]
+      parameters: [{ name: branchId, in: query, schema: { type: integer } }]
+      responses:
+        "200": { description: Category responsible contacts, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    put:
+      operationId: upsertCategoryResponsible
+      tags: [admin]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CategoryResponsibleInput" } } } }
+      responses:
+        "200": { description: Assignment, content: { application/json: { schema: { type: object } } } }
+  /admin/category-responsibles/{id}:
+    delete:
+      operationId: deleteCategoryResponsible
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "204": { description: Deleted } }
+  /admin/reports/branches:
+    get:
+      operationId: getBranchReport
+      tags: [admin]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Branch comparison, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/BranchReport" } } } } }
 components:
   schemas:
     HealthStatus:
@@ -1094,4 +1156,48 @@ components:
       type: object
       properties: { status: { type: string, enum: [pending_payment, paid, preparing, ready, completed, cancelled] } }
       required: [status]
+    SafeUser:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string }
+      required: [id, name, email, role]
+    AssignmentInput:
+      type: object
+      properties: { userId: { type: string } }
+      required: [userId]
+    CategoryResponsibleInput:
+      type: object
+      properties:
+        branchId: { type: integer }
+        categoryId: { type: integer }
+        userId: { type: string }
+      required: [branchId, categoryId, userId]
+    AdminBranchDetail:
+      type: object
+      properties:
+        branch: { $ref: "#/components/schemas/AdminBranch" }
+        general: { type: object }
+        contact: { type: object }
+        hours: { type: array, items: { $ref: "#/components/schemas/BranchHour" } }
+        products: { type: array, items: { type: object } }
+        inventory: { type: array, items: { type: object } }
+        orders: { type: array, items: { type: object } }
+        alerts: { type: array, items: { type: object } }
+        notificationSettings: { type: object }
+      required: [branch, general, contact, hours, products, inventory, orders, alerts, notificationSettings]
+    BranchReport:
+      type: object
+      properties:
+        branchId: { type: integer }
+        branchName: { type: string }
+        orderCount: { type: integer }
+        revenue: { type: string }
+        inventoryCount: { type: integer }
+        inventoryValue: { type: string }
+        lowStockCount: { type: integer }
+        outOfStockCount: { type: integer }
+      required: [branchId, branchName, orderCount, revenue, inventoryCount, inventoryValue, lowStockCount, outOfStockCount]
 

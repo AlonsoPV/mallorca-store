@@ -16,6 +16,7 @@ import {
   branchProductsTable,
   productsTable,
   productVariantsTable,
+  categoriesTable,
 } from "./ecommerce";
 
 export const userRoleEnum = pgEnum("user_role", [
@@ -290,6 +291,21 @@ export const branchUserAssignmentsTable = pgTable(
   (table) => [uniqueIndex("branch_user_assignment_unique").on(table.branchId, table.userId)],
 );
 
+/** A category-level escalation contact, scoped to a branch. */
+export const categoryResponsibleAssignmentsTable = pgTable(
+  "category_responsible_assignments",
+  {
+    id: serial("id").primaryKey(),
+    branchId: integer("branch_id").notNull().references(() => branchesTable.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id").notNull().references(() => categoriesTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("category_responsible_assignment_unique").on(table.branchId, table.categoryId),
+  ],
+);
+
 export const inventoryAlertsTable = pgTable("inventory_alerts", {
   id: serial("id").primaryKey(),
   branchProductId: integer("branch_product_id").notNull().references(() => branchProductsTable.id, { onDelete: "cascade" }),
@@ -342,5 +358,6 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertAddress = z.infer<typeof insertAddressSchema>;
 export type InsertCart = z.infer<typeof insertCartSchema>;
 export type BranchUserAssignment = typeof branchUserAssignmentsTable.$inferSelect;
+export type CategoryResponsibleAssignment = typeof categoryResponsibleAssignmentsTable.$inferSelect;
 export type InventoryAlert = typeof inventoryAlertsTable.$inferSelect;
 export type InternalNotification = typeof internalNotificationsTable.$inferSelect;

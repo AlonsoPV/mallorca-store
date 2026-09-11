@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, lt, sql, inArray } from "drizzle-orm";
+import { and, eq, lt, sql, inArray, desc } from "drizzle-orm";
 import {
   branchProductsTable,
   branchesTable,
@@ -16,19 +16,81 @@ import {
   UpdateProductParams,
   UpdateProductResponse,
 } from "@workspace/api-zod";
-import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, usersTable } from "@workspace/db";
-import { desc } from "drizzle-orm";
+import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, usersTable, branchUserAssignmentsTable, categoryResponsibleAssignmentsTable, categoriesTable } from "@workspace/db";
 import { ListAdminOrdersQueryParams, ListAdminOrdersResponse, UpdateAdminOrderParams, UpdateAdminOrderBody, UpdateAdminOrderResponse } from "@workspace/api-zod";
 import {
   getProductDetailBySlug,
   listProductCards,
 } from "../lib/catalog";
-import { canAccessBranch, getAccessibleBranchIds } from "../middlewares/auth";
+import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
 import { stockState, enteredAlertState, validateInventoryCsv } from "../lib/inventory";
 import { z } from "zod/v4";
 import { applyInventoryAlert } from "./commerce";
 
 const router: IRouter = Router();
+
+async function assignmentActor(req: Parameters<typeof getRequestUser>[0]) {
+  const user = await getRequestUser(req);
+  return user && hasGlobalBranchAccess(user) ? user : undefined;
+}
+
+// Assignment administration deliberately returns no authentication/provider fields.
+router.get("/admin/users", async (req, res): Promise<void> => {
+  if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
+  const rows = await db.select({ id: usersTable.id, name: sql<string>`trim(concat(${usersTable.firstName}, ' ', ${usersTable.lastName}))`, email: usersTable.email, role: usersTable.role })
+    .from(usersTable).where(sql`${usersTable.role} <> 'customer'`).orderBy(usersTable.email);
+  res.json(rows);
+});
+
+router.get("/admin/branches/:id/assignments", async (req, res): Promise<void> => {
+  const branchId = Number(req.params.id);
+  if (!Number.isInteger(branchId) || !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const rows = await db.select({ id: branchUserAssignmentsTable.id, branchId: branchUserAssignmentsTable.branchId, user: { id: usersTable.id, name: sql<string>`trim(concat(${usersTable.firstName}, ' ', ${usersTable.lastName}))`, email: usersTable.email, role: usersTable.role } })
+    .from(branchUserAssignmentsTable).innerJoin(usersTable, eq(branchUserAssignmentsTable.userId, usersTable.id))
+    .where(eq(branchUserAssignmentsTable.branchId, branchId));
+  res.json(rows);
+});
+
+const assignmentBody = z.object({ userId: z.string().min(1) });
+router.put("/admin/branches/:id/assignments", async (req, res): Promise<void> => {
+  const branchId = Number(req.params.id), body = assignmentBody.safeParse(req.body);
+  if (!Number.isInteger(branchId) || !body.success) { res.status(400).json({ error: "Invalid assignment" }); return; }
+  if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
+  const [row] = await db.insert(branchUserAssignmentsTable).values({ branchId, userId: body.data.userId }).onConflictDoNothing().returning();
+  if (!row) { res.status(409).json({ error: "Assignment already exists" }); return; }
+  res.status(201).json(row);
+});
+
+router.delete("/admin/branches/:id/assignments/:userId", async (req, res): Promise<void> => {
+  const branchId = Number(req.params.id);
+  if (!Number.isInteger(branchId) || !(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
+  await db.delete(branchUserAssignmentsTable).where(and(eq(branchUserAssignmentsTable.branchId, branchId), eq(branchUserAssignmentsTable.userId, req.params.userId)));
+  res.status(204).end();
+});
+
+router.get("/admin/category-responsibles", async (req, res): Promise<void> => {
+  const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+  if (branchId != null && !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const filters = branchId == null ? undefined : eq(categoryResponsibleAssignmentsTable.branchId, branchId);
+  const rows = await db.select({ id: categoryResponsibleAssignmentsTable.id, branchId: categoryResponsibleAssignmentsTable.branchId, categoryId: categoryResponsibleAssignmentsTable.categoryId, category: categoriesTable.name, user: { id: usersTable.id, name: sql<string>`trim(concat(${usersTable.firstName}, ' ', ${usersTable.lastName}))`, email: usersTable.email, role: usersTable.role } })
+    .from(categoryResponsibleAssignmentsTable).innerJoin(categoriesTable, eq(categoryResponsibleAssignmentsTable.categoryId, categoriesTable.id)).innerJoin(usersTable, eq(categoryResponsibleAssignmentsTable.userId, usersTable.id)).where(filters);
+  res.json(rows);
+});
+
+const categoryResponsibleBody = z.object({ branchId: z.number().int(), categoryId: z.number().int(), userId: z.string().min(1) });
+router.put("/admin/category-responsibles", async (req, res): Promise<void> => {
+  const body = categoryResponsibleBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
+  const [row] = await db.insert(categoryResponsibleAssignmentsTable).values(body.data).onConflictDoUpdate({ target: [categoryResponsibleAssignmentsTable.branchId, categoryResponsibleAssignmentsTable.categoryId], set: { userId: body.data.userId } }).returning();
+  res.json(row);
+});
+
+router.delete("/admin/category-responsibles/:id", async (req, res): Promise<void> => {
+  if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
+  await db.delete(categoryResponsibleAssignmentsTable).where(eq(categoryResponsibleAssignmentsTable.id, Number(req.params.id)));
+  res.status(204).end();
+});
 const branchConfigurationSchema = z.object({
   branchId: z.number().int(),
   available: z.boolean().optional(),
@@ -107,6 +169,46 @@ router.get("/admin/branches", async (req, res): Promise<void> => {
   const rows = await db.select().from(branchesTable)
     .where(ids ? (ids.length ? inArray(branchesTable.id, ids) : sql`false`) : undefined)
     .orderBy(branchesTable.id);
+  res.json(rows);
+});
+
+router.get("/admin/branches/:id", async (req, res): Promise<void> => {
+  const branchId = Number(req.params.id);
+  if (!Number.isInteger(branchId) || !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, branchId));
+  if (!branch) { res.status(404).json({ error: "Branch not found" }); return; }
+  const [products, inventory, orders, alerts] = await Promise.all([
+    db.select({ configuration: branchProductsTable, product: productsTable }).from(branchProductsTable).innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id)).where(eq(branchProductsTable.branchId, branchId)),
+    db.select({ configuration: branchProductsTable, product: productsTable }).from(branchProductsTable).innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id)).where(eq(branchProductsTable.branchId, branchId)),
+    db.select().from(ordersTable).where(eq(ordersTable.branchId, branchId)).orderBy(desc(ordersTable.createdAt)).limit(100),
+    db.select({ alert: inventoryAlertsTable, product: productsTable }).from(inventoryAlertsTable).innerJoin(productsTable, eq(inventoryAlertsTable.productId, productsTable.id)).where(eq(inventoryAlertsTable.branchId, branchId)).orderBy(desc(inventoryAlertsTable.createdAt)),
+  ]);
+  res.json({ branch, general: branch, contact: { phone: branch.phone, whatsapp: branch.whatsapp, email: branch.email }, hours: branch.hours, products, inventory, orders, alerts, notificationSettings: branch.notificationPreferences });
+});
+
+const reportQuery = z.object({
+  from: z.string().optional(), to: z.string().optional(),
+});
+router.get("/admin/reports/branches", async (req, res): Promise<void> => {
+  const parsed = reportQuery.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ids = await getAccessibleBranchIds(req);
+  const dateFilters: ReturnType<typeof sql>[] = [];
+  if (parsed.data.from) dateFilters.push(sql`${ordersTable.createdAt} >= ${new Date(parsed.data.from)}`);
+  if (parsed.data.to) dateFilters.push(sql`${ordersTable.createdAt} < ${new Date(parsed.data.to)}`);
+  const branchFilter = ids ? (ids.length ? inArray(branchesTable.id, ids) : sql`false`) : undefined;
+  const branches = await db.select({ id: branchesTable.id, name: branchesTable.name }).from(branchesTable).where(branchFilter).orderBy(branchesTable.id);
+  const rows = await Promise.all(branches.map(async (branch) => {
+    const [sales] = await db.select({ orderCount: sql<number>`count(*)::int`, revenue: sql<string>`coalesce(sum(${ordersTable.total}), 0)::numeric` })
+      .from(ordersTable).where(and(eq(ordersTable.branchId, branch.id), sql`${ordersTable.status} <> 'cancelled'`, ...dateFilters));
+    const [stock] = await db.select({
+      inventoryCount: sql<number>`coalesce(sum(${branchProductsTable.inventory}), 0)::int`,
+      inventoryValue: sql<string>`coalesce(sum(${branchProductsTable.inventory} * coalesce(${branchProductsTable.priceOverride}, ${productsTable.price})), 0)::numeric`,
+      lowStockCount: sql<number>`count(*) filter (where ${branchProductsTable.inventory} > 0 and ${branchProductsTable.inventory} <= ${branchProductsTable.minStock})::int`,
+      outOfStockCount: sql<number>`count(*) filter (where ${branchProductsTable.inventory} = 0)::int`,
+    }).from(branchProductsTable).innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id)).where(eq(branchProductsTable.branchId, branch.id));
+    return { branchId: branch.id, branchName: branch.name, ...sales, ...stock };
+  }));
   res.json(rows);
 });
 

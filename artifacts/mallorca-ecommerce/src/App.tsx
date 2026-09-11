@@ -35,6 +35,9 @@ import AdminInventory from '@/pages/admin/inventory';
 import AdminImport from '@/pages/admin/import';
 import AdminBranches from '@/pages/admin/branches';
 import AdminAlerts from '@/pages/admin/alerts';
+import AdminBranchDetail from '@/pages/admin/branch-detail';
+import AdminReports from '@/pages/admin/reports';
+import AdminResponsibles from '@/pages/admin/responsibles';
 import { AdminGuard } from '@/components/layout/admin-guard';
 
 import { CartProvider } from '@/lib/cart-context';
@@ -231,6 +234,15 @@ function ClerkProviderWithRoutes() {
               </Route>
               <Route path="/admin/sucursales">
                 <AdminGuard><AdminBranches /></AdminGuard>
+              </Route>
+              <Route path="/admin/sucursales/:id">
+                <AdminGuard><AdminBranchDetail /></AdminGuard>
+              </Route>
+              <Route path="/admin/reportes">
+                <AdminGuard><AdminReports /></AdminGuard>
+              </Route>
+              <Route path="/admin/responsables">
+                <AdminGuard><AdminResponsibles /></AdminGuard>
               </Route>
               <Route path="/admin/alertas">
                 <AdminGuard><AdminAlerts /></AdminGuard>

@@ -1069,6 +1069,88 @@ export const ListAdminBranchesResponseItem = zod.object({
 export const ListAdminBranchesResponse = zod.array(ListAdminBranchesResponseItem)
 
 
+export const GetAdminBranchParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const GetAdminBranchResponse = zod.object({
+  "branch": zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "shortName": zod.string(),
+  "description": zod.string().nullable(),
+  "address": zod.string(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "phone": zod.string(),
+  "whatsapp": zod.string().nullable(),
+  "email": zod.string(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "preparationTimeMinutes": zod.number().int(),
+  "deliveryTimeMinutes": zod.number().int(),
+  "active": zod.boolean()
+}).and(zod.object({
+  "name": zod.string(),
+  "branchCode": zod.string().optional(),
+  "managerName": zod.string().nullish(),
+  "managerEmail": zod.string().email().nullish(),
+  "managerPhone": zod.string().nullish(),
+  "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
+  "active": zod.boolean()
+})),
+  "general": zod.object({
+
+}).passthrough(),
+  "contact": zod.object({
+
+}).passthrough(),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean()
+})),
+  "products": zod.array(zod.object({
+
+}).passthrough()),
+  "inventory": zod.array(zod.object({
+
+}).passthrough()),
+  "orders": zod.array(zod.object({
+
+}).passthrough()),
+  "alerts": zod.array(zod.object({
+
+}).passthrough()),
+  "notificationSettings": zod.object({
+
+}).passthrough()
+})
+
+
 export const UpdateAdminBranchParams = zod.object({
   "id": zod.coerce.number().int()
 })
@@ -1377,5 +1459,91 @@ export const UpdateAdminOrderResponse = zod.object({
   "lineTotal": zod.number()
 }))
 })
+
+
+export const ListAdminUsersResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.string()
+})
+export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
+
+
+export const ListBranchAssignmentsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListBranchAssignmentsResponseItem = zod.object({
+
+}).passthrough()
+export const ListBranchAssignmentsResponse = zod.array(ListBranchAssignmentsResponseItem)
+
+
+export const CreateBranchAssignmentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const CreateBranchAssignmentBody = zod.object({
+  "userId": zod.string()
+})
+
+export const CreateBranchAssignmentResponse = zod.object({
+
+}).passthrough()
+
+
+export const DeleteBranchAssignmentParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "userId": zod.coerce.string()
+})
+
+export const DeleteBranchAssignmentResponse = zod.void()
+
+
+export const ListCategoryResponsiblesQueryParams = zod.object({
+  "branchId": zod.coerce.number().int().optional()
+})
+
+export const ListCategoryResponsiblesResponseItem = zod.object({
+
+}).passthrough()
+export const ListCategoryResponsiblesResponse = zod.array(ListCategoryResponsiblesResponseItem)
+
+
+export const UpsertCategoryResponsibleBody = zod.object({
+  "branchId": zod.number().int(),
+  "categoryId": zod.number().int(),
+  "userId": zod.string()
+})
+
+export const UpsertCategoryResponsibleResponse = zod.object({
+
+}).passthrough()
+
+
+export const DeleteCategoryResponsibleParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteCategoryResponsibleResponse = zod.void()
+
+
+export const GetBranchReportQueryParams = zod.object({
+  "from": zod.date().optional(),
+  "to": zod.date().optional()
+})
+
+export const GetBranchReportResponseItem = zod.object({
+  "branchId": zod.number().int(),
+  "branchName": zod.string(),
+  "orderCount": zod.number().int(),
+  "revenue": zod.string(),
+  "inventoryCount": zod.number().int(),
+  "inventoryValue": zod.string(),
+  "lowStockCount": zod.number().int(),
+  "outOfStockCount": zod.number().int()
+})
+export const GetBranchReportResponse = zod.array(GetBranchReportResponseItem)
 
 

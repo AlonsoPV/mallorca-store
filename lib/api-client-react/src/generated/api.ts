@@ -21,21 +21,27 @@ import type {
 
 import type {
   AdminBranch,
+  AdminBranchDetail,
   AdminProduct,
   AdminSummary,
+  AssignmentInput,
   Branch,
   BranchDetail,
+  BranchReport,
   BranchUpdate,
   Cart,
   CartItemInput,
   CartItemUpdate,
   CartSessionInput,
   Category,
+  CategoryResponsibleInput,
+  CreateBranchAssignment201,
   CsvImportInput,
   DeliveryValidation,
   DeliveryValidationInput,
   ErrorResponse,
   FulfillmentSlot,
+  GetBranchReportParams,
   GetInventoryMatrix200Item,
   HealthStatus,
   ImportPreview,
@@ -46,6 +52,9 @@ import type {
   ListAdminInventoryParams,
   ListAdminOrdersParams,
   ListAdminProductsParams,
+  ListBranchAssignments200Item,
+  ListCategoryResponsibles200Item,
+  ListCategoryResponsiblesParams,
   ListFulfillmentSlotsParams,
   ListInventoryMovements200Item,
   ListProductsParams,
@@ -59,7 +68,9 @@ import type {
   ProductDetail,
   ProductInput,
   ProductUpdate,
+  SafeUser,
   UpdateAdminInventory200,
+  UpsertCategoryResponsible200,
   UserProfile,
   UserProfileUpdate
 } from './api.schemas';
@@ -2135,6 +2146,77 @@ export function useListAdminBranches<TData = Awaited<ReturnType<typeof listAdmin
 
 
 
+export const getGetAdminBranchUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/branches/${id}`
+}
+
+export const getAdminBranch = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<AdminBranchDetail> => {
+
+  return customFetch<AdminBranchDetail>(getGetAdminBranchUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminBranchQueryKey = (id: number,) => {
+    return [
+    `/api/admin/branches/${id}`
+    ] as const;
+    }
+
+
+export const getGetAdminBranchQueryOptions = <TData = Awaited<ReturnType<typeof getAdminBranch>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminBranch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminBranchQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminBranch>>> = ({ signal }) => getAdminBranch(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminBranch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminBranchQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminBranch>>>
+export type GetAdminBranchQueryError = ErrorType<unknown>
+
+
+
+export function useGetAdminBranch<TData = Awaited<ReturnType<typeof getAdminBranch>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminBranch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminBranchQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getUpdateAdminBranchUrl = (id: number,) => {
 
 
@@ -2837,4 +2919,605 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getUpdateAdminOrderMutationOptions(options));
     }
+
+export const getListAdminUsersUrl = () => {
+
+
+
+
+  return `/api/admin/users`
+}
+
+export const listAdminUsers = async ( options?: Parameters<typeof customFetch>[1]): Promise<SafeUser[]> => {
+
+  return customFetch<SafeUser[]>(getListAdminUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminUsersQueryKey = () => {
+    return [
+    `/api/admin/users`
+    ] as const;
+    }
+
+
+export const getListAdminUsersQueryOptions = <TData = Awaited<ReturnType<typeof listAdminUsers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminUsersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminUsers>>> = ({ signal }) => listAdminUsers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminUsers>>>
+export type ListAdminUsersQueryError = ErrorType<unknown>
+
+
+
+export function useListAdminUsers<TData = Awaited<ReturnType<typeof listAdminUsers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminUsersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListBranchAssignmentsUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/branches/${id}/assignments`
+}
+
+export const listBranchAssignments = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<ListBranchAssignments200Item[]> => {
+
+  return customFetch<ListBranchAssignments200Item[]>(getListBranchAssignmentsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBranchAssignmentsQueryKey = (id: number,) => {
+    return [
+    `/api/admin/branches/${id}/assignments`
+    ] as const;
+    }
+
+
+export const getListBranchAssignmentsQueryOptions = <TData = Awaited<ReturnType<typeof listBranchAssignments>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBranchAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBranchAssignmentsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBranchAssignments>>> = ({ signal }) => listBranchAssignments(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBranchAssignments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBranchAssignmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listBranchAssignments>>>
+export type ListBranchAssignmentsQueryError = ErrorType<unknown>
+
+
+
+export function useListBranchAssignments<TData = Awaited<ReturnType<typeof listBranchAssignments>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBranchAssignments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBranchAssignmentsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBranchAssignmentUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/branches/${id}/assignments`
+}
+
+export const createBranchAssignment = async (id: number,
+    assignmentInput: AssignmentInput, options?: Parameters<typeof customFetch>[1]): Promise<CreateBranchAssignment201> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CreateBranchAssignment201>(getCreateBranchAssignmentUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(assignmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBranchAssignmentMutationKey = () => ['createBranchAssignment'] as const;
+
+export const getCreateBranchAssignmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBranchAssignment>>, TError,CreateBranchAssignmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBranchAssignment>>, TError,CreateBranchAssignmentMutationVariables, TContext> => {
+
+const mutationKey = getCreateBranchAssignmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBranchAssignment>>, CreateBranchAssignmentMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createBranchAssignment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBranchAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof createBranchAssignment>>>
+    export type CreateBranchAssignmentMutationBody = BodyType<AssignmentInput>
+    export type CreateBranchAssignmentMutationError = ErrorType<unknown>
+    export type CreateBranchAssignmentMutationVariables = {id: number;data: BodyType<AssignmentInput>}
+
+    export const useCreateBranchAssignment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBranchAssignment>>, TError,CreateBranchAssignmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBranchAssignment>>,
+        TError,
+        CreateBranchAssignmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateBranchAssignmentMutationOptions(options));
+    }
+
+export const getDeleteBranchAssignmentUrl = (id: number,
+    userId: string,) => {
+
+
+
+
+  return `/api/admin/branches/${id}/assignments/${userId}`
+}
+
+export const deleteBranchAssignment = async (id: number,
+    userId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteBranchAssignmentUrl(id,userId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteBranchAssignmentMutationKey = () => ['deleteBranchAssignment'] as const;
+
+export const getDeleteBranchAssignmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBranchAssignment>>, TError,DeleteBranchAssignmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBranchAssignment>>, TError,DeleteBranchAssignmentMutationVariables, TContext> => {
+
+const mutationKey = getDeleteBranchAssignmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBranchAssignment>>, DeleteBranchAssignmentMutationVariables> = (props) => {
+          const {id,userId} = props ?? {};
+
+          return  deleteBranchAssignment(id,userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBranchAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBranchAssignment>>>
+
+    export type DeleteBranchAssignmentMutationError = ErrorType<unknown>
+    export type DeleteBranchAssignmentMutationVariables = {id: number;userId: string}
+
+    export const useDeleteBranchAssignment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBranchAssignment>>, TError,DeleteBranchAssignmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBranchAssignment>>,
+        TError,
+        DeleteBranchAssignmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteBranchAssignmentMutationOptions(options));
+    }
+
+export const getListCategoryResponsiblesUrl = (params?: ListCategoryResponsiblesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/category-responsibles?${stringifiedParams}` : `/api/admin/category-responsibles`
+}
+
+export const listCategoryResponsibles = async (params?: ListCategoryResponsiblesParams, options?: Parameters<typeof customFetch>[1]): Promise<ListCategoryResponsibles200Item[]> => {
+
+  return customFetch<ListCategoryResponsibles200Item[]>(getListCategoryResponsiblesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCategoryResponsiblesQueryKey = (params?: ListCategoryResponsiblesParams,) => {
+    return [
+    `/api/admin/category-responsibles`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCategoryResponsiblesQueryOptions = <TData = Awaited<ReturnType<typeof listCategoryResponsibles>>, TError = ErrorType<unknown>>(params?: ListCategoryResponsiblesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCategoryResponsibles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCategoryResponsiblesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCategoryResponsibles>>> = ({ signal }) => listCategoryResponsibles(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCategoryResponsibles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCategoryResponsiblesQueryResult = NonNullable<Awaited<ReturnType<typeof listCategoryResponsibles>>>
+export type ListCategoryResponsiblesQueryError = ErrorType<unknown>
+
+
+
+export function useListCategoryResponsibles<TData = Awaited<ReturnType<typeof listCategoryResponsibles>>, TError = ErrorType<unknown>>(
+ params?: ListCategoryResponsiblesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCategoryResponsibles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCategoryResponsiblesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertCategoryResponsibleUrl = () => {
+
+
+
+
+  return `/api/admin/category-responsibles`
+}
+
+export const upsertCategoryResponsible = async (categoryResponsibleInput: CategoryResponsibleInput, options?: Parameters<typeof customFetch>[1]): Promise<UpsertCategoryResponsible200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<UpsertCategoryResponsible200>(getUpsertCategoryResponsibleUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(categoryResponsibleInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertCategoryResponsibleMutationKey = () => ['upsertCategoryResponsible'] as const;
+
+export const getUpsertCategoryResponsibleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertCategoryResponsible>>, TError,UpsertCategoryResponsibleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertCategoryResponsible>>, TError,UpsertCategoryResponsibleMutationVariables, TContext> => {
+
+const mutationKey = getUpsertCategoryResponsibleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertCategoryResponsible>>, UpsertCategoryResponsibleMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertCategoryResponsible(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertCategoryResponsibleMutationResult = NonNullable<Awaited<ReturnType<typeof upsertCategoryResponsible>>>
+    export type UpsertCategoryResponsibleMutationBody = BodyType<CategoryResponsibleInput>
+    export type UpsertCategoryResponsibleMutationError = ErrorType<unknown>
+    export type UpsertCategoryResponsibleMutationVariables = {data: BodyType<CategoryResponsibleInput>}
+
+    export const useUpsertCategoryResponsible = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertCategoryResponsible>>, TError,UpsertCategoryResponsibleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertCategoryResponsible>>,
+        TError,
+        UpsertCategoryResponsibleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpsertCategoryResponsibleMutationOptions(options));
+    }
+
+export const getDeleteCategoryResponsibleUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/category-responsibles/${id}`
+}
+
+export const deleteCategoryResponsible = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteCategoryResponsibleUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCategoryResponsibleMutationKey = () => ['deleteCategoryResponsible'] as const;
+
+export const getDeleteCategoryResponsibleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryResponsible>>, TError,DeleteCategoryResponsibleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryResponsible>>, TError,DeleteCategoryResponsibleMutationVariables, TContext> => {
+
+const mutationKey = getDeleteCategoryResponsibleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCategoryResponsible>>, DeleteCategoryResponsibleMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCategoryResponsible(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCategoryResponsibleMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCategoryResponsible>>>
+
+    export type DeleteCategoryResponsibleMutationError = ErrorType<unknown>
+    export type DeleteCategoryResponsibleMutationVariables = {id: number}
+
+    export const useDeleteCategoryResponsible = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryResponsible>>, TError,DeleteCategoryResponsibleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCategoryResponsible>>,
+        TError,
+        DeleteCategoryResponsibleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteCategoryResponsibleMutationOptions(options));
+    }
+
+export const getGetBranchReportUrl = (params?: GetBranchReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/reports/branches?${stringifiedParams}` : `/api/admin/reports/branches`
+}
+
+export const getBranchReport = async (params?: GetBranchReportParams, options?: Parameters<typeof customFetch>[1]): Promise<BranchReport[]> => {
+
+  return customFetch<BranchReport[]>(getGetBranchReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBranchReportQueryKey = (params?: GetBranchReportParams,) => {
+    return [
+    `/api/admin/reports/branches`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetBranchReportQueryOptions = <TData = Awaited<ReturnType<typeof getBranchReport>>, TError = ErrorType<unknown>>(params?: GetBranchReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBranchReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBranchReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBranchReport>>> = ({ signal }) => getBranchReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBranchReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBranchReportQueryResult = NonNullable<Awaited<ReturnType<typeof getBranchReport>>>
+export type GetBranchReportQueryError = ErrorType<unknown>
+
+
+
+export function useGetBranchReport<TData = Awaited<ReturnType<typeof getBranchReport>>, TError = ErrorType<unknown>>(
+ params?: GetBranchReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBranchReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBranchReportQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
