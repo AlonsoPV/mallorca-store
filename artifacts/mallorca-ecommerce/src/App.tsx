@@ -161,6 +161,11 @@ function AccountRedirect() {
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location]);
+
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
