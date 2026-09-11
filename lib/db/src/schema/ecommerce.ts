@@ -33,6 +33,7 @@ export const branchesTable = pgTable(
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
+    branchCode: text("branch_code"),
     shortName: text("short_name").notNull(),
     description: text("description"),
     address: text("address").notNull(),
@@ -47,6 +48,13 @@ export const branchesTable = pgTable(
     phone: text("phone").notNull(),
     whatsapp: text("whatsapp"),
     email: text("email").notNull(),
+    managerName: text("manager_name"),
+    managerEmail: text("manager_email"),
+    managerPhone: text("manager_phone"),
+    notificationPreferences: jsonb("notification_preferences")
+      .$type<{ email?: boolean; inApp?: boolean }>()
+      .notNull()
+      .default({ email: false, inApp: true }),
     mapsUrl: text("maps_url").notNull(),
     openTableUrl: text("open_table_url"),
     instagramUrl: text("instagram_url"),
@@ -77,7 +85,10 @@ export const branchesTable = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [uniqueIndex("branches_slug_unique").on(table.slug)],
+  (table) => [
+    uniqueIndex("branches_slug_unique").on(table.slug),
+    uniqueIndex("branches_code_unique").on(table.branchCode),
+  ],
 );
 
 export const categoriesTable = pgTable(
@@ -172,6 +183,9 @@ export const branchProductsTable = pgTable(
       .references(() => productsTable.id, { onDelete: "cascade" }),
     available: boolean("available").notNull().default(true),
     inventory: integer("inventory").notNull().default(0),
+    minStock: integer("min_stock").notNull().default(0),
+    alertState: text("alert_state").notNull().default("NORMAL"),
+    responsibleUserId: text("responsible_user_id"),
     priceOverride: numeric("price_override", { mode: "number" }),
     salePriceOverride: numeric("sale_price_override", { mode: "number" }),
     preparationTimeMinutes: integer("preparation_time_minutes"),

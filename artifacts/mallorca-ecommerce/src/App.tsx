@@ -31,6 +31,10 @@ import AdminDashboard from '@/pages/admin/dashboard';
 import AdminProductsList from '@/pages/admin/products-list';
 import AdminProductForm from '@/pages/admin/product-form';
 import AdminOrdersList from '@/pages/admin/orders-list';
+import AdminInventory from '@/pages/admin/inventory';
+import AdminImport from '@/pages/admin/import';
+import AdminBranches from '@/pages/admin/branches';
+import AdminAlerts from '@/pages/admin/alerts';
 import { AdminGuard } from '@/components/layout/admin-guard';
 
 import { CartProvider } from '@/lib/cart-context';
@@ -218,6 +222,18 @@ function ClerkProviderWithRoutes() {
               </Route>
               <Route path="/admin/pedidos">
                 <AdminGuard><AdminOrdersList /></AdminGuard>
+              </Route>
+              <Route path="/admin/inventario">
+                <AdminGuard><AdminInventory /></AdminGuard>
+              </Route>
+              <Route path="/admin/importar">
+                <AdminGuard><AdminImport /></AdminGuard>
+              </Route>
+              <Route path="/admin/sucursales">
+                <AdminGuard><AdminBranches /></AdminGuard>
+              </Route>
+              <Route path="/admin/alertas">
+                <AdminGuard><AdminAlerts /></AdminGuard>
               </Route>
               
               <Route component={NotFound} />

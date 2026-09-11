@@ -10,6 +10,7 @@ import {
   useGetProduct,
   useListCategories,
   useListAdminProducts,
+  useListAdminBranches,
   type ProductInput,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -63,6 +64,8 @@ export default function AdminProductForm() {
   const queryClient = useQueryClient();
 
   const { data: categories } = useListCategories();
+  const { data: branches } = useListAdminBranches();
+  const [branchConfigurations, setBranchConfigurations] = useState<Record<number, any>>({});
   
   // Use slug based fetch if editing. Wait, our API uses ID for update, but getProduct takes slug? 
   // Let's assume the route passes slug or ID. The schema says updateProduct takes id (number) and getProduct takes slug.
@@ -133,6 +136,14 @@ export default function AdminProductForm() {
   const initialized = useRef(false);
   useEffect(() => {
     if (isEditing && productDetail && !initialized.current) {
+      setBranchConfigurations(Object.fromEntries((productDetail.availability || []).map((availability) => [availability.branchId, {
+        available: availability.available,
+        inventory: availability.inventory,
+        priceOverride: availability.price,
+        pickupAvailable: availability.pickupAvailable,
+        deliveryAvailable: availability.deliveryAvailable,
+        preparationTimeMinutes: availability.preparationTimeMinutes,
+      }])));
       form.reset({
         sku: productDetail.sku,
         name: productDetail.name,
@@ -157,6 +168,9 @@ export default function AdminProductForm() {
       ...data,
       imageUrl: data.imageUrl || null,
       salePrice: data.salePrice || null,
+      branchConfigurations: Object.entries(branchConfigurations).map(([branchId, config]) => ({
+        branchId: Number(branchId), ...config,
+      })),
     };
 
     if (isEditing) {
@@ -378,6 +392,27 @@ export default function AdminProductForm() {
                       </FormItem>
                     )} />
                   </div>
+                </div>
+              </div>
+
+              {/* Image Section */}
+              <div className="bg-card p-6 rounded-xl border border-border shadow-sm">
+                <h2 className="text-lg font-semibold mb-4 border-b border-border pb-2">Configuración por sucursal</h2>
+                <div className="space-y-4">
+                  {branches?.map((branch) => {
+                    const config = branchConfigurations[branch.id] || {};
+                    const setConfig = (key: string, value: any) => setBranchConfigurations(prev => ({ ...prev, [branch.id]: { ...prev[branch.id], [key]: value } }));
+                    return <div key={branch.id} className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end border-b pb-4 last:border-0">
+                      <div className="col-span-2 font-medium">{branch.name}</div>
+                      <label className="flex gap-2 items-center text-sm"><Checkbox checked={config.available ?? false} onCheckedChange={v => setConfig("available", !!v)} /> Disponible</label>
+                      <label className="text-sm">Inventario<Input type="number" min="0" value={config.inventory ?? 0} onChange={e => setConfig("inventory", Number(e.target.value))}/></label>
+                      <label className="text-sm">Mínimo<Input type="number" min="0" value={config.minStock ?? 0} onChange={e => setConfig("minStock", Number(e.target.value))}/></label>
+                      <label className="text-sm">Precio local<Input type="number" min="0" step="0.01" placeholder="Base" value={config.priceOverride ?? ""} onChange={e => setConfig("priceOverride", e.target.value ? Number(e.target.value) : null)}/></label>
+                      <label className="flex gap-2 items-center text-sm"><Checkbox checked={config.pickupAvailable ?? branch.pickupAvailable} onCheckedChange={v => setConfig("pickupAvailable", !!v)} /> Recogida</label>
+                      <label className="flex gap-2 items-center text-sm"><Checkbox checked={config.deliveryAvailable ?? branch.deliveryAvailable} onCheckedChange={v => setConfig("deliveryAvailable", !!v)} /> Entrega</label>
+                      <label className="text-sm">Preparación (min)<Input type="number" min="0" value={config.preparationTimeMinutes ?? branch.preparationTimeMinutes} onChange={e => setConfig("preparationTimeMinutes", Number(e.target.value))}/></label>
+                    </div>
+                  })}
                 </div>
               </div>
 

@@ -3,7 +3,7 @@ import { and, eq, sql, desc, lt } from "drizzle-orm";
 import {
   db, branchesTable, cartsTable, cartItemsTable, productsTable,
   productVariantsTable, branchProductsTable, ordersTable, orderItemsTable,
-  inventoryReservationsTable, inventoryLedgerTable, usersTable,
+  inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, internalNotificationsTable, usersTable,
 } from "@workspace/db";
 import {
   CreateCartSessionBody, CreateCartSessionResponse, GetCartParams, GetCartResponse,
@@ -19,10 +19,44 @@ import {
 import { serializeBranch } from "../lib/catalog";
 import { getRequestUser, requireAuth } from "../middlewares/auth";
 import crypto from "node:crypto";
+import { stockState, enteredAlertState } from "../lib/inventory";
 
 const router: IRouter = Router();
 const id = () => crypto.randomUUID();
 const num = (v: number | null) => v ?? 0;
+
+export async function applyInventoryAlert(tx: any, bp: typeof branchProductsTable.$inferSelect, nextInventory: number): Promise<void> {
+  const nextState = stockState(nextInventory, bp.minStock);
+  const previous = bp.alertState as "NORMAL" | "LOW_STOCK" | "OUT_OF_STOCK";
+  await tx.update(branchProductsTable).set({ alertState: nextState }).where(eq(branchProductsTable.id, bp.id));
+  if (nextState === "NORMAL" && previous !== "NORMAL") {
+    await tx.update(inventoryAlertsTable).set({ resolvedAt: new Date() })
+      .where(and(eq(inventoryAlertsTable.branchProductId, bp.id), sql`${inventoryAlertsTable.resolvedAt} is null`));
+  }
+  if (!enteredAlertState(previous, nextState)) return;
+  const [branch] = await tx.select().from(branchesTable).where(eq(branchesTable.id, bp.branchId));
+  const [responsible] = bp.responsibleUserId
+    ? await tx.select().from(usersTable).where(eq(usersTable.id, bp.responsibleUserId))
+    : [];
+  const [fallback] = responsible ? [] : await tx.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
+  const recipient = responsible ?? fallback;
+  const prefs = branch?.notificationPreferences ?? { email: false, inApp: true };
+  const channels = [prefs.inApp !== false ? "in_app" : null, prefs.email ? "email_pending" : null].filter(Boolean) as string[];
+  const [alert] = await tx.insert(inventoryAlertsTable).values({
+    branchProductId: bp.id, branchId: bp.branchId, productId: bp.productId,
+    state: nextState as "LOW_STOCK" | "OUT_OF_STOCK", type: nextState as "LOW_STOCK" | "OUT_OF_STOCK",
+    stock: nextInventory, minStock: bp.minStock,
+    responsibleName: responsible ? `${responsible.firstName ?? ""} ${responsible.lastName ?? ""}`.trim() : branch?.managerName,
+    responsibleEmail: responsible?.email ?? branch?.managerEmail,
+    responsibleUserId: recipient?.id, channels,
+    deliveryState: channels.some((channel) => channel === "email_pending") ? "pending" : "not_sent",
+  }).returning();
+  if (recipient) await tx.insert(internalNotificationsTable).values({
+    userId: recipient.id, branchId: bp.branchId, alertId: alert.id,
+    title: `Inventory ${nextState.toLowerCase().replace("_", " ")}`,
+    message: `Product inventory requires attention (${nextInventory} remaining).`,
+  });
+}
 
 async function releaseExpiredReservations(): Promise<void> {
   await db.transaction(async (tx) => {
@@ -37,8 +71,9 @@ async function releaseExpiredReservations(): Promise<void> {
         .where(and(eq(inventoryReservationsTable.orderId, order.id), eq(inventoryReservationsTable.status, "active"))).returning();
       for (const r of expired) {
         const [bp] = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` })
-          .where(eq(branchProductsTable.id, r.branchProductId)).returning({ inventory: branchProductsTable.inventory });
+          .where(eq(branchProductsTable.id, r.branchProductId)).returning();
         if (!bp) continue;
+        await applyInventoryAlert(tx, bp, bp.inventory);
         await tx.insert(inventoryLedgerTable).values({ branchProductId: r.branchProductId, orderId: r.orderId, movement: "release", quantityDelta: r.quantity, balanceAfter: bp.inventory, reason: "Reservation expired" });
       }
       if (expired.length) await tx.update(ordersTable).set({ status: "cancelled" }).where(and(eq(ordersTable.id, order.id), eq(ordersTable.status, "pending_payment")));
@@ -246,7 +281,8 @@ router.post("/orders", async (req, res): Promise<void> => {
         const updated = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} - ${item.quantity}` }).where(and(eq(branchProductsTable.id, bp.id), sql`${branchProductsTable.inventory} >= ${item.quantity}`)).returning({ inventory: branchProductsTable.inventory });
         if (!updated.length) throw new Error("OUT_OF_STOCK");
         await tx.insert(orderItemsTable).values({ orderId, productId: item.productId, variantId: item.variantId, sku: item.sku, name: item.name, variantLabel: item.variantLabel, quantity: item.quantity, unitPrice: serverPrice, lineTotal: serverPrice * item.quantity });
-        await tx.insert(inventoryReservationsTable).values({ orderId, branchProductId: bp.id, quantity: item.quantity, expiresAt: reservationExpiresAt });
+         await applyInventoryAlert(tx, { ...bp, inventory: updated[0].inventory }, updated[0].inventory);
+         await tx.insert(inventoryReservationsTable).values({ orderId, branchProductId: bp.id, quantity: item.quantity, expiresAt: reservationExpiresAt });
         await tx.insert(inventoryLedgerTable).values({ branchProductId: bp.id, orderId, movement: "reserve", quantityDelta: -item.quantity, balanceAfter: updated[0].inventory, reason: "Order reservation" });
       }
       return o;

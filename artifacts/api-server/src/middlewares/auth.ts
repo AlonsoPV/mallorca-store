@@ -1,6 +1,6 @@
 import { getAuth } from "@clerk/express";
 import type { NextFunction, Request, Response } from "express";
-import { db, usersTable, type User } from "@workspace/db";
+import { db, usersTable, branchUserAssignmentsTable, type User } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 declare global {
@@ -62,6 +62,32 @@ export function requireRole(...roles: User["role"][]) {
     }
     next();
   };
+}
+
+/** Roles retained for legacy admin callers, plus the explicitly global operations roles. */
+export function hasGlobalBranchAccess(user: User): boolean {
+  return user.role === "admin" || user.role === "operations_manager" || user.role === "operations" || user.role === "manager";
+}
+
+/**
+ * Enforce branch scope server-side. A null result means the caller may address
+ * every branch; otherwise callers may only address the returned assignments.
+ */
+export async function getAccessibleBranchIds(req: Request): Promise<number[] | null> {
+  const user = await getRequestUser(req);
+  if (!user) return [];
+  if (hasGlobalBranchAccess(user)) return null;
+  if (user.role !== "staff" && user.role !== "branch_manager") return [];
+  const rows = await db
+    .select({ branchId: branchUserAssignmentsTable.branchId })
+    .from(branchUserAssignmentsTable)
+    .where(eq(branchUserAssignmentsTable.userId, user.id));
+  return rows.map((row) => row.branchId);
+}
+
+export async function canAccessBranch(req: Request, branchId: number): Promise<boolean> {
+  const ids = await getAccessibleBranchIds(req);
+  return ids === null || ids.includes(branchId);
 }
 
 export async function getRequestUser(req: Request): Promise<User | undefined> {

@@ -380,9 +380,75 @@ paths:
     get:
       operationId: listAdminOrders
       tags: [admin]
-      parameters: [{ name: status, in: query, required: false, schema: { type: string } }]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string } }
+        - { name: branchId, in: query, required: false, schema: { type: integer } }
       responses:
         "200": { description: Orders, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrderSummary" } } } } }
+  /admin/branches:
+    get:
+      operationId: listAdminBranches
+      tags: [admin]
+      responses:
+        "200": { description: Branches, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AdminBranch" } } } } }
+  /admin/branches/{id}:
+    patch:
+      operationId: updateAdminBranch
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/BranchUpdate" } } } }
+      responses:
+        "200": { description: Branch, content: { application/json: { schema: { $ref: "#/components/schemas/AdminBranch" } } } }
+  /admin/inventory:
+    get:
+      operationId: listAdminInventory
+      tags: [admin]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: branchId, in: query, schema: { type: integer } }
+        - { name: state, in: query, schema: { type: string, enum: [NORMAL, LOW_STOCK, OUT_OF_STOCK] } }
+        - { name: categoryId, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Inventory, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/InventoryRow" } } } } }
+  /admin/inventory/matrix:
+    get:
+      operationId: getInventoryMatrix
+      tags: [admin]
+      responses:
+        "200": { description: Inventory matrix, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+  /admin/inventory/update:
+    post:
+      operationId: updateAdminInventory
+      tags: [admin]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/InventoryUpdate" } } } }
+      responses:
+        "200": { description: Updated inventory, content: { application/json: { schema: { type: object } } } }
+  /admin/inventory/movements:
+    get:
+      operationId: listInventoryMovements
+      tags: [admin]
+      responses:
+        "200": { description: Movement history, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+  /admin/inventory/alerts:
+    get:
+      operationId: listInventoryAlerts
+      tags: [admin]
+      responses:
+        "200": { description: Alert history, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/InventoryAlertRow" } } } } }
+  /admin/inventory/import/preview:
+    post:
+      operationId: previewInventoryImport
+      tags: [admin]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CsvImportInput" } } } }
+      responses:
+        "200": { description: Import preview, content: { application/json: { schema: { $ref: "#/components/schemas/ImportPreview" } } } }
+  /admin/inventory/import:
+    post:
+      operationId: importInventory
+      tags: [admin]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CsvImportInput" } } } }
+      responses:
+        "200": { description: Import result, content: { application/json: { schema: { $ref: "#/components/schemas/ImportResult" } } } }
   /admin/orders/{id}:
     patch:
       operationId: updateAdminOrder
@@ -720,6 +786,10 @@ components:
         minimumLeadTimeHours:
           type: integer
           minimum: 0
+        branchConfigurations:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchConfiguration"
       required:
         - sku
         - name
@@ -763,6 +833,80 @@ components:
         minimumLeadTimeHours:
           type: integer
           minimum: 0
+        branchConfigurations:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchConfiguration"
+    BranchConfiguration:
+      type: object
+      properties:
+        branchId: { type: integer }
+        available: { type: boolean }
+        inventory: { type: integer, minimum: 0 }
+        minStock: { type: integer, minimum: 0 }
+        priceOverride: { type: ["number", "null"] }
+        salePriceOverride: { type: ["number", "null"] }
+        preparationTimeMinutes: { type: ["integer", "null"] }
+        pickupAvailable: { type: boolean }
+        deliveryAvailable: { type: boolean }
+      required: [branchId]
+    BranchUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        branchCode: { type: string }
+        managerName: { type: ["string", "null"] }
+        managerEmail: { type: ["string", "null"], format: email }
+        managerPhone: { type: ["string", "null"] }
+        notificationPreferences: { type: object, additionalProperties: { type: boolean } }
+        active: { type: boolean }
+    AdminBranch:
+      allOf:
+        - $ref: "#/components/schemas/Branch"
+        - $ref: "#/components/schemas/BranchUpdate"
+    InventoryRow:
+      type: object
+      properties:
+        branchProduct: { type: object }
+        branch: { $ref: "#/components/schemas/Branch" }
+        product: { $ref: "#/components/schemas/ProductCard" }
+        reservedStock: { type: integer }
+      required: [branchProduct, branch, product, reservedStock]
+    InventoryAlertRow:
+      type: object
+      properties:
+        alert: { type: object }
+        branch: { $ref: "#/components/schemas/Branch" }
+        product: { $ref: "#/components/schemas/ProductCard" }
+      required: [alert, branch, product]
+    InventoryUpdate:
+      type: object
+      properties:
+        branchProductId: { type: integer }
+        branchId: { type: integer }
+        productId: { type: integer }
+        quantity: { type: integer, minimum: 0 }
+        delta: { type: integer }
+        reason: { type: string }
+        reference: { type: string }
+      required: [reason]
+    CsvImportInput:
+      type: object
+      properties: { csv: { type: string } }
+      required: [csv]
+    ImportPreview:
+      type: object
+      properties:
+        rows: { type: array, items: { type: object } }
+        errors: { type: array, items: { type: object } }
+        valid: { type: boolean }
+      required: [rows, errors, valid]
+    ImportResult:
+      type: object
+      properties:
+        imported: { type: integer }
+        errors: { type: array, items: { type: object } }
+      required: [imported, errors]
     AdminProduct:
       allOf:
         - $ref: "#/components/schemas/ProductCard"
@@ -915,7 +1059,11 @@ components:
         status: { type: string }
         total: { type: number }
         createdAt: { type: string, format: date-time }
-      required: [id, orderNumber, status, total, createdAt]
+        branchId: { type: integer }
+        customerName: { type: string }
+        customerEmail: { type: string }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+      required: [id, orderNumber, status, total, createdAt, branchId, customerName, customerEmail, fulfillmentMethod]
     PaymentStart:
       type: object
       properties:
@@ -934,7 +1082,7 @@ components:
         firstName: { type: ["string", "null"] }
         lastName: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
-        role: { type: string, enum: [customer, staff, manager, admin] }
+        role: { type: string, enum: [customer, staff, manager, admin, branch_manager, operations, operations_manager] }
       required: [id, email, firstName, lastName, phone, role]
     UserProfileUpdate:
       type: object

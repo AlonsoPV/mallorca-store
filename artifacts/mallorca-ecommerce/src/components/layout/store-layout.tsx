@@ -24,7 +24,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
 
   const toggleMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
-  const isAdmin = user?.role === "staff" || user?.role === "manager" || user?.role === "admin";
+  const isAdmin = !!user && ["staff", "branch_manager", "operations_manager", "operations", "manager", "admin"].includes(user.role);
   const isHeroHeader = location === "/" && !isScrolled;
 
   useEffect(() => {

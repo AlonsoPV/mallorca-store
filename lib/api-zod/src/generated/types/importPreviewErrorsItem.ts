@@ -6,7 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListAdminOrdersParams = {
-status?: string;
-branchId?: number;
-};
+export type ImportPreviewErrorsItem = { [key: string]: unknown };

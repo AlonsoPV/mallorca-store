@@ -5,6 +5,7 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderSummaryFulfillmentMethod } from './orderSummaryFulfillmentMethod';
 
 export interface OrderSummary {
   id: string;
@@ -12,4 +13,8 @@ export interface OrderSummary {
   status: string;
   total: number;
   createdAt: Date;
+  branchId: number;
+  customerName: string;
+  customerEmail: string;
+  fulfillmentMethod: OrderSummaryFulfillmentMethod;
 }

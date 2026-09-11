@@ -14,4 +14,7 @@ export const UserProfileRole = {
   staff: 'staff',
   manager: 'manager',
   admin: 'admin',
+  branch_manager: 'branch_manager',
+  operations: 'operations',
+  operations_manager: 'operations_manager',
 } as const;

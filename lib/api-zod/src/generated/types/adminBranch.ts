@@ -5,8 +5,7 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { Branch } from './branch';
+import type { BranchUpdate } from './branchUpdate';
 
-export type ListAdminOrdersParams = {
-status?: string;
-branchId?: number;
-};
+export type AdminBranch = Branch & BranchUpdate;

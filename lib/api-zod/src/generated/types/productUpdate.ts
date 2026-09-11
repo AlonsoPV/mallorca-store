@@ -5,6 +5,7 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { BranchConfiguration } from './branchConfiguration';
 import type { ProductUpdateStatus } from './productUpdateStatus';
 
 export interface ProductUpdate {
@@ -24,4 +25,5 @@ export interface ProductUpdate {
   status?: ProductUpdateStatus;
   /** @minimum 0 */
   minimumLeadTimeHours?: number;
+  branchConfigurations?: BranchConfiguration[];
 }

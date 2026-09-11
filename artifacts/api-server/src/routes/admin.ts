@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, lt, sql, inArray } from "drizzle-orm";
 import {
   branchProductsTable,
   branchesTable,
@@ -16,21 +16,43 @@ import {
   UpdateProductParams,
   UpdateProductResponse,
 } from "@workspace/api-zod";
-import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable } from "@workspace/db";
+import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, usersTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { ListAdminOrdersQueryParams, ListAdminOrdersResponse, UpdateAdminOrderParams, UpdateAdminOrderBody, UpdateAdminOrderResponse } from "@workspace/api-zod";
 import {
   getProductDetailBySlug,
   listProductCards,
 } from "../lib/catalog";
+import { canAccessBranch, getAccessibleBranchIds } from "../middlewares/auth";
+import { stockState, enteredAlertState, validateInventoryCsv } from "../lib/inventory";
+import { z } from "zod/v4";
+import { applyInventoryAlert } from "./commerce";
 
 const router: IRouter = Router();
+const branchConfigurationSchema = z.object({
+  branchId: z.number().int(),
+  available: z.boolean().optional(),
+  inventory: z.number().int().min(0).optional(),
+  minStock: z.number().int().min(0).optional(),
+  priceOverride: z.number().min(0).nullable().optional(),
+  salePriceOverride: z.number().min(0).nullable().optional(),
+  preparationTimeMinutes: z.number().int().min(0).nullable().optional(),
+  pickupAvailable: z.boolean().optional(),
+  deliveryAvailable: z.boolean().optional(),
+});
+const branchConfigurationsSchema = z.array(branchConfigurationSchema).optional();
 
 router.get("/admin/orders", async (req, res): Promise<void> => {
   const q = ListAdminOrdersQueryParams.safeParse(req.query);
   if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
-  const rows = await db.select({ id: ordersTable.id, orderNumber: ordersTable.orderNumber, status: ordersTable.status, total: ordersTable.total, createdAt: ordersTable.createdAt })
-    .from(ordersTable).where(q.data.status ? eq(ordersTable.status, q.data.status as any) : undefined).orderBy(desc(ordersTable.createdAt));
+  const branchIds = await getAccessibleBranchIds(req);
+  const filters = [];
+  if (q.data.status) filters.push(eq(ordersTable.status, q.data.status as any));
+  if (q.data.branchId != null && !(await canAccessBranch(req, q.data.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  if (q.data.branchId != null) filters.push(eq(ordersTable.branchId, q.data.branchId));
+  if (branchIds) filters.push(branchIds.length ? sql`${ordersTable.branchId} = ANY(${branchIds})` : sql`false`);
+  const rows = await db.select({ id: ordersTable.id, orderNumber: ordersTable.orderNumber, status: ordersTable.status, total: ordersTable.total, createdAt: ordersTable.createdAt, branchId: ordersTable.branchId, customerName: ordersTable.customerName, customerEmail: ordersTable.customerEmail, fulfillmentMethod: ordersTable.fulfillmentMethod })
+    .from(ordersTable).where(filters.length ? and(...filters) : undefined).orderBy(desc(ordersTable.createdAt));
   res.json(ListAdminOrdersResponse.parse(rows));
 });
 
@@ -42,6 +64,7 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     updated = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, p.data.id)).for("update");
     if (!order) throw new Error("ORDER_NOT_FOUND");
+    if (!(await canAccessBranch(req, order.branchId))) throw new Error("FORBIDDEN_BRANCH");
     const valid: Record<string, string[]> = { pending_payment: ["paid", "cancelled"], paid: ["preparing", "cancelled"], preparing: ["ready", "cancelled"], ready: ["completed", "cancelled"], completed: [], cancelled: [] };
     if (!valid[order.status].includes(b.data.status) && order.status !== b.data.status) throw new Error("INVALID_TRANSITION");
     if (b.data.status === "paid" && order.status !== "paid") {
@@ -53,6 +76,8 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
       const reservations = await tx.update(inventoryReservationsTable).set({ status: "released" }).where(and(eq(inventoryReservationsTable.orderId, order.id), sql`${inventoryReservationsTable.status} in ('active','committed')`)).returning();
       for (const r of reservations) {
         const [bp] = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` }).where(eq(branchProductsTable.id, r.branchProductId)).returning({ inventory: branchProductsTable.inventory });
+        const [fullBp] = await tx.select().from(branchProductsTable).where(eq(branchProductsTable.id, r.branchProductId));
+        if (fullBp) await applyInventoryAlert(tx, fullBp, bp.inventory);
         await tx.insert(inventoryLedgerTable).values({ branchProductId: r.branchProductId, orderId: order.id, movement: "release", quantityDelta: r.quantity, balanceAfter: bp.inventory, reason: "Order cancelled" });
       }
     }
@@ -62,11 +87,181 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     });
   } catch (error) {
     if (error instanceof Error && error.message === "ORDER_NOT_FOUND") { res.status(404).json({ error: "Order not found" }); return; }
+    if (error instanceof Error && error.message === "FORBIDDEN_BRANCH") { res.status(403).json({ error: "Branch access denied" }); return; }
     if (error instanceof Error && error.message === "INVALID_TRANSITION") { res.status(409).json({ error: "Invalid status transition" }); return; }
     throw error;
   }
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, updated.id));
   res.json(UpdateAdminOrderResponse.parse({ ...updated, items }));
+});
+
+const branchUpdateSchema = z.object({
+  name: z.string().min(1).optional(), branchCode: z.string().min(1).optional(),
+  managerName: z.string().nullable().optional(), managerEmail: z.string().email().nullable().optional(),
+  managerPhone: z.string().nullable().optional(), notificationPreferences: z.object({ email: z.boolean().optional(), inApp: z.boolean().optional() }).optional(),
+  active: z.boolean().optional(),
+});
+
+router.get("/admin/branches", async (req, res): Promise<void> => {
+  const ids = await getAccessibleBranchIds(req);
+  const rows = await db.select().from(branchesTable)
+    .where(ids ? (ids.length ? inArray(branchesTable.id, ids) : sql`false`) : undefined)
+    .orderBy(branchesTable.id);
+  res.json(rows);
+});
+
+router.patch("/admin/branches/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const body = branchUpdateSchema.safeParse(req.body);
+  if (!Number.isInteger(id) || !body.success) { res.status(400).json({ error: "Invalid branch update" }); return; }
+  if (!(await canAccessBranch(req, id))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const [branch] = await db.update(branchesTable).set(body.data).where(eq(branchesTable.id, id)).returning();
+  if (!branch) { res.status(404).json({ error: "Branch not found" }); return; }
+  res.json(branch);
+});
+
+const inventoryQuery = z.object({
+  search: z.string().optional(), branchId: z.coerce.number().int().optional(),
+  state: z.enum(["NORMAL", "LOW_STOCK", "OUT_OF_STOCK"]).optional(),
+  categoryId: z.coerce.number().int().optional(),
+});
+
+async function scopedBranchId(req: Parameters<typeof canAccessBranch>[0], branchId: number): Promise<boolean> {
+  return canAccessBranch(req, branchId);
+}
+
+router.get("/admin/inventory", async (req, res): Promise<void> => {
+  const q = inventoryQuery.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
+  if (q.data.branchId != null && !(await scopedBranchId(req, q.data.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const ids = await getAccessibleBranchIds(req);
+  const filters = [];
+  if (ids) filters.push(ids.length ? inArray(branchProductsTable.branchId, ids) : sql`false`);
+  if (q.data.branchId != null) filters.push(eq(branchProductsTable.branchId, q.data.branchId));
+  if (q.data.categoryId != null) filters.push(eq(productsTable.categoryId, q.data.categoryId));
+  if (q.data.state) filters.push(eq(branchProductsTable.alertState, q.data.state));
+  if (q.data.search) filters.push(sql`(${productsTable.sku} ilike ${`%${q.data.search}%`} or ${productsTable.name} ilike ${`%${q.data.search}%`})`);
+  const rows = await db.select({ branchProduct: branchProductsTable, branch: branchesTable, product: productsTable,
+    reservedStock: sql<number>`coalesce((select sum(${inventoryReservationsTable.quantity}) from ${inventoryReservationsTable} where ${inventoryReservationsTable.branchProductId} = ${branchProductsTable.id} and ${inventoryReservationsTable.status} = 'active'), 0)::int` })
+    .from(branchProductsTable).innerJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
+    .innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id))
+    .where(filters.length ? and(...filters) : undefined).orderBy(productsTable.name);
+  res.json(rows);
+});
+
+router.get("/admin/inventory/matrix", async (req, res): Promise<void> => {
+  const ids = await getAccessibleBranchIds(req);
+  const rows = await db.select({ product: productsTable, branchProduct: branchProductsTable, branch: branchesTable,
+    reservedStock: sql<number>`coalesce((select sum(${inventoryReservationsTable.quantity}) from ${inventoryReservationsTable} where ${inventoryReservationsTable.branchProductId} = ${branchProductsTable.id} and ${inventoryReservationsTable.status} = 'active'), 0)::int` })
+    .from(productsTable).leftJoin(branchProductsTable, eq(branchProductsTable.productId, productsTable.id))
+    .leftJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
+    .where(ids ? (ids.length ? inArray(branchProductsTable.branchId, ids) : sql`false`) : undefined);
+  res.json(rows);
+});
+
+const stockUpdateSchema = z.object({
+  branchProductId: z.number().int().optional(), branchId: z.number().int().optional(), productId: z.number().int().optional(),
+  quantity: z.number().int().min(0).optional(), delta: z.number().int().optional(),
+  reason: z.string().min(1), reference: z.string().optional(),
+}).refine((v) => v.quantity != null || v.delta != null, "quantity or delta is required");
+
+router.post("/admin/inventory/update", async (req, res): Promise<void> => {
+  const parsed = stockUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const input = parsed.data;
+  try {
+    const result = await db.transaction(async (tx) => {
+      let bp;
+      if (input.branchProductId) [bp] = await tx.select().from(branchProductsTable).where(eq(branchProductsTable.id, input.branchProductId)).for("update");
+      else if (input.branchId && input.productId) [bp] = await tx.select().from(branchProductsTable).where(and(eq(branchProductsTable.branchId, input.branchId), eq(branchProductsTable.productId, input.productId))).for("update");
+      if (!bp) throw new Error("INVENTORY_NOT_FOUND");
+      if (!(await canAccessBranch(req, bp.branchId))) throw new Error("FORBIDDEN_BRANCH");
+      const next = input.quantity != null ? input.quantity : bp.inventory + input.delta!;
+      if (next < 0) throw new Error("NEGATIVE_INVENTORY");
+      const nextState = stockState(next, bp.minStock);
+      const [updated] = await tx.update(branchProductsTable).set({ inventory: next, alertState: nextState }).where(eq(branchProductsTable.id, bp.id)).returning();
+      const [ledger] = await tx.insert(inventoryLedgerTable).values({
+        branchProductId: bp.id, movement: "adjustment", category: "manual", quantityDelta: next - bp.inventory,
+        balanceAfter: next, previousBalance: bp.inventory, newBalance: next, actorUserId: req.localUser?.id,
+        reference: input.reference, reason: input.reason,
+      }).returning();
+      await applyInventoryAlert(tx, bp, next);
+      return { inventory: updated, ledger };
+    });
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "FORBIDDEN_BRANCH") { res.status(403).json({ error: "Branch access denied" }); return; }
+    if (message === "INVENTORY_NOT_FOUND") { res.status(404).json({ error: "Inventory record not found" }); return; }
+    if (message === "NEGATIVE_INVENTORY") { res.status(409).json({ error: "Inventory cannot be negative" }); return; }
+    throw error;
+  }
+});
+
+router.get("/admin/inventory/movements", async (req, res): Promise<void> => {
+  const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+  if (branchId != null && !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const ids = await getAccessibleBranchIds(req);
+  const rows = await db.select().from(inventoryLedgerTable).innerJoin(branchProductsTable, eq(inventoryLedgerTable.branchProductId, branchProductsTable.id))
+    .where(ids ? (ids.length ? inArray(branchProductsTable.branchId, ids) : sql`false`) : branchId ? eq(branchProductsTable.branchId, branchId) : undefined)
+    .orderBy(desc(inventoryLedgerTable.createdAt));
+  res.json(rows);
+});
+
+router.get("/admin/inventory/alerts", async (req, res): Promise<void> => {
+  const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+  if (branchId != null && !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const ids = await getAccessibleBranchIds(req);
+  const alertFilters = ids ? (ids.length ? inArray(inventoryAlertsTable.branchId, ids) : sql`false`) : branchId ? eq(inventoryAlertsTable.branchId, branchId) : undefined;
+  const rows = await db.select({ alert: inventoryAlertsTable, branch: branchesTable, product: productsTable })
+    .from(inventoryAlertsTable).innerJoin(branchesTable, eq(inventoryAlertsTable.branchId, branchesTable.id))
+    .innerJoin(productsTable, eq(inventoryAlertsTable.productId, productsTable.id))
+    .where(alertFilters).orderBy(desc(inventoryAlertsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/admin/inventory/import/preview", async (req, res): Promise<void> => {
+  const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
+  const result = validateInventoryCsv(csv);
+  const ids = await getAccessibleBranchIds(req);
+  const allowed = ids === null ? null : new Set(ids);
+  const branches = await db.select({ id: branchesTable.id, code: branchesTable.branchCode }).from(branchesTable);
+  const byCode = new Map(branches.map((b) => [b.code, b.id]));
+  const products = await db.select({ sku: productsTable.sku }).from(productsTable);
+  const skus = new Set(products.map((p) => p.sku));
+  const errors = [...result.errors];
+  result.rows.forEach((row, i) => { const branchId = byCode.get(row.branchCode); if (!branchId) errors.push({ row: i + 2, message: "Unknown branch_code" }); else if (allowed && !allowed.has(branchId)) errors.push({ row: i + 2, message: "Branch access denied" }); if (!skus.has(row.sku)) errors.push({ row: i + 2, message: "Unknown SKU" }); });
+  res.json({ rows: result.rows, errors, valid: errors.length === 0 });
+});
+
+router.post("/admin/inventory/import", async (req, res): Promise<void> => {
+  const parsed = validateInventoryCsv(typeof req.body?.csv === "string" ? req.body.csv : "");
+  const branches = await db.select({ id: branchesTable.id, code: branchesTable.branchCode }).from(branchesTable);
+  const products = await db.select({ id: productsTable.id, sku: productsTable.sku }).from(productsTable);
+  const branchMap = new Map(branches.map((b) => [b.code, b.id])), productMap = new Map(products.map((p) => [p.sku, p.id]));
+  const ids = await getAccessibleBranchIds(req), errors = [...parsed.errors];
+  const existing = await db.select({ branchId: branchProductsTable.branchId, productId: branchProductsTable.productId }).from(branchProductsTable);
+  const existingPairs = new Set(existing.map((row) => `${row.branchId}:${row.productId}`));
+  for (const [i, row] of parsed.rows.entries()) {
+    const branchId = branchMap.get(row.branchCode), productId = productMap.get(row.sku);
+    if (!branchId || (ids && !ids.includes(branchId))) errors.push({ row: i + 2, message: "Invalid branch_code or access" });
+    if (!productId) errors.push({ row: i + 2, message: "Unknown SKU" });
+    else if (branchId && !existingPairs.has(`${branchId}:${productId}`)) errors.push({ row: i + 2, message: "SKU is not configured for branch" });
+  }
+  if (errors.length) { res.status(400).json({ imported: 0, errors }); return; }
+  const imported = await db.transaction(async (tx) => {
+    for (const row of parsed.rows) {
+      const branchId = branchMap.get(row.branchCode)!, productId = productMap.get(row.sku)!;
+      const [bp] = await tx.select().from(branchProductsTable).where(and(eq(branchProductsTable.branchId, branchId), eq(branchProductsTable.productId, productId))).for("update");
+      if (!bp) throw new Error(`Missing branch product for ${row.sku}/${row.branchCode}`);
+      const state = stockState(row.quantity, bp.minStock);
+      await tx.update(branchProductsTable).set({ inventory: row.quantity, alertState: state }).where(eq(branchProductsTable.id, bp.id));
+      await tx.insert(inventoryLedgerTable).values({ branchProductId: bp.id, movement: "adjustment", category: "import", quantityDelta: row.quantity - bp.inventory, balanceAfter: row.quantity, previousBalance: bp.inventory, newBalance: row.quantity, actorUserId: req.localUser?.id, reason: "Inventory CSV import" });
+      await applyInventoryAlert(tx, bp, row.quantity);
+    }
+    return parsed.rows.length;
+  });
+  res.json({ imported, errors: [] });
 });
 
 router.get("/admin/summary", async (_req, res): Promise<void> => {
@@ -138,20 +333,18 @@ router.get("/admin/products", async (req, res): Promise<void> => {
 
 router.post("/admin/products", async (req, res): Promise<void> => {
   const body = CreateProductBody.safeParse(req.body);
-  if (!body.success) {
-    req.log.warn({ errors: body.error.message }, "Invalid product");
-    res.status(400).json({ error: body.error.message });
+  const configurations = branchConfigurationsSchema.safeParse(req.body?.branchConfigurations);
+  if (!body.success || !configurations.success) {
+    const message = !body.success ? body.error.message : configurations.error?.message ?? "Invalid branch configuration";
+    req.log.warn({ errors: message }, "Invalid product");
+    res.status(400).json({ error: message });
     return;
   }
+  for (const config of configurations.data ?? []) {
+    if (!(await canAccessBranch(req, config.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  }
 
-  const [product] = await db
-    .insert(productsTable)
-    .values({
-      ...body.data,
-      gallery: body.data.imageUrl ? [body.data.imageUrl] : [],
-      tags: [],
-    })
-    .returning();
+  const [product] = await db.insert(productsTable).values({ ...body.data, gallery: body.data.imageUrl ? [body.data.imageUrl] : [], tags: [] }).returning();
 
   const branches = await db
     .select({ id: branchesTable.id })
@@ -159,13 +352,22 @@ router.post("/admin/products", async (req, res): Promise<void> => {
     .where(eq(branchesTable.active, true));
 
   if (branches.length) {
+    const configs = configurations.data ?? [];
     await db.insert(branchProductsTable).values(
-      branches.map((branch) => ({
+      branches.map((branch) => {
+        const config = configs.find((item) => item.branchId === branch.id);
+        return ({
         branchId: branch.id,
         productId: product.id,
-        available: false,
-        inventory: 0,
-      })),
+        available: config?.available ?? false,
+        inventory: config?.inventory ?? 0,
+        minStock: config?.minStock ?? 0,
+        priceOverride: config?.priceOverride,
+        salePriceOverride: config?.salePriceOverride,
+        preparationTimeMinutes: config?.preparationTimeMinutes,
+        pickupAvailable: config?.pickupAvailable ?? true,
+        deliveryAvailable: config?.deliveryAvailable ?? true,
+      }); }),
     );
   }
 
@@ -176,14 +378,15 @@ router.post("/admin/products", async (req, res): Promise<void> => {
 router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   const params = UpdateProductParams.safeParse(req.params);
   const body = UpdateProductBody.safeParse(req.body);
+  const configurations = branchConfigurationsSchema.safeParse(req.body?.branchConfigurations);
 
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+  if (!body.success || !configurations.success) {
+    res.status(400).json({ error: !body.success ? body.error.message : configurations.error?.message ?? "Invalid branch configuration" });
     return;
   }
 
@@ -196,6 +399,14 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   if (!product) {
     res.status(404).json({ error: "Producto no encontrado" });
     return;
+  }
+
+  for (const config of configurations.data ?? []) {
+    if (!(await canAccessBranch(req, config.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+    const { branchId, ...values } = config;
+    await db.insert(branchProductsTable).values({ branchId, productId: product.id, ...values }).onConflictDoUpdate({
+      target: [branchProductsTable.branchId, branchProductsTable.productId], set: values,
+    });
   }
 
   const detail = await getProductDetailBySlug(product.slug);

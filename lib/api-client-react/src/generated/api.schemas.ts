@@ -148,6 +148,23 @@ export const ProductInputStatus = {
   inactive: 'inactive',
 } as const;
 
+export interface BranchConfiguration {
+  branchId: number;
+  available?: boolean;
+  /** @minimum 0 */
+  inventory?: number;
+  /** @minimum 0 */
+  minStock?: number;
+  /** @nullable */
+  priceOverride?: number | null;
+  /** @nullable */
+  salePriceOverride?: number | null;
+  /** @nullable */
+  preparationTimeMinutes?: number | null;
+  pickupAvailable?: boolean;
+  deliveryAvailable?: boolean;
+}
+
 export interface ProductInput {
   /** @minLength 1 */
   sku: string;
@@ -169,6 +186,7 @@ export interface ProductInput {
   status: ProductInputStatus;
   /** @minimum 0 */
   minimumLeadTimeHours: number;
+  branchConfigurations?: BranchConfiguration[];
 }
 
 export type ProductUpdateStatus = typeof ProductUpdateStatus[keyof typeof ProductUpdateStatus];
@@ -197,6 +215,73 @@ export interface ProductUpdate {
   status?: ProductUpdateStatus;
   /** @minimum 0 */
   minimumLeadTimeHours?: number;
+  branchConfigurations?: BranchConfiguration[];
+}
+
+export type BranchUpdateNotificationPreferences = {[key: string]: boolean};
+
+export interface BranchUpdate {
+  name?: string;
+  branchCode?: string;
+  /** @nullable */
+  managerName?: string | null;
+  /** @nullable */
+  managerEmail?: string | null;
+  /** @nullable */
+  managerPhone?: string | null;
+  notificationPreferences?: BranchUpdateNotificationPreferences;
+  active?: boolean;
+}
+
+export type AdminBranch = Branch & BranchUpdate;
+
+export type InventoryRowBranchProduct = { [key: string]: unknown };
+
+export interface InventoryRow {
+  branchProduct: InventoryRowBranchProduct;
+  branch: Branch;
+  product: ProductCard;
+  reservedStock: number;
+}
+
+export type InventoryAlertRowAlert = { [key: string]: unknown };
+
+export interface InventoryAlertRow {
+  alert: InventoryAlertRowAlert;
+  branch: Branch;
+  product: ProductCard;
+}
+
+export interface InventoryUpdate {
+  branchProductId?: number;
+  branchId?: number;
+  productId?: number;
+  /** @minimum 0 */
+  quantity?: number;
+  delta?: number;
+  reason: string;
+  reference?: string;
+}
+
+export interface CsvImportInput {
+  csv: string;
+}
+
+export type ImportPreviewRowsItem = { [key: string]: unknown };
+
+export type ImportPreviewErrorsItem = { [key: string]: unknown };
+
+export interface ImportPreview {
+  rows: ImportPreviewRowsItem[];
+  errors: ImportPreviewErrorsItem[];
+  valid: boolean;
+}
+
+export type ImportResultErrorsItem = { [key: string]: unknown };
+
+export interface ImportResult {
+  imported: number;
+  errors: ImportResultErrorsItem[];
 }
 
 export type AdminProductStatus = typeof AdminProductStatus[keyof typeof AdminProductStatus];
@@ -346,12 +431,24 @@ export interface Order {
   items: CartLineItem[];
 }
 
+export type OrderSummaryFulfillmentMethod = typeof OrderSummaryFulfillmentMethod[keyof typeof OrderSummaryFulfillmentMethod];
+
+
+export const OrderSummaryFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
 export interface OrderSummary {
   id: string;
   orderNumber: string;
   status: string;
   total: number;
   createdAt: string;
+  branchId: number;
+  customerName: string;
+  customerEmail: string;
+  fulfillmentMethod: OrderSummaryFulfillmentMethod;
 }
 
 export type PaymentStartCode = typeof PaymentStartCode[keyof typeof PaymentStartCode];
@@ -378,6 +475,9 @@ export const UserProfileRole = {
   staff: 'staff',
   manager: 'manager',
   admin: 'admin',
+  branch_manager: 'branch_manager',
+  operations: 'operations',
+  operations_manager: 'operations_manager',
 } as const;
 
 export interface UserProfile {
@@ -458,5 +558,28 @@ export const ListFulfillmentSlotsMethod = {
 
 export type ListAdminOrdersParams = {
 status?: string;
+branchId?: number;
 };
+
+export type ListAdminInventoryParams = {
+search?: string;
+branchId?: number;
+state?: ListAdminInventoryState;
+categoryId?: number;
+};
+
+export type ListAdminInventoryState = typeof ListAdminInventoryState[keyof typeof ListAdminInventoryState];
+
+
+export const ListAdminInventoryState = {
+  NORMAL: 'NORMAL',
+  LOW_STOCK: 'LOW_STOCK',
+  OUT_OF_STOCK: 'OUT_OF_STOCK',
+} as const;
+
+export type GetInventoryMatrix200Item = { [key: string]: unknown };
+
+export type UpdateAdminInventory200 = { [key: string]: unknown };
+
+export type ListInventoryMovements200Item = { [key: string]: unknown };
 

@@ -10,6 +10,6 @@ const router: IRouter = Router();
 router.use(healthRouter);
 router.use(storefrontRouter);
 router.use(commerceRouter);
-router.use(requireRole("staff", "manager", "admin"), adminRouter);
+router.use(requireRole("staff", "branch_manager", "operations_manager", "operations", "manager", "admin"), adminRouter);
 
 export default router;

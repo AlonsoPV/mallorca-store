@@ -1,20 +1,25 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Package, LayoutDashboard, FilePlus, LogOut, ShoppingCart } from "lucide-react";
+import { Package, LayoutDashboard, FilePlus, LogOut, ShoppingCart, Boxes, Upload, Store, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useListInventoryAlerts } from "@workspace/api-client-react";
 import { useClerk } from "@clerk/react";
 
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { data: user, isLoading } = useGetMe();
   const { signOut } = useClerk();
+  const { data: alerts } = useListInventoryAlerts();
 
   const navItems = [
     { href: "/admin", label: "Resumen", icon: LayoutDashboard },
     { href: "/admin/productos", label: "Productos", icon: Package },
     { href: "/admin/productos/nuevo", label: "Nuevo Producto", icon: FilePlus },
     { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
+    { href: "/admin/inventario", label: "Inventario", icon: Boxes },
+    { href: "/admin/importar", label: "Importar", icon: Upload },
+    { href: "/admin/sucursales", label: "Sucursales", icon: Store },
+    { href: "/admin/alertas", label: "Alertas", icon: Bell },
   ];
 
   if (isLoading) {
@@ -28,7 +33,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user || (user.role !== "staff" && user.role !== "manager" && user.role !== "admin")) {
+  if (!user || !["staff", "branch_manager", "operations_manager", "operations", "manager", "admin"].includes(user.role)) {
     return (
       <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background px-4 text-center">
         <h1 className="text-4xl font-serif text-foreground mb-4">Acceso Denegado</h1>
@@ -71,7 +76,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                     : "text-foreground/70 hover:bg-muted hover:text-foreground"
                 )}>
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                   {item.label}{item.href === "/admin/alertas" && alerts?.length ? <span className="ml-auto rounded-full bg-destructive px-2 py-0.5 text-[10px] text-destructive-foreground">{alerts.length}</span> : null}
                 </span>
               </Link>
             );

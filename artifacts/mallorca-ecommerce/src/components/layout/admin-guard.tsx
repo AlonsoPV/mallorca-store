@@ -40,7 +40,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (isError || !user || !["staff", "manager", "admin"].includes(user.role)) {
+  if (isError || !user || !["staff", "branch_manager", "operations_manager", "operations", "manager", "admin"].includes(user.role)) {
     return (
       <StoreLayout>
         <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">

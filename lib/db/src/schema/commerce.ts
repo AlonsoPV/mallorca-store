@@ -23,6 +23,9 @@ export const userRoleEnum = pgEnum("user_role", [
   "staff",
   "manager",
   "admin",
+  "branch_manager",
+  "operations",
+  "operations_manager",
 ]);
 export const cartStatusEnum = pgEnum("cart_status", [
   "active",
@@ -58,6 +61,23 @@ export const inventoryMovementEnum = pgEnum("inventory_movement", [
   "release",
   "sale",
   "adjustment",
+]);
+export const inventoryMovementCategoryEnum = pgEnum("inventory_movement_category", [
+  "reserve",
+  "release",
+  "sale",
+  "adjustment",
+  "manual",
+  "import",
+]);
+export const inventoryAlertStateEnum = pgEnum("inventory_alert_state", [
+  "NORMAL",
+  "LOW_STOCK",
+  "OUT_OF_STOCK",
+]);
+export const inventoryAlertTypeEnum = pgEnum("inventory_alert_type", [
+  "LOW_STOCK",
+  "OUT_OF_STOCK",
 ]);
 
 export const usersTable = pgTable(
@@ -248,10 +268,55 @@ export const inventoryLedgerTable = pgTable("inventory_ledger", {
   movement: inventoryMovementEnum("movement").notNull(),
   quantityDelta: integer("quantity_delta").notNull(),
   balanceAfter: integer("balance_after").notNull(),
+  previousBalance: integer("previous_balance"),
+  newBalance: integer("new_balance"),
+  actorUserId: text("actor_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  reference: text("reference"),
+  category: inventoryMovementCategoryEnum("category").notNull().default("adjustment"),
   reason: text("reason").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+export const branchUserAssignmentsTable = pgTable(
+  "branch_user_assignments",
+  {
+    id: serial("id").primaryKey(),
+    branchId: integer("branch_id").notNull().references(() => branchesTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("branch_user_assignment_unique").on(table.branchId, table.userId)],
+);
+
+export const inventoryAlertsTable = pgTable("inventory_alerts", {
+  id: serial("id").primaryKey(),
+  branchProductId: integer("branch_product_id").notNull().references(() => branchProductsTable.id, { onDelete: "cascade" }),
+  branchId: integer("branch_id").notNull().references(() => branchesTable.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => productsTable.id, { onDelete: "cascade" }),
+  state: inventoryAlertStateEnum("state").notNull(),
+  type: inventoryAlertTypeEnum("type").notNull(),
+  stock: integer("stock").notNull().default(0),
+  minStock: integer("min_stock").notNull().default(0),
+  responsibleName: text("responsible_name"),
+  responsibleEmail: text("responsible_email"),
+  responsibleUserId: text("responsible_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  deliveryState: text("delivery_state").notNull().default("pending"),
+  channels: text("channels").array().notNull().default([]),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const internalNotificationsTable = pgTable("internal_notifications", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
+  branchId: integer("branch_id").references(() => branchesTable.id, { onDelete: "cascade" }),
+  alertId: integer("alert_id").references(() => inventoryAlertsTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({
@@ -276,3 +341,6 @@ export type OrderItem = typeof orderItemsTable.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertAddress = z.infer<typeof insertAddressSchema>;
 export type InsertCart = z.infer<typeof insertCartSchema>;
+export type BranchUserAssignment = typeof branchUserAssignmentsTable.$inferSelect;
+export type InventoryAlert = typeof inventoryAlertsTable.$inferSelect;
+export type InternalNotification = typeof internalNotificationsTable.$inferSelect;
