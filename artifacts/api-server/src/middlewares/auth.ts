@@ -27,12 +27,20 @@ export async function provisionUser(req: Request): Promise<User | undefined> {
     `${userId}@clerk.invalid`;
   const firstName = claimString(claims.first_name) ?? claimString(claims.firstName);
   const lastName = claimString(claims.last_name) ?? claimString(claims.lastName);
+  const initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
+  const role = initialAdminEmail && email.toLowerCase() === initialAdminEmail ? "admin" : undefined;
   const [user] = await db
     .insert(usersTable)
-    .values({ id: userId, email, firstName, lastName })
+    .values({ id: userId, email, firstName, lastName, ...(role ? { role } : {}) })
     .onConflictDoUpdate({
       target: usersTable.id,
-      set: { email, firstName, lastName, updatedAt: new Date() },
+      set: {
+        email,
+        firstName,
+        lastName,
+        ...(role ? { role } : {}),
+        updatedAt: new Date(),
+      },
     })
     .returning();
   req.userId = userId;
