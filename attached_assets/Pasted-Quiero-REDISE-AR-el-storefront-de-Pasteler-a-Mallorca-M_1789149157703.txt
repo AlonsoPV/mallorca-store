@@ -1,0 +1,1070 @@
+Quiero REDISEÑAR el storefront de Pastelería Mallorca México tomando como REFERENCIA PRINCIPAL el sitio oficial de Mallorca Madrid:
+
+https://www.pasteleria-mallorca.com/
+
+IMPORTANTE:
+
+NO quiero una copia literal.
+
+Quiero que el sitio de México se sienta claramente parte de la misma familia de marca que Mallorca Madrid, pero con una interpretación más:
+
+- cálida
+- contemporánea
+- dinámica
+- gastronómica
+- amigable
+- digital
+- mexicana
+
+Debe poder verse y pensarse:
+
+"Esto definitivamente es Mallorca"
+
+pero también:
+
+"Esta es la versión de Mallorca México."
+
+==================================================
+1. PRINCIPIO DE DISEÑO
+==================================================
+
+El sitio de Madrid debe ser la referencia principal de:
+
+- identidad
+- composición
+- uso del rojo
+- protagonismo fotográfico
+- simplicidad
+- jerarquía
+- navegación
+- lenguaje general de marca
+
+NO crear una identidad paralela.
+
+NO transformar Mallorca México en:
+
+- una marca minimalista beige genérica
+- un ecommerce de lujo frío
+- una startup
+- una cafetería hipster
+- una marca mexicana folclórica
+- una tienda Shopify genérica
+
+La nueva experiencia debe preservar el ADN Mallorca.
+
+==================================================
+2. COLOR PRINCIPAL
+==================================================
+
+Utilizar como rojo de marca principal EXACTAMENTE:
+
+#D43B2B
+
+Crear token:
+
+--mallorca-red: #D43B2B;
+
+Usarlo para:
+
+- CTAs principales
+- estados activos
+- pequeños acentos
+- badges
+- hover
+- enlaces importantes
+- carrito
+- promociones
+
+NO inundar toda la interfaz de rojo.
+
+El rojo debe sentirse característico y reconocible.
+
+==================================================
+3. PALETA MÉXICO
+==================================================
+
+Construir una paleta alrededor del rojo oficial.
+
+Base:
+
+Rojo Mallorca:
+#D43B2B
+
+Cream:
+#F5F0E8 aproximadamente
+
+Warm white:
+#FBFAF7
+
+Ink:
+#25211E
+
+Cacao:
+#4B3028
+
+Accent opcional:
+verde oliva apagado
+
+Arena:
+beige cálido
+
+La diferencia México debe venir de la CALIDEZ de la fotografía y ciertos tonos secundarios, no de introducir colores folclóricos saturados.
+
+==================================================
+4. RELACIÓN CON MADRID
+==================================================
+
+Mantener de Madrid:
+
+- logo blanco sobre fotografía cuando aplique
+- fotografías grandes
+- mucho espacio limpio
+- CTAs rojos sólidos
+- composición simple
+- navegación clara
+- sensación de producto artesanal
+- elementos centrados en ciertos bloques
+- estructura visual directa
+
+Modernizar:
+
+- navegación
+- responsive
+- catálogo
+- cards
+- microinteracciones
+- búsqueda
+- carrito
+- checkout
+- sucursales
+- experiencia mobile
+
+Madrid es la raíz.
+
+México es la evolución digital.
+
+==================================================
+5. IDEA CREATIVA MÉXICO
+==================================================
+
+Concepto:
+
+"Mallorca, de Madrid a México."
+
+Sin utilizar necesariamente esta frase literalmente en todo el sitio.
+
+La experiencia debe reflejar:
+
+tradición española
++
+hospitalidad mexicana
++
+vida contemporánea en CDMX
+
+Debe sentirse menos institucional que Madrid y un poco más cercana.
+
+==================================================
+6. HERO
+==================================================
+
+Tomar como referencia directa la lógica visual de Madrid:
+
+- fotografía protagonista
+- producto en gran formato
+- logo o navegación encima
+- CTA claramente visible
+
+Pero modernizarla.
+
+NO hacer:
+
+imagen izquierda + texto derecha
+
+como template genérico.
+
+Preferencia:
+
+hero full-width / near full-width.
+
+Ejemplo:
+
+[ FOTOGRAFÍA GRANDE DEL PRODUCTO ]
+
+                  MALLORCA
+
+           Un clásico que viajó
+             hasta México.
+
+              [ Ver tienda ]
+
+La foto debe llevar casi toda la atención.
+
+==================================================
+7. FOTOGRAFÍA HERO
+==================================================
+
+Dirección fotográfica:
+
+- platos claros
+- manteles
+- textiles
+- mesas
+- producto real
+- luz natural
+- sombras suaves
+- textura
+- detalle
+
+Tomar inspiración de la referencia de Madrid:
+producto cenital / editorial / composición simple.
+
+Pero incorporar una calidez ligeramente mayor.
+
+México NO debe representarse mediante clichés.
+
+Evitar:
+
+- papel picado
+- sombreros
+- patrones prehispánicos
+- colores bandera
+- clichés turísticos
+
+==================================================
+8. HEADER
+==================================================
+
+Inspirarse en la composición limpia de Madrid.
+
+Desktop:
+
+CONTACTO / WHATSAPP
+
+              LOGO MALLORCA
+
+TIENDA
+PASTELERÍA
+RESTAURANTE
+HISTORIA
+
+                         BUSCAR
+                         CUENTA
+                         CARRITO
+
+O ajustar la distribución según el hero.
+
+El header puede comenzar sobre la fotografía en blanco.
+
+Al hacer scroll:
+
+transformarse en:
+
+background crema / blanco cálido
+
+logo oscuro
+
+texto oscuro
+
+con una transición suave.
+
+==================================================
+9. NAV
+==================================================
+
+Mantener navegación extremadamente simple.
+
+Principales:
+
+TIENDA
+PASTELERÍA
+RESTAURANTE
+NUESTRA HISTORIA
+SUCURSALES
+
+No saturar.
+
+Search, cuenta y carrito deben ser iconos o controles secundarios.
+
+==================================================
+10. DIFERENCIA MÉXICO
+==================================================
+
+La diferencia NO debe venir de cambiar el logo o romper el branding.
+
+Debe venir de:
+
+1. Fotografía
+2. Copy
+3. Calidez
+4. Movimiento
+5. Contenido
+6. Sucursales CDMX
+7. Menú/productos locales
+8. Experiencia digital más moderna
+
+==================================================
+11. COPY
+==================================================
+
+Madrid tiene un tono muy funcional.
+
+México puede ser un poco más humano.
+
+Ejemplos:
+
+En lugar de:
+
+Productos destacados
+
+usar:
+
+Los favoritos de Mallorca
+
+En lugar de:
+
+Nuestras tiendas
+
+usar:
+
+¿Dónde nos vemos?
+
+En lugar de:
+
+Productos relacionados
+
+usar:
+
+También se te puede antojar
+
+En lugar de:
+
+Selecciona sucursal
+
+usar:
+
+¿Desde qué Mallorca pides?
+
+==================================================
+12. HOME
+==================================================
+
+Estructura recomendada:
+
+1. HERO
+
+2. CATEGORÍAS
+
+3. PRODUCTO / COLECCIÓN DESTACADA
+
+4. FAVORITOS MALLORCA
+
+5. STORYTELLING MADRID → MÉXICO
+
+6. RESTAURANTE
+
+7. SUCURSALES
+
+8. TEMPORADA
+
+9. FAMILIA MALLORCA / NEWSLETTER
+
+10. FOOTER
+
+==================================================
+13. CATEGORÍAS
+==================================================
+
+Crear sección:
+
+¿Qué se te antoja hoy?
+
+Categorías:
+
+PASTELES
+PANADERÍA
+BOLLERÍA
+CHOCOLATE
+SALADO
+TEMPORADA
+
+Mantener estética limpia.
+
+No usar cards SaaS.
+
+Cada categoría debe tener:
+
+fotografía
+nombre
+pequeño CTA
+
+==================================================
+14. PRODUCT CARDS
+==================================================
+
+Inspirarse en la simplicidad de Madrid.
+
+No sobrecargar.
+
+Card:
+
+[ fotografía grande ]
+
+CATEGORÍA
+
+Producto
+
+Precio
+
+Añadir +
+
+Sin bordes pesados.
+
+Sin sombra.
+
+Sin fondo gris.
+
+Hover desktop:
+
+imagen scale 1.02
+CTA aparece suavemente
+
+==================================================
+15. ROJO EN CTAS
+==================================================
+
+Todos los CTAs primarios deben usar:
+
+background: #D43B2B;
+color: #FFFFFF;
+
+Hover:
+
+un rojo ligeramente más oscuro.
+
+Border radius:
+
+4–8px máximo.
+
+NO convertirlos en pills exageradas.
+
+Mantener cierta relación con los botones sólidos de Madrid.
+
+==================================================
+16. PRODUCT FEATURE
+==================================================
+
+Crear bloques inspirados en el protagonismo del producto del sitio Madrid.
+
+Ejemplo:
+
+gran fondo crema
+
+croissant gigante o pastel
+
+texto pequeño:
+
+Hecho cada mañana.
+
+Bollería Mallorca
+para empezar mejor el día.
+
+[Descubrir]
+
+Permitir que el producto rompa ligeramente el grid.
+
+==================================================
+17. STORYTELLING
+==================================================
+
+Crear un bloque importante:
+
+DE MADRID A MÉXICO
+
+No hacerlo institucional.
+
+Ejemplo:
+
+1931
+Madrid
+
+↓
+
+2016
+Ciudad de México
+
+Texto corto:
+
+La tradición de Mallorca cruzó el Atlántico
+para encontrarse con la Ciudad de México.
+
+[Conoce nuestra historia]
+
+Usar fotografía histórica + fotografía actual si existe material.
+
+==================================================
+18. MÉXICO SIN CLICHÉ
+==================================================
+
+Representar México mediante:
+
+- arquitectura
+- CDMX
+- Reforma
+- Lomas
+- luz cálida
+- sobremesa
+- hospitalidad
+- personas
+- lifestyle
+- ingredientes
+- cultura gastronómica
+
+No mediante decoración temática.
+
+==================================================
+19. SUCURSALES
+==================================================
+
+Dar mayor importancia que Madrid porque la operación México depende de ellas.
+
+Sección:
+
+¿Dónde nos vemos?
+
+MALLORCA LOMAS
+
+foto
+dirección
+horario
+
+[Ver sucursal]
+[Reservar mesa]
+
+MALLORCA REFORMA
+
+foto
+dirección
+horario
+
+[Ver sucursal]
+[Reservar mesa]
+
+Integrar:
+
+OpenTable
+WhatsApp
+Google Maps
+
+==================================================
+20. RESTAURANTE + PASTELERÍA
+==================================================
+
+Diferenciar claramente dos intenciones.
+
+¿Vienes a vernos?
+
+[Reservar mesa]
+
+¿Mallorca va contigo?
+
+[Pedir]
+
+Esto debe sentirse muy sencillo.
+
+==================================================
+21. INTERACTIVIDAD
+==================================================
+
+Madrid es bastante estático.
+
+México debe dar un salto digital.
+
+Agregar:
+
+- entradas suaves al scroll
+- zoom de producto
+- transitions
+- quick add
+- mini cart
+- search overlay
+- selector de sucursal
+- carruseles táctiles
+- hover de categorías
+- sticky add-to-cart mobile
+
+Sin exagerar.
+
+==================================================
+22. MOTION
+==================================================
+
+Duración:
+
+150–400ms normalmente.
+
+Hero:
+máximo 700ms.
+
+Usar principalmente:
+
+opacity
+transform
+
+No scroll hijacking.
+
+No movimientos constantes.
+
+No animaciones decorativas que distraigan.
+
+==================================================
+23. SHOP EXPERIENCE
+==================================================
+
+La tienda debe mantener la identidad Madrid pero modernizar radicalmente UX.
+
+Header visual consistente.
+
+Título:
+
+Pastelería
+
+Subcopy:
+
+Hecho para llevar un poco de Mallorca contigo.
+
+Filtros sencillos:
+
+Todo
+Pastelería
+Panadería
+Chocolate
+Salado
+Temporada
+
+Sucursal:
+
+Tu Mallorca: Reforma ▾
+
+==================================================
+24. SINGLE PRODUCT
+==================================================
+
+Desktop:
+
+55% fotografía
+45% información
+
+Foto limpia.
+
+Categoría
+
+Nombre
+
+Descripción
+
+Precio
+
+Sucursal
+
+Variantes
+
+Cantidad
+
+[ AÑADIR AL CARRITO ]
+
+Entrega / Pickup
+
+Mantener bastante espacio en blanco.
+
+El botón:
+
+#D43B2B
+
+==================================================
+25. CARRITO
+==================================================
+
+Cart drawer.
+
+Título:
+
+Tu bolsa
+
+Producto
+Sucursal
+Cantidad
+Precio
+
+Subtotal
+
+[Terminar compra]
+
+Acento rojo Mallorca.
+
+No utilizar componentes visualmente genéricos.
+
+==================================================
+26. CHECKOUT
+==================================================
+
+Muy limpio.
+
+Logo Mallorca arriba.
+
+Pasos:
+
+Bolsa → Entrega → Pago
+
+Preguntas humanas:
+
+¿Cómo quieres recibirlo?
+
+[Lo recojo]
+[Envíenmelo]
+
+Si pickup:
+
+¿En qué Mallorca?
+
+Lomas
+Reforma
+
+¿Cuándo pasas?
+
+Fecha
+Hora
+
+==================================================
+27. CUENTA
+==================================================
+
+Mantener el concepto Login / Regístrate que existe en Madrid, pero modernizarlo.
+
+Mi Mallorca
+
+Pedidos
+Direcciones
+Datos personales
+Cerrar sesión
+
+Evitar dashboard complejo.
+
+==================================================
+28. FAMILIA MALLORCA
+==================================================
+
+Madrid actualmente tiene una sección:
+
+"Únete a la Familia Mallorca"
+
+con programa de fidelidad. La referencia también comunica acumulación de puntos. 
+
+Para México:
+
+NO asumir que el mismo programa existe.
+
+Pero preparar un bloque administrable:
+
+Familia Mallorca
+
+que pueda funcionar inicialmente como:
+
+newsletter
+beneficios
+registro
+
+y permitir evolucionarlo posteriormente a loyalty.
+
+==================================================
+29. SECCIÓN DE CONFIANZA
+==================================================
+
+Madrid muestra satisfacción de clientes/NPS.
+
+Para México no copiar automáticamente esas métricas.
+
+Si no existen datos reales:
+
+NO inventarlos.
+
+En su lugar:
+
+reseñas
+testimonios
+Google rating
+o simplemente omitir temporalmente la sección.
+
+==================================================
+30. FOOTER
+==================================================
+
+Mantener una relación visual con Madrid:
+
+limpio
+estructurado
+mucho aire
+
+pero conservar el footer México que ya definimos:
+
+MALLORCA
+
+Déjanos tus comentarios
+
+CONOCE MÁS
+
+Factura
+Bolsa de trabajo
+
+MALLORCA LOMAS
+
+teléfono
+correo
+dirección
+
+MALLORCA REFORMA
+
+teléfono
+correo
+dirección
+
+Aviso de privacidad
+Términos y condiciones
+
+==================================================
+31. MOBILE
+==================================================
+
+La versión móvil NO debe ser simplemente desktop reducido.
+
+Hero:
+
+fotografía vertical/crop específico.
+
+Logo legible.
+
+CTA accesible.
+
+Categorías:
+horizontal swipe o 2 columnas.
+
+Products:
+2 columnas.
+
+Sucursal:
+cards apiladas.
+
+Sticky cart.
+
+Bottom sheets.
+
+==================================================
+32. FACTOR WOW
+==================================================
+
+El WOW debe venir principalmente de:
+
+1. Fotografía
+2. Escala
+3. Composición
+4. Rojo Mallorca
+5. Movimiento sutil
+6. Producto
+7. Ritmo
+8. Copy
+
+NO de efectos especiales.
+
+Ejemplo:
+
+un croissant enorme ocupando 40% de viewport
++
+mucho aire
++
+copy corto
++
+CTA rojo
+
+es preferible a:
+
+parallax + gradients + blobs + 3D.
+
+==================================================
+33. SISTEMA DE DISEÑO
+==================================================
+
+Definir:
+
+--mallorca-red: #D43B2B;
+--mallorca-red-dark: variante hover;
+
+--mallorca-cream
+--mallorca-white
+--mallorca-ink
+--mallorca-cacao
+--mallorca-olive
+
+Typography tokens.
+
+Spacing tokens.
+
+Motion tokens.
+
+==================================================
+34. REFERENCIA MADRID
+==================================================
+
+Antes de implementar:
+
+Visita:
+
+https://www.pasteleria-mallorca.com/
+
+Analiza:
+
+- navegación
+- hero
+- CTA
+- imagen
+- proporciones
+- colores
+- jerarquía
+- tipografía
+- footer
+- espacios
+- comportamiento responsive
+
+Identifica qué elementos conforman el ADN Mallorca.
+
+Mantener esos elementos.
+
+NO copiar:
+
+contenido específico de España
+Pedido Madrid
+Pedido Nacional
+teléfonos
+direcciones
+programa de fidelidad
+promociones
+métricas
+medios de pago
+
+Los datos deben provenir del proyecto México.
+
+==================================================
+35. NO COPIAR DATOS DE MADRID
+==================================================
+
+Muy importante.
+
+Madrid sirve solamente como referencia de:
+
+DISEÑO
+IDENTIDAD
+RITMO
+DIRECCIÓN VISUAL
+
+No copiar información operativa.
+
+México usa:
+
+Mallorca Reforma
+Mallorca Lomas
+
+sus propios:
+
+precios
+productos
+horarios
+links
+WhatsApp
+OpenTable
+direcciones
+pagos
+envíos
+
+==================================================
+36. RESPONSIVE
+==================================================
+
+Probar:
+
+1920
+1440
+1366
+1280
+1024
+768
+430
+390
+375
+320
+
+No overflow.
+
+No textos cortados.
+
+No hero ilegible.
+
+No producto cortado de forma incorrecta.
+
+==================================================
+37. RESULTADO FINAL
+==================================================
+
+Quiero que si una persona conoce Mallorca Madrid y entra al sitio México piense:
+
+"Sí, esto es Mallorca."
+
+Pero inmediatamente perciba:
+
+"Esta versión es más cálida, moderna y está hecha para Ciudad de México."
+
+Debe existir continuidad de marca.
+
+NO ruptura.
+
+Madrid:
+tradición + origen
+
+México:
+tradición + hospitalidad + evolución digital
+
+Ese debe ser el equilibrio.
+
+==================================================
+38. IMPLEMENTACIÓN
+==================================================
+
+No te limites a hacer un mockup.
+
+Primero:
+
+1. Audita el diseño actual.
+2. Compara contra Mallorca Madrid.
+3. Identifica diferencias.
+4. Crea design tokens.
+5. Reestructura homepage.
+6. Ajusta componentes globales.
+7. Ajusta catálogo.
+8. Ajusta producto.
+9. Ajusta cart.
+10. Ajusta checkout.
+11. Ajusta sucursales.
+12. Ajusta responsive.
+
+Mantén intacta la lógica ecommerce ya implementada.
+
+No romper:
+
+- productos
+- sucursales
+- inventario
+- carrito
+- auth
+- órdenes
+- pickup
+- delivery
+- pagos
+
+Después implementa directamente el rediseño.

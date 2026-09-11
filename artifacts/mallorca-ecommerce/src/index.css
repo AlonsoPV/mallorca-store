@@ -76,7 +76,7 @@
   
   --border: 35 20% 85%;
   --input: 35 20% 85%;
-  --ring: 350 40% 30%;
+  --ring: 5 68% 50%;
 
   --card: 0 0% 100%;
   --card-foreground: 20 20% 10%;
@@ -86,7 +86,7 @@
   --popover-foreground: 20 20% 10%;
   --popover-border: 35 20% 90%;
 
-  --primary: 350 40% 30%; /* Burgundy/Wine */
+  --primary: 5 68% 50%; /* Mallorca red #D43B2B */
   --primary-foreground: 0 0% 100%;
 
   --secondary: 35 25% 88%; /* Sand */
@@ -104,13 +104,13 @@
   --sidebar: 40 33% 96%;
   --sidebar-foreground: 20 20% 10%;
   --sidebar-border: 35 20% 85%;
-  --sidebar-primary: 350 40% 30%;
+  --sidebar-primary: 5 68% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 35 25% 88%;
   --sidebar-accent-foreground: 20 20% 10%;
-  --sidebar-ring: 350 40% 30%;
+  --sidebar-ring: 5 68% 50%;
 
-  --chart-1: 350 40% 30%;
+  --chart-1: 5 68% 50%;
   --chart-2: 35 25% 70%;
   --chart-3: 20 20% 20%;
   --chart-4: 40 30% 60%;
@@ -174,7 +174,7 @@
   
   --border: 20 15% 18%;
   --input: 20 15% 18%;
-  --ring: 350 40% 40%;
+  --ring: 5 68% 43%;
 
   --card: 20 20% 10%;
   --card-foreground: 40 33% 94%;
@@ -184,7 +184,7 @@
   --popover-foreground: 40 33% 94%;
   --popover-border: 20 15% 18%;
 
-  --primary: 350 40% 40%;
+  --primary: 5 68% 43%;
   --primary-foreground: 40 33% 94%;
 
   --secondary: 20 15% 16%;
@@ -202,13 +202,13 @@
   --sidebar: 20 20% 9%;
   --sidebar-foreground: 40 33% 94%;
   --sidebar-border: 20 15% 18%;
-  --sidebar-primary: 350 40% 40%;
+  --sidebar-primary: 5 68% 43%;
   --sidebar-primary-foreground: 40 33% 94%;
   --sidebar-accent: 20 15% 16%;
   --sidebar-accent-foreground: 40 33% 94%;
-  --sidebar-ring: 350 40% 40%;
+  --sidebar-ring: 5 68% 43%;
 
-  --chart-1: 350 40% 40%;
+  --chart-1: 5 68% 43%;
   --chart-2: 35 25% 60%;
   --chart-3: 20 20% 40%;
   --chart-4: 40 30% 50%;
@@ -299,14 +299,20 @@
 
 /* Mallorca editorial storefront */
 :root {
+  --mallorca-red: #D43B2B;
+  --mallorca-red-dark: #B83225;
+  --mallorca-cream: #F5F0E8;
+  --mallorca-white: #FBFAF7;
+  --mallorca-ink: #25211E;
+  --mallorca-cacao: #4B3028;
+  --mallorca-olive: #7D8360;
+  --mallorca-sand: #E8DED0;
   --mallorca-cream: #f6f0e6;
   --mallorca-ivory: #fffdf8;
-  --mallorca-burgundy: #6f1d2f;
-  --mallorca-cherry: #a83f4f;
+  --mallorca-burgundy: #D43B2B;
+  --mallorca-cherry: #B83225;
   --mallorca-butter: #e8c875;
   --mallorca-cacao: #271a18;
-  --mallorca-olive: #7d8360;
-  --mallorca-ink: #211815;
 }
 
 ::selection {
