@@ -53,20 +53,20 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               MALLORCA
               </span>
             </Link>
-            <nav className="hidden md:flex gap-7 items-center text-[0.68rem] font-bold tracking-[0.18em]">
-              <Link href="/tienda" className={`hover:text-primary transition-colors ${location === "/tienda" ? "text-primary" : isHeroHeader ? "text-white/80" : "text-muted-foreground"}`}>
+            <nav className={`hidden items-center gap-7 text-[0.68rem] font-bold tracking-[0.18em] md:flex ${isHeroHeader ? "text-white drop-shadow-[0_1px_8px_rgba(0,0,0,0.45)]" : "text-foreground"}`}>
+              <Link href="/tienda" className={`transition-colors hover:text-primary ${location === "/tienda" ? "text-primary" : isHeroHeader ? "text-white" : "text-foreground"}`}>
                 TIENDA
               </Link>
-              <Link href="/tienda" className={`hover:text-primary transition-colors ${isHeroHeader ? "text-white/80" : "text-muted-foreground"}`}>
+              <Link href="/tienda" className={`transition-colors hover:text-primary ${isHeroHeader ? "text-white" : "text-foreground"}`}>
                 PASTELERÍA
               </Link>
-              <Link href="/sucursales" className={`hidden lg:block hover:text-primary transition-colors ${location === "/sucursales" ? "text-primary" : isHeroHeader ? "text-white/80" : "text-muted-foreground"}`}>
+              <Link href="/sucursales" className={`hidden transition-colors hover:text-primary lg:block ${location === "/sucursales" ? "text-primary" : isHeroHeader ? "text-white" : "text-foreground"}`}>
                 RESTAURANTE
               </Link>
-              <Link href="/nosotros" className={`hidden lg:block hover:text-primary transition-colors ${location === "/nosotros" ? "text-primary" : isHeroHeader ? "text-white/80" : "text-muted-foreground"}`}>
+              <Link href="/nosotros" className={`hidden transition-colors hover:text-primary lg:block ${location === "/nosotros" ? "text-primary" : isHeroHeader ? "text-white" : "text-foreground"}`}>
                 HISTORIA
               </Link>
-              <Link href="/sucursales" className={`hover:text-primary transition-colors ${location === "/sucursales" ? "text-primary" : isHeroHeader ? "text-white/80" : "text-muted-foreground"}`}>
+              <Link href="/sucursales" className={`transition-colors hover:text-primary ${location === "/sucursales" ? "text-primary" : isHeroHeader ? "text-white" : "text-foreground"}`}>
                 SUCURSALES
               </Link>
             </nav>
@@ -75,23 +75,23 @@ export function StoreLayout({ children }: { children: ReactNode }) {
           <div className="hidden md:flex items-center gap-1">
             {isAdmin && (
               <Link href="/admin">
-                <span className="text-[0.65rem] font-bold tracking-widest text-muted-foreground hover:text-primary transition-colors cursor-pointer mr-3">
+                <span className={`mr-3 cursor-pointer text-[0.65rem] font-bold tracking-widest transition-colors hover:text-primary ${isHeroHeader ? "text-white drop-shadow-[0_1px_8px_rgba(0,0,0,0.45)]" : "text-foreground"}`}>
                   ADMIN
                 </span>
               </Link>
             )}
-            <Button variant="ghost" size="icon" className="hover:text-primary" onClick={() => setIsSearchOpen(true)}>
+              <Button variant="ghost" size="icon" className={`hover:text-primary ${isHeroHeader ? "text-white hover:bg-white/10 hover:text-white" : "text-foreground"}`} onClick={() => setIsSearchOpen(true)}>
               <Search className="h-[1.05rem] w-[1.05rem]" />
               <span className="sr-only">Buscar</span>
             </Button>
             <Link href={isSignedIn ? "/cuenta" : "/sign-in"}>
-              <Button variant="ghost" size="icon" className="hover:text-primary">
+              <Button variant="ghost" size="icon" className={`hover:text-primary ${isHeroHeader ? "text-white hover:bg-white/10 hover:text-white" : "text-foreground"}`}>
                 <User className="h-[1.05rem] w-[1.05rem]" />
                 <span className="sr-only">Cuenta</span>
               </Button>
             </Link>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="hover:text-primary relative">
+              <Button variant="ghost" size="icon" className={`relative hover:text-primary ${isHeroHeader ? "text-white hover:bg-white/10 hover:text-white" : "text-foreground"}`}>
                 <ShoppingBag className="h-[1.05rem] w-[1.05rem]" />
                 {cart && cart.quantity > 0 && (
                   <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
@@ -104,12 +104,12 @@ export function StoreLayout({ children }: { children: ReactNode }) {
           </div>
 
           <div className="md:hidden flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="hover:text-primary" onClick={() => setIsSearchOpen(true)}>
+              <Button variant="ghost" size="icon" className={`hover:text-primary ${isHeroHeader ? "text-white hover:bg-white/10 hover:text-white" : "text-foreground"}`} onClick={() => setIsSearchOpen(true)}>
               <Search className="h-5 w-5" />
               <span className="sr-only">Buscar</span>
             </Button>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="hover:text-primary relative">
+              <Button variant="ghost" size="icon" className={`relative hover:text-primary ${isHeroHeader ? "text-white hover:bg-white/10 hover:text-white" : "text-foreground"}`}>
                 <ShoppingBag className="h-5 w-5" />
                 {cart && cart.quantity > 0 && (
                   <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
@@ -118,7 +118,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
                 )}
               </Button>
             </SheetTrigger>
-            <Button variant="ghost" size="icon" onClick={toggleMenu}>
+            <Button variant="ghost" size="icon" className={isHeroHeader ? "text-white hover:bg-white/10 hover:text-white" : "text-foreground"} onClick={toggleMenu}>
               {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </Button>
           </div>

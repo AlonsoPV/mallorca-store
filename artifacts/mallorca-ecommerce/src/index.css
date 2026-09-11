@@ -323,6 +323,13 @@
   letter-spacing: -0.045em;
 }
 
+.mallorca-image {
+  display: block;
+  max-width: 100%;
+  backface-visibility: hidden;
+  transform-origin: center;
+}
+
 .mallorca-kicker {
   font-family: var(--app-font-sans);
   font-size: 0.66rem;

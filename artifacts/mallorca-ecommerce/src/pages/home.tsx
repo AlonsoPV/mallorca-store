@@ -38,7 +38,7 @@ export default function Home() {
         <img
           src="/images/mallorca-bolleria.jpg"
           alt="Bollería recién horneada de Mallorca"
-          className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700"
+          className="mallorca-image absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700"
           style={{ transform: `scale(1.04) translate(${heroShift.x}px, ${heroShift.y}px)` }}
         />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(37,33,30,.14)_0%,rgba(37,33,30,.06)_36%,rgba(37,33,30,.74)_100%)]" />
@@ -50,7 +50,7 @@ export default function Home() {
               <span className="h-px w-12 bg-[var(--mallorca-red)]" />
               <span className="mallorca-kicker">De Madrid a México · CDMX</span>
             </div>
-            <h1 className="mallorca-display mallorca-reveal mallorca-reveal-delay mt-6 max-w-3xl text-[clamp(3.5rem,9vw,9rem)] leading-[0.84] text-white">
+            <h1 className="mallorca-display mallorca-reveal mallorca-reveal-delay mt-6 max-w-3xl text-[clamp(3.5rem,9vw,9rem)] leading-[0.9] text-white md:leading-[0.94]">
               Un clásico que<br /><em className="text-[var(--mallorca-red)]">viajó</em> hasta México.
             </h1>
             <div className="mt-8 flex flex-wrap items-end justify-between gap-8">
@@ -89,7 +89,7 @@ export default function Home() {
             <div className="mt-12 grid gap-4 md:grid-cols-3">
               {categories?.slice(0, 3).map((category, index) => (
                 <Link key={category.id} href={`/tienda?categorySlug=${category.slug}`} className="group relative aspect-[1.15] overflow-hidden bg-[var(--mallorca-cacao)]">
-                  <img src={category.imageUrl || categoryImages[index]} alt={category.name} className="h-full w-full object-cover opacity-90 transition duration-500 group-hover:scale-[1.02]" />
+                  <img src={category.imageUrl || categoryImages[index]} alt={category.name} className="mallorca-image h-full w-full object-cover opacity-90 transition duration-500 group-hover:scale-[1.02]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
                   <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white">
                     <div>
@@ -122,7 +122,7 @@ export default function Home() {
             </div>
             <div className="relative">
               <div className="relative aspect-[1.25] overflow-hidden bg-[var(--mallorca-sand)]">
-                <img src={featureProduct?.imageUrl || "/images/mallorca-bolleria.jpg"} alt={featureProduct?.name || "Bollería Mallorca"} className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
+                <img src={featureProduct?.imageUrl || "/images/mallorca-bolleria.jpg"} alt={featureProduct?.name || "Bollería Mallorca"} className="mallorca-image h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
               </div>
               <div className="absolute -bottom-5 left-5 max-w-[18rem] bg-[var(--mallorca-red)] p-5 text-white md:-left-8">
                 <span className="mallorca-kicker text-white/75">Favorito Mallorca</span>
@@ -186,7 +186,7 @@ export default function Home() {
             {branches?.slice(0, 2).map((branch) => (
               <article key={branch.id} className="group overflow-hidden bg-[var(--mallorca-cream)]">
                 <div className="aspect-[1.7] overflow-hidden bg-[var(--mallorca-sand)]">
-                  {branch.imageUrl ? <img src={branch.imageUrl} alt={branch.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" /> : <img src="/images/mallorca-bolleria.jpg" alt="" className="h-full w-full object-cover" />}
+                  {branch.imageUrl ? <img src={branch.imageUrl} alt={branch.name} className="mallorca-image h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" /> : <img src="/images/mallorca-bolleria.jpg" alt="" className="mallorca-image h-full w-full object-cover" />}
                 </div>
                 <div className="flex items-start justify-between gap-5 p-6">
                   <div>
