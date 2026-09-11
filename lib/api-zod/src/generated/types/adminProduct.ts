@@ -11,4 +11,10 @@ import type { ProductCard } from './productCard';
 export type AdminProduct = ProductCard & {
   status: AdminProductStatus;
   updatedAt: Date;
-};
+} & Required<Pick<ProductCard & {
+  status: AdminProductStatus;
+  updatedAt: Date;
+}, Extract<keyof (ProductCard & {
+  status: AdminProductStatus;
+  updatedAt: Date;
+}), 'seasonal - minimumLeadTimeHours'>>>;

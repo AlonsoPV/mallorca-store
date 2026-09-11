@@ -12,4 +12,5 @@ export interface BranchHour {
   open: string;
   close: string;
   closed: boolean;
+  date?: string;
 }

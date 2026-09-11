@@ -5,6 +5,7 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { BranchHour } from './branchHour';
 import type { BranchUpdateNotificationPreferences } from './branchUpdateNotificationPreferences';
 
 export interface BranchUpdate {
@@ -18,4 +19,15 @@ export interface BranchUpdate {
   managerPhone?: string | null;
   notificationPreferences?: BranchUpdateNotificationPreferences;
   active?: boolean;
+  hours?: BranchHour[];
+  pickupAvailable?: boolean;
+  deliveryAvailable?: boolean;
+  /** @minimum 0 */
+  preparationTimeMinutes?: number;
+  /** @minimum 0 */
+  deliveryTimeMinutes?: number;
+  /** @minimum 5 */
+  pickupSlotIntervalMinutes?: number;
+  /** @minimum 1 */
+  pickupSlotCapacity?: number;
 }

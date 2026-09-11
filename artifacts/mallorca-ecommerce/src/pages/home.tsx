@@ -13,17 +13,19 @@ const categoryImages = [
 ];
 
 export default function Home() {
-  const { branchId } = useCart();
+  const { branchId, selectedTime } = useCart();
   const { data: categories, isLoading: isLoadingCategories } = useListCategories();
   const { data: branches } = useListBranches();
   const selectedBranch = branches?.find((branch) => branch.id === branchId);
   const { data: products, isLoading: isLoadingProducts } = useListProducts({
     featured: true,
     branchSlug: selectedBranch?.slug,
+    scheduledStart: selectedTime || undefined,
+    includeUnavailable: true,
   }, {
     query: {
-      enabled: Boolean(selectedBranch),
-      queryKey: getListProductsQueryKey({ featured: true, branchSlug: selectedBranch?.slug }),
+      enabled: Boolean(selectedBranch && selectedTime),
+      queryKey: getListProductsQueryKey({ featured: true, branchSlug: selectedBranch?.slug, scheduledStart: selectedTime || undefined, includeUnavailable: true }),
     },
   });
   const [heroShift, setHeroShift] = useState({ x: 0, y: 0 });

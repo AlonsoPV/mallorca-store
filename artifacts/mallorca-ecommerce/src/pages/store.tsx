@@ -17,7 +17,8 @@ export default function Store() {
   const [search, setSearch] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-  const { branchId } = useCart();
+  const [showUnavailable, setShowUnavailable] = useState(false);
+  const { branchId, selectedDate, selectedTime } = useCart();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -31,15 +32,19 @@ export default function Store() {
   const selectedBranch = branches?.find((branch) => branch.id === branchId);
   const { data: products, isLoading: isLoadingProducts } = useListProducts({
     branchSlug: selectedBranch?.slug,
+    scheduledStart: selectedTime || undefined,
     categorySlug: categorySlug || undefined,
     search: debouncedSearch || undefined,
+    includeUnavailable: showUnavailable,
   }, {
     query: {
-      enabled: Boolean(selectedBranch),
+      enabled: Boolean(selectedBranch && selectedTime),
       queryKey: getListProductsQueryKey({
         branchSlug: selectedBranch?.slug,
+        scheduledStart: selectedTime || undefined,
         categorySlug: categorySlug || undefined,
         search: debouncedSearch || undefined,
+        includeUnavailable: showUnavailable,
       }),
     },
   });
@@ -167,6 +172,18 @@ export default function Store() {
                 ))}
               </ul>
             </div>
+             <label className="flex cursor-pointer items-start gap-3 border-t border-border pt-5 text-sm text-muted-foreground">
+               <input
+                 type="checkbox"
+                 checked={showUnavailable}
+                 onChange={(event) => setShowUnavailable(event.target.checked)}
+                 className="mt-0.5 h-4 w-4 accent-primary"
+               />
+               <span>
+                 Mostrar productos no disponibles
+                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground/70">Aparecen deshabilitados para tu fecha y horario.</span>
+               </span>
+             </label>
           </aside>
 
           {/* Product Grid */}

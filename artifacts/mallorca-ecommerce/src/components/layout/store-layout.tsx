@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
 import { BranchSelector } from "@/components/branch-selector";
+import { FulfillmentSelector } from "@/components/fulfillment-selector";
 import { useGetCart, useGetMe, getGetCartQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/react";
 import footerLogo from "@assets/MallorcaFooter_1789166205501.webp";
@@ -74,6 +75,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <BranchSelector required={branchRequired && !branchId} />
+          <FulfillmentSelector required={branchRequired} />
 
           <div className="hidden md:flex items-center gap-1">
             {isAdmin && (

@@ -11,4 +11,6 @@ branchSlug?: string;
 categorySlug?: string;
 search?: string;
 featured?: boolean;
+scheduledStart?: Date;
+includeUnavailable?: boolean;
 };

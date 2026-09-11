@@ -21,6 +21,7 @@ export interface ProductCard {
   /** @nullable */
   imageUrl: string | null;
   featured: boolean;
-  seasonal: boolean;
+  seasonal?: boolean;
+  minimumLeadTimeHours?: number;
   availability: BranchAvailability[];
 }

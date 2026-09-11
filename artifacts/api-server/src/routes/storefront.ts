@@ -95,7 +95,11 @@ router.get("/categories", async (_req, res): Promise<void> => {
 });
 
 router.get("/products", async (req, res): Promise<void> => {
-  const query = ListProductsQueryParams.safeParse(req.query);
+  const rawQuery: Record<string, unknown> = { ...req.query };
+  if (typeof rawQuery.scheduledStart === "string") {
+    rawQuery.scheduledStart = new Date(rawQuery.scheduledStart);
+  }
+  const query = ListProductsQueryParams.safeParse(rawQuery);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
     return;

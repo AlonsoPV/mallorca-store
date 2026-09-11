@@ -12,6 +12,7 @@ import {
   ValidateDeliveryBody, ValidateDeliveryResponse, ListFulfillmentSlotsQueryParams,
   ListFulfillmentSlotsResponse, CreateOrderBody, CreateOrderResponse, StartOrderPaymentBody,
   StartOrderPaymentResponse,
+  PreviewFulfillmentBody, PreviewFulfillmentResponse,
   PreviewCartBranchParams, PreviewCartBranchBody, PreviewCartBranchResponse,
   GetOrderDetailsParams, GetOrderDetailsResponse, GetGuestOrderDetailsParams,
   GetGuestOrderDetailsResponse, GetMeResponse, UpdateMeBody, UpdateMeResponse,
@@ -95,9 +96,13 @@ async function cartView(cartId: string): Promise<CartShape | undefined> {
   const [row] = await db.select({ cart: cartsTable, branch: branchesTable }).from(cartsTable)
     .innerJoin(branchesTable, eq(cartsTable.branchId, branchesTable.id)).where(eq(cartsTable.id, cartId));
   if (!row) return undefined;
-  const items = await db.select({ item: cartItemsTable, product: productsTable, variant: productVariantsTable })
+  const items = await db.select({ item: cartItemsTable, product: productsTable, variant: productVariantsTable, branchProduct: branchProductsTable })
     .from(cartItemsTable).innerJoin(productsTable, eq(cartItemsTable.productId, productsTable.id))
     .leftJoin(productVariantsTable, eq(cartItemsTable.variantId, productVariantsTable.id))
+    .leftJoin(branchProductsTable, and(
+      eq(branchProductsTable.productId, cartItemsTable.productId),
+      eq(branchProductsTable.branchId, row.cart.branchId),
+    ))
     .where(eq(cartItemsTable.cartId, cartId));
   const lines = items.map(({ item, product, variant }) => ({
     id: item.id, productId: item.productId, variantId: item.variantId, sku: variant?.sku ?? product.sku,
@@ -106,7 +111,11 @@ async function cartView(cartId: string): Promise<CartShape | undefined> {
   }));
   return { id: cartId, branch: serializeBranch(row.branch), items: lines, subtotal: lines.reduce((s, x) => s + x.lineTotal, 0),
     quantity: lines.reduce((s, x) => s + x.quantity, 0),
-    maxLeadTimeMinutes: items.reduce((s, x) => Math.max(s, (x.product.minimumLeadTimeHours ?? 0) * 60), 0) };
+    maxLeadTimeMinutes: items.reduce((s, x) => Math.max(
+      s,
+      (x.product.minimumLeadTimeHours ?? 0) * 60,
+      x.branchProduct?.preparationTimeMinutes ?? 0,
+    ), 0) };
 }
 
 router.post("/cart/session", async (req, res): Promise<void> => {
@@ -240,7 +249,8 @@ function fulfillmentSchedule(
   const day = new Date(`${date}T12:00:00Z`)
     .toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Mexico_City" })
     .toLowerCase();
-  const hours = branch.hours.find(
+  const hours = branch.hours.find((entry) => entry.date === date) ??
+    branch.hours.find(
     (entry) => entry.day.toLowerCase() === day || entry.label.toLowerCase() === day,
   );
   if (!hours || hours.closed) return undefined;
@@ -264,15 +274,104 @@ router.get("/fulfillment/slots", async (req, res): Promise<void> => {
   const p = ListFulfillmentSlotsQueryParams.safeParse(req.query); if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
   const [b] = await db.select().from(branchesTable).where(eq(branchesTable.id, p.data.branchId)); if (!b) { res.status(404).json({ error: "Branch not found" }); return; }
   if ((p.data.method === "pickup" && !b.pickupAvailable) || (p.data.method === "delivery" && !b.deliveryAvailable)) { res.json([]); return; }
-  const cart = await cartView(p.data.cartId);
-  if (!cart || cart.branch.id !== b.id) { res.status(409).json({ error: "Cart branch mismatch" }); return; }
-  const schedule = fulfillmentSchedule(b, p.data.date, p.data.method, cart.maxLeadTimeMinutes);
+  const cart = p.data.cartId ? await cartView(p.data.cartId) : undefined;
+  if (cart && cart.branch.id !== b.id) { res.status(409).json({ error: "Cart branch mismatch" }); return; }
+  const schedule = fulfillmentSchedule(b, p.data.date, p.data.method, cart?.maxLeadTimeMinutes ?? 0);
   if (!schedule) { res.json([]); return; }
   const slots = []; for (let t = schedule.first; t + schedule.intervalMs <= schedule.close; t += schedule.intervalMs) {
     const s = new Date(t), e = new Date(t + schedule.intervalMs);
     const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(ordersTable).where(and(eq(ordersTable.branchId, b.id), eq(ordersTable.scheduledStart, s), sql`${ordersTable.status} <> 'cancelled'`));
     slots.push({ start: s, end: e, available: count < schedule.capacity, remainingCapacity: Math.max(0, schedule.capacity - count) });
   } res.json(ListFulfillmentSlotsResponse.parse(slots));
+});
+
+router.post("/fulfillment/preview", async (req, res): Promise<void> => {
+  await releaseExpiredReservations();
+  const body = PreviewFulfillmentBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const cart = await cartView(body.data.cartId);
+  if (!cart || !cart.items.length) { res.status(409).json({ error: "Cart is empty" }); return; }
+
+  const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, cart.branch.id));
+  if (!branch) { res.status(404).json({ error: "Branch not found" }); return; }
+
+  const scheduled = new Date(body.data.scheduledStart);
+  const schedule = Number.isFinite(scheduled.getTime())
+    ? fulfillmentSchedule(branch, mexicoDate(scheduled), body.data.fulfillmentMethod, cart.maxLeadTimeMinutes)
+    : undefined;
+  const slotWindowValid = Boolean(
+    schedule &&
+    scheduled.getTime() >= schedule.first &&
+    scheduled.getTime() + schedule.intervalMs <= schedule.close &&
+    (scheduled.getTime() - schedule.anchor) % schedule.intervalMs === 0,
+  );
+  const methodAvailable = body.data.fulfillmentMethod === "pickup"
+    ? branch.pickupAvailable
+    : branch.deliveryAvailable;
+  const [{ count: booked }] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(ordersTable)
+    .where(and(
+      eq(ordersTable.branchId, branch.id),
+      eq(ordersTable.scheduledStart, scheduled),
+      eq(ordersTable.fulfillmentMethod, body.data.fulfillmentMethod),
+      sql`${ordersTable.status} <> 'cancelled'`,
+    ));
+  const slotAvailable = Boolean(slotWindowValid && methodAvailable && schedule && booked < schedule.capacity);
+  const slotReason = !methodAvailable
+    ? body.data.fulfillmentMethod === "delivery"
+      ? "Esta sucursal no ofrece delivery."
+      : "Esta sucursal no ofrece pickup."
+    : !slotWindowValid
+    ? "Este horario ya no está disponible para la sucursal."
+    : booked >= (schedule?.capacity ?? 0)
+      ? "Este horario está lleno."
+      : null;
+
+  const rows = await db.select({ item: cartItemsTable, product: productsTable, branchProduct: branchProductsTable })
+    .from(cartItemsTable)
+    .innerJoin(productsTable, eq(cartItemsTable.productId, productsTable.id))
+    .innerJoin(branchProductsTable, and(
+      eq(branchProductsTable.productId, cartItemsTable.productId),
+      eq(branchProductsTable.branchId, branch.id),
+    ))
+    .where(eq(cartItemsTable.cartId, cart.id));
+
+  const items = rows.map(({ item, product, branchProduct }) => {
+    const requiredLeadMinutes = Math.max(
+      product.minimumLeadTimeHours * 60,
+      branchProduct.preparationTimeMinutes ?? branch.preparationTimeMinutes,
+    );
+    const available = Boolean(
+      slotAvailable &&
+      product.status === "active" &&
+      branchProduct.available &&
+      branchProduct.inventory >= item.quantity &&
+      scheduled.getTime() >= Date.now() + requiredLeadMinutes * 60_000,
+    );
+    return {
+      cartItemId: item.id,
+      productId: product.id,
+      name: product.name,
+      quantity: item.quantity,
+      available,
+      reason: available
+        ? null
+        : !slotAvailable
+          ? slotReason
+          : scheduled.getTime() < Date.now() + requiredLeadMinutes * 60_000
+          ? `Requiere ${Math.ceil(requiredLeadMinutes / 60)} h de preparación.`
+            : "No disponible para esta sucursal.",
+    };
+  });
+
+  res.json(PreviewFulfillmentResponse.parse({
+    scheduledStart: scheduled,
+    slotAvailable,
+    slotReason,
+    items,
+    unavailableItems: items.filter((item) => !item.available),
+  }));
 });
 
 function orderShape(order: typeof ordersTable.$inferSelect, items: Array<typeof orderItemsTable.$inferSelect>) {

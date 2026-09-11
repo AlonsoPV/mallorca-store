@@ -25,7 +25,7 @@ import { format, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 
 export default function CheckoutPage() {
-  const { cartId, branchId, clearCartSession } = useCart();
+  const { cartId, branchId, selectedDate, selectedTime, setFulfillmentContext, clearCartSession } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
@@ -55,15 +55,14 @@ export default function CheckoutPage() {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   
   // Fulfillment Date/Slot
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [selectedSlot, setSelectedSlot] = useState<string>("");
+  const [selectedSlot, setSelectedSlot] = useState<string>(selectedTime || "");
 
   const validateDelivery = useValidateDelivery();
   const [deliveryInfo, setDeliveryInfo] = useState<{ eligible: boolean; fee: number; reason: string | null } | null>(null);
 
   const { data: slots, isLoading: isLoadingSlots } = useListFulfillmentSlots({
     branchId: branchId!,
-    date: selectedDate,
+    date: selectedDate || format(new Date(), "yyyy-MM-dd"),
     method: fulfillmentMethod,
     cartId: cartId!
   }, {
@@ -71,12 +70,16 @@ export default function CheckoutPage() {
       enabled: !!cartId && !!branchId && !!selectedDate && !!fulfillmentMethod,
       queryKey: getListFulfillmentSlotsQueryKey({
         branchId: branchId!,
-        date: selectedDate,
+        date: selectedDate || format(new Date(), "yyyy-MM-dd"),
         method: fulfillmentMethod,
         cartId: cartId!
       })
     }
   });
+
+  useEffect(() => {
+    setSelectedSlot(selectedTime || "");
+  }, [selectedTime]);
 
   const createOrder = useCreateOrder();
   const startPayment = useStartOrderPayment();
@@ -139,7 +142,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!selectedSlot) {
+    if (!selectedDate || !selectedTime || !selectedSlot) {
       toast({ title: "Horario faltante", description: "Selecciona un horario de entrega/recogida.", variant: "destructive" });
       return;
     }
@@ -149,7 +152,7 @@ export default function CheckoutPage() {
         data: {
           cartId: cartId,
           fulfillmentMethod,
-          scheduledStart: selectedSlot,
+           scheduledStart: selectedSlot,
           customerEmail,
           customerName,
           customerPhone,
@@ -179,18 +182,10 @@ export default function CheckoutPage() {
     }
   };
 
-  // Generate simple date options (today + next 6 days)
-  const dateOptions = Array.from({ length: 7 }).map((_, i) => {
-    const d = addDays(new Date(), i);
-    return {
-      value: format(d, 'yyyy-MM-dd'),
-      label: i === 0 ? "Hoy" : i === 1 ? "Mañana" : format(d, "EEEE d 'de' MMMM", { locale: es })
-    };
-  });
-
   const total = (cart?.subtotal || 0) + (fulfillmentMethod === "delivery" && deliveryInfo?.eligible ? deliveryInfo.fee : 0);
   const minimumOrder = cart?.branch.minimumOrder ?? 0;
   const minimumRemaining = Math.max(0, minimumOrder - (cart?.subtotal ?? 0));
+  const selectedSlotAvailable = Boolean(slots?.some((slot) => slot.start === selectedSlot && slot.available));
 
   if (isLoadingCart) {
     return (
@@ -235,7 +230,7 @@ export default function CheckoutPage() {
                 <MapPin className="w-5 h-5 text-primary" /> 
                 Método de Entrega
               </h2>
-              <RadioGroup value={fulfillmentMethod} onValueChange={(val: OrderInputFulfillmentMethod) => { setFulfillmentMethod(val); setSelectedSlot(""); }} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <RadioGroup value={fulfillmentMethod} onValueChange={(val: OrderInputFulfillmentMethod) => { setFulfillmentMethod(val); setSelectedSlot(selectedTime || ""); }} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className={`border p-4 cursor-pointer transition-colors ${fulfillmentMethod === "pickup" ? "border-primary bg-primary/5" : "border-border"}`} onClick={() => setFulfillmentMethod("pickup")}>
                   <RadioGroupItem value="pickup" id="pickup" className="sr-only" />
                   <Label htmlFor="pickup" className="font-semibold text-lg cursor-pointer">Recoger en Sucursal</Label>
@@ -285,45 +280,46 @@ export default function CheckoutPage() {
                 <Clock className="w-5 h-5 text-primary" /> 
                 ¿Cuándo lo quieres?
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <Label className="mb-2 block">Día</Label>
-                  <Select value={selectedDate} onValueChange={(v) => { setSelectedDate(v); setSelectedSlot(""); }}>
-                    <SelectTrigger>
-                      <CalendarIcon className="w-4 h-4 mr-2 text-muted-foreground" />
-                      <SelectValue placeholder="Selecciona un día" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {dateOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value} className="capitalize">
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="border border-border bg-secondary/10 p-5">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="flex items-start gap-3">
+                    <CalendarIcon className="mt-0.5 h-5 w-5 text-primary" />
+                    <div>
+                      <span className="mallorca-kicker text-primary">Fecha seleccionada</span>
+                      <p className="mt-1 font-serif text-xl capitalize">{selectedDate ? format(new Date(`${selectedDate}T12:00:00`), "EEEE d 'de' MMMM", { locale: es }) : "Selecciona una fecha"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Clock className="mt-0.5 h-5 w-5 text-primary" />
+                    <div>
+                      <span className="mallorca-kicker text-primary">Horario seleccionado</span>
+                      <p className="mt-1 font-serif text-xl">{selectedTime ? new Date(selectedTime).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : "Selecciona un horario"}</p>
+                    </div>
+                  </div>
                 </div>
-                
-                <div>
-                  <Label className="mb-2 block">Horario</Label>
-                  <Select value={selectedSlot} onValueChange={setSelectedSlot} disabled={isLoadingSlots || !slots || slots.length === 0}>
-                    <SelectTrigger>
-                      <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
-                      <SelectValue placeholder={isLoadingSlots ? "Cargando..." : slots?.length === 0 ? "Sin horarios disponibles" : "Selecciona un horario"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {slots?.map(slot => {
-                        const start = new Date(slot.start).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-                        const end = new Date(slot.end).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-                        return (
-                          <SelectItem key={slot.start} value={slot.start} disabled={!slot.available}>
-                            {start} - {end} {slot.available ? "" : "(Lleno)"}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <p className="mt-4 text-sm text-muted-foreground">Puedes cambiar la fecha o la hora desde el encabezado sin perder tu contexto.</p>
               </div>
+              {fulfillmentMethod === "delivery" && !isLoadingSlots && selectedTime && !selectedSlotAvailable && (
+                <div className="mt-4 border border-primary/30 bg-primary/5 p-4">
+                  <p className="text-sm font-medium">Este horario no está disponible para delivery. Elige otro:</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {slots?.filter((slot) => slot.available).map((slot) => (
+                      <Button
+                        key={slot.start}
+                        type="button"
+                        variant="outline"
+                        className="rounded-none"
+                        onClick={() => {
+                          setSelectedSlot(slot.start);
+                          if (selectedDate) setFulfillmentContext(selectedDate, slot.start);
+                        }}
+                      >
+                        {new Date(slot.start).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* 3. Customer Info */}

@@ -14,5 +14,5 @@ branchId: number;
  */
 date: string;
 method: ListFulfillmentSlotsMethod;
-cartId: string;
+cartId?: string;
 };

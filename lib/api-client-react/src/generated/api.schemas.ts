@@ -19,6 +19,7 @@ export interface BranchHour {
   open: string;
   close: string;
   closed: boolean;
+  date?: string;
 }
 
 export interface Branch {
@@ -92,7 +93,8 @@ export interface ProductCard {
   /** @nullable */
   imageUrl: string | null;
   featured: boolean;
-  seasonal: boolean;
+  seasonal?: boolean;
+  minimumLeadTimeHours?: number;
   availability: BranchAvailability[];
 }
 
@@ -137,7 +139,39 @@ export type ProductDetail = ProductCard & ({
   portions: string | null;
   minimumLeadTimeHours: number;
   variants: ProductVariant[];
-});
+}) & Required<Pick<ProductCard & ({
+  description: string;
+  tags: string[];
+  gallery: string[];
+  /** @nullable */
+  ingredients: string | null;
+  /** @nullable */
+  allergens: string | null;
+  /** @nullable */
+  conservation: string | null;
+  /** @nullable */
+  weight: string | null;
+  /** @nullable */
+  portions: string | null;
+  minimumLeadTimeHours: number;
+  variants: ProductVariant[];
+}), Extract<keyof (ProductCard & ({
+  description: string;
+  tags: string[];
+  gallery: string[];
+  /** @nullable */
+  ingredients: string | null;
+  /** @nullable */
+  allergens: string | null;
+  /** @nullable */
+  conservation: string | null;
+  /** @nullable */
+  weight: string | null;
+  /** @nullable */
+  portions: string | null;
+  minimumLeadTimeHours: number;
+  variants: ProductVariant[];
+})), 'seasonal - minimumLeadTimeHours'>>>;
 
 export type ProductInputStatus = typeof ProductInputStatus[keyof typeof ProductInputStatus];
 
@@ -231,6 +265,17 @@ export interface BranchUpdate {
   managerPhone?: string | null;
   notificationPreferences?: BranchUpdateNotificationPreferences;
   active?: boolean;
+  hours?: BranchHour[];
+  pickupAvailable?: boolean;
+  deliveryAvailable?: boolean;
+  /** @minimum 0 */
+  preparationTimeMinutes?: number;
+  /** @minimum 0 */
+  deliveryTimeMinutes?: number;
+  /** @minimum 5 */
+  pickupSlotIntervalMinutes?: number;
+  /** @minimum 1 */
+  pickupSlotCapacity?: number;
 }
 
 export type AdminBranch = Branch & BranchUpdate;
@@ -296,7 +341,13 @@ export const AdminProductStatus = {
 export type AdminProduct = ProductCard & {
   status: AdminProductStatus;
   updatedAt: string;
-};
+} & Required<Pick<ProductCard & {
+  status: AdminProductStatus;
+  updatedAt: string;
+}, Extract<keyof (ProductCard & {
+  status: AdminProductStatus;
+  updatedAt: string;
+}), 'seasonal - minimumLeadTimeHours'>>>;
 
 export interface BranchSummary {
   branchId: number;
@@ -399,6 +450,39 @@ export interface FulfillmentSlot {
   end: string;
   available: boolean;
   remainingCapacity: number;
+}
+
+export type FulfillmentPreviewInputFulfillmentMethod = typeof FulfillmentPreviewInputFulfillmentMethod[keyof typeof FulfillmentPreviewInputFulfillmentMethod];
+
+
+export const FulfillmentPreviewInputFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface FulfillmentPreviewInput {
+  cartId: string;
+  scheduledStart: string;
+  fulfillmentMethod: FulfillmentPreviewInputFulfillmentMethod;
+}
+
+export interface FulfillmentPreviewItem {
+  cartItemId: number;
+  productId: number;
+  name: string;
+  quantity: number;
+  available: boolean;
+  /** @nullable */
+  reason: string | null;
+}
+
+export interface FulfillmentPreview {
+  scheduledStart: string;
+  slotAvailable: boolean;
+  /** @nullable */
+  slotReason: string | null;
+  items: FulfillmentPreviewItem[];
+  unavailableItems: FulfillmentPreviewItem[];
 }
 
 export type OrderInputFulfillmentMethod = typeof OrderInputFulfillmentMethod[keyof typeof OrderInputFulfillmentMethod];
@@ -599,6 +683,8 @@ branchSlug?: string;
 categorySlug?: string;
 search?: string;
 featured?: boolean;
+scheduledStart?: string;
+includeUnavailable?: boolean;
 };
 
 export type ListAdminProductsParams = {
@@ -622,7 +708,7 @@ branchId: number;
  */
 date: string;
 method: ListFulfillmentSlotsMethod;
-cartId: string;
+cartId?: string;
 };
 
 export type ListFulfillmentSlotsMethod = typeof ListFulfillmentSlotsMethod[keyof typeof ListFulfillmentSlotsMethod];

@@ -161,6 +161,14 @@ const branchUpdateSchema = z.object({
   name: z.string().min(1).optional(), branchCode: z.string().min(1).optional(),
   managerName: z.string().nullable().optional(), managerEmail: z.string().email().nullable().optional(),
   managerPhone: z.string().nullable().optional(), notificationPreferences: z.object({ email: z.boolean().optional(), inApp: z.boolean().optional() }).optional(),
+  hours: z.array(z.object({
+    day: z.string(), label: z.string(), open: z.string(), close: z.string(), closed: z.boolean(), date: z.string().optional(),
+  })).optional(),
+  pickupAvailable: z.boolean().optional(), deliveryAvailable: z.boolean().optional(),
+  preparationTimeMinutes: z.number().int().min(0).optional(),
+  deliveryTimeMinutes: z.number().int().min(0).optional(),
+  pickupSlotIntervalMinutes: z.number().int().min(5).optional(),
+  pickupSlotCapacity: z.number().int().min(1).optional(),
   active: z.boolean().optional(),
 });
 

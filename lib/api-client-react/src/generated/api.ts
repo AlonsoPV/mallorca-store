@@ -42,6 +42,8 @@ import type {
   DeliveryValidation,
   DeliveryValidationInput,
   ErrorResponse,
+  FulfillmentPreview,
+  FulfillmentPreviewInput,
   FulfillmentSlot,
   GetBranchReportParams,
   GetInventoryMatrix200Item,
@@ -1551,6 +1553,94 @@ export function useListFulfillmentSlots<TData = Awaited<ReturnType<typeof listFu
 
 
 
+
+export const getPreviewFulfillmentUrl = () => {
+
+
+
+
+  return `/api/fulfillment/preview`
+}
+
+/**
+ * @summary Revalidate cart products for a fulfillment date and slot
+ */
+export const previewFulfillment = async (fulfillmentPreviewInput: FulfillmentPreviewInput, options?: Parameters<typeof customFetch>[1]): Promise<FulfillmentPreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<FulfillmentPreview>(getPreviewFulfillmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(fulfillmentPreviewInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewFulfillmentMutationKey = () => ['previewFulfillment'] as const;
+
+export const getPreviewFulfillmentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewFulfillment>>, TError,PreviewFulfillmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewFulfillment>>, TError,PreviewFulfillmentMutationVariables, TContext> => {
+
+const mutationKey = getPreviewFulfillmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewFulfillment>>, PreviewFulfillmentMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewFulfillment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewFulfillmentMutationResult = NonNullable<Awaited<ReturnType<typeof previewFulfillment>>>
+    export type PreviewFulfillmentMutationBody = BodyType<FulfillmentPreviewInput>
+    export type PreviewFulfillmentMutationError = ErrorType<ErrorResponse>
+    export type PreviewFulfillmentMutationVariables = {data: BodyType<FulfillmentPreviewInput>}
+
+    /**
+ * @summary Revalidate cart products for a fulfillment date and slot
+ */
+export const usePreviewFulfillment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewFulfillment>>, TError,PreviewFulfillmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewFulfillment>>,
+        TError,
+        PreviewFulfillmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPreviewFulfillmentMutationOptions(options));
+    }
 
 export const getCreateOrderUrl = () => {
 

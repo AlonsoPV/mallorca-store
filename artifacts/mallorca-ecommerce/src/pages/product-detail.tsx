@@ -11,10 +11,10 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { branchId } = useCart();
+  const { branchId, selectedDate, selectedTime } = useCart();
   const { data: product, isLoading, isError } = useGetProduct(slug || "", {
     query: {
-      enabled: Boolean(slug && branchId),
+      enabled: Boolean(slug && branchId && selectedDate && selectedTime),
       queryKey: getGetProductQueryKey(slug || ""),
     },
   });
@@ -76,6 +76,17 @@ export default function ProductDetail() {
   const currentPrice = selectedVariant 
     ? (product.variants.find(v => v.id === selectedVariant)?.salePrice || product.variants.find(v => v.id === selectedVariant)?.price || product.price)
     : (currentBranchAvailability?.salePrice || currentBranchAvailability?.price || product.salePrice || product.price);
+  const scheduleAvailable = Boolean(
+    selectedTime &&
+    currentBranchAvailability &&
+    new Date(selectedTime).getTime() >=
+      Date.now() +
+        Math.max(
+          product.minimumLeadTimeHours * 60,
+          currentBranchAvailability.preparationTimeMinutes,
+        ) *
+        60_000,
+  );
 
   const handleAddToCart = async () => {
     if (!branchId) {
@@ -191,9 +202,9 @@ export default function ProductDetail() {
                   <span className="mallorca-kicker text-primary">Tu Mallorca</span>
                   <p className="mt-1 font-serif text-xl">{currentBranchAvailability?.branchName || "Sucursal seleccionada"}</p>
                   <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                    {currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) > 0
+                    {currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) > 0 && scheduleAvailable
                       ? `Disponible · ${currentBranchAvailability.inventory} piezas`
-                      : "Agotado en esta sucursal"}
+                      : selectedTime ? "No disponible para este horario" : "Selecciona fecha y hora"}
                   </p>
                 </div>
               </div>
@@ -253,7 +264,7 @@ export default function ProductDetail() {
               
               <Button 
                 onClick={handleAddToCart}
-                disabled={!branchId || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
+                disabled={!branchId || !selectedDate || !selectedTime || !scheduleAvailable || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
                 size="lg" 
                 className="h-12 flex-1 rounded-none bg-primary text-base text-primary-foreground hover:bg-primary/90"
               >
@@ -268,7 +279,7 @@ export default function ProductDetail() {
               </div>
               <Button
                 onClick={handleAddToCart}
-                disabled={!branchId || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
+                disabled={!branchId || !selectedDate || !selectedTime || !scheduleAvailable || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
                 className="h-12 rounded-md bg-[var(--mallorca-red)] px-5 text-white hover:bg-[var(--mallorca-red-dark)]"
               >
                 {addCartItem.isPending || createSession.isPending ? "Añadiendo" : "Añadir"}

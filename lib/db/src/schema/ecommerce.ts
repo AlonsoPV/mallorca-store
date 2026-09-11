@@ -25,6 +25,7 @@ export type BranchHour = {
   open: string;
   close: string;
   closed: boolean;
+  date?: string;
 };
 
 export const branchesTable = pgTable(

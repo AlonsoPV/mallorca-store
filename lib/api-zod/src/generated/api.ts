@@ -48,7 +48,8 @@ export const ListBranchesResponseItem = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -96,7 +97,8 @@ export const GetBranchResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -118,7 +120,8 @@ export const GetBranchResponse = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int().optional(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
@@ -156,7 +159,9 @@ export const ListProductsQueryParams = zod.object({
   "branchSlug": zod.coerce.string().optional(),
   "categorySlug": zod.coerce.string().optional(),
   "search": zod.coerce.string().optional(),
-  "featured": zod.coerce.boolean().optional()
+  "featured": zod.coerce.boolean().optional(),
+  "scheduledStart": zod.date().optional(),
+  "includeUnavailable": zod.coerce.boolean().optional()
 })
 
 export const ListProductsResponseItem = zod.object({
@@ -171,7 +176,8 @@ export const ListProductsResponseItem = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int().optional(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
@@ -207,7 +213,8 @@ export const GetProductResponse = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
@@ -278,7 +285,8 @@ export const ListAdminProductsResponseItem = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int().optional(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
@@ -353,7 +361,8 @@ export const CreateProductResponse = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
@@ -442,7 +451,8 @@ export const UpdateProductResponse = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
@@ -511,7 +521,8 @@ export const CreateCartSessionResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -572,7 +583,8 @@ export const GetCartResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -639,7 +651,8 @@ export const PreviewCartBranchResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -715,7 +728,8 @@ export const AddCartItemResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -784,7 +798,8 @@ export const UpdateCartItemResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -846,7 +861,8 @@ export const DeleteCartItemResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -896,7 +912,7 @@ export const ListFulfillmentSlotsQueryParams = zod.object({
   "branchId": zod.coerce.number().int(),
   "date": zod.coerce.string().regex(listFulfillmentSlotsQueryDateRegExp),
   "method": zod.enum(['pickup', 'delivery']),
-  "cartId": zod.coerce.string()
+  "cartId": zod.coerce.string().optional()
 })
 
 export const ListFulfillmentSlotsResponseItem = zod.object({
@@ -906,6 +922,38 @@ export const ListFulfillmentSlotsResponseItem = zod.object({
   "remainingCapacity": zod.number().int()
 })
 export const ListFulfillmentSlotsResponse = zod.array(ListFulfillmentSlotsResponseItem)
+
+
+/**
+ * @summary Revalidate cart products for a fulfillment date and slot
+ */
+export const PreviewFulfillmentBody = zod.object({
+  "cartId": zod.string(),
+  "scheduledStart": zod.coerce.date(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery'])
+})
+
+export const PreviewFulfillmentResponse = zod.object({
+  "scheduledStart": zod.coerce.date(),
+  "slotAvailable": zod.boolean(),
+  "slotReason": zod.string().nullable(),
+  "items": zod.array(zod.object({
+  "cartItemId": zod.number().int(),
+  "productId": zod.number().int(),
+  "name": zod.string(),
+  "quantity": zod.number().int(),
+  "available": zod.boolean(),
+  "reason": zod.string().nullable()
+})),
+  "unavailableItems": zod.array(zod.object({
+  "cartItemId": zod.number().int(),
+  "productId": zod.number().int(),
+  "name": zod.string(),
+  "quantity": zod.number().int(),
+  "available": zod.boolean(),
+  "reason": zod.string().nullable()
+}))
+})
 
 
 export const CreateOrderBody = zod.object({
@@ -1093,6 +1141,15 @@ export const ListAdminOrdersResponseItem = zod.object({
 export const ListAdminOrdersResponse = zod.array(ListAdminOrdersResponseItem)
 
 
+export const listAdminBranchesResponseTwoPreparationTimeMinutesMin = 0;
+
+export const listAdminBranchesResponseTwoDeliveryTimeMinutesMin = 0;
+
+export const listAdminBranchesResponseTwoPickupSlotIntervalMinutesMin = 5;
+
+
+
+
 export const ListAdminBranchesResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -1121,7 +1178,8 @@ export const ListAdminBranchesResponseItem = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -1137,7 +1195,21 @@ export const ListAdminBranchesResponseItem = zod.object({
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
   "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "preparationTimeMinutes": zod.number().int().min(listAdminBranchesResponseTwoPreparationTimeMinutesMin),
+  "deliveryTimeMinutes": zod.number().int().min(listAdminBranchesResponseTwoDeliveryTimeMinutesMin),
+  "pickupSlotIntervalMinutes": zod.number().int().min(listAdminBranchesResponseTwoPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional()
 }))
 export const ListAdminBranchesResponse = zod.array(ListAdminBranchesResponseItem)
 
@@ -1145,6 +1217,15 @@ export const ListAdminBranchesResponse = zod.array(ListAdminBranchesResponseItem
 export const GetAdminBranchParams = zod.object({
   "id": zod.coerce.number().int()
 })
+
+export const getAdminBranchResponseBranchTwoPreparationTimeMinutesMin = 0;
+
+export const getAdminBranchResponseBranchTwoDeliveryTimeMinutesMin = 0;
+
+export const getAdminBranchResponseBranchTwoPickupSlotIntervalMinutesMin = 5;
+
+
+
 
 export const GetAdminBranchResponse = zod.object({
   "branch": zod.object({
@@ -1175,7 +1256,8 @@ export const GetAdminBranchResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -1191,7 +1273,21 @@ export const GetAdminBranchResponse = zod.object({
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
   "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "preparationTimeMinutes": zod.number().int().min(getAdminBranchResponseBranchTwoPreparationTimeMinutesMin),
+  "deliveryTimeMinutes": zod.number().int().min(getAdminBranchResponseBranchTwoDeliveryTimeMinutesMin),
+  "pickupSlotIntervalMinutes": zod.number().int().min(getAdminBranchResponseBranchTwoPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional()
 })),
   "general": zod.object({
 
@@ -1204,7 +1300,8 @@ export const GetAdminBranchResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "products": zod.array(zod.object({
 
@@ -1228,6 +1325,15 @@ export const UpdateAdminBranchParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const updateAdminBranchBodyPreparationTimeMinutesMin = 0;
+
+export const updateAdminBranchBodyDeliveryTimeMinutesMin = 0;
+
+export const updateAdminBranchBodyPickupSlotIntervalMinutesMin = 5;
+
+
+
+
 export const UpdateAdminBranchBody = zod.object({
   "name": zod.string().optional(),
   "branchCode": zod.string().optional(),
@@ -1235,8 +1341,31 @@ export const UpdateAdminBranchBody = zod.object({
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
   "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean().optional(),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
+})).optional(),
+  "pickupAvailable": zod.boolean().optional(),
+  "deliveryAvailable": zod.boolean().optional(),
+  "preparationTimeMinutes": zod.number().int().min(updateAdminBranchBodyPreparationTimeMinutesMin).optional(),
+  "deliveryTimeMinutes": zod.number().int().min(updateAdminBranchBodyDeliveryTimeMinutesMin).optional(),
+  "pickupSlotIntervalMinutes": zod.number().int().min(updateAdminBranchBodyPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional()
 })
+
+export const updateAdminBranchResponseTwoPreparationTimeMinutesMin = 0;
+
+export const updateAdminBranchResponseTwoDeliveryTimeMinutesMin = 0;
+
+export const updateAdminBranchResponseTwoPickupSlotIntervalMinutesMin = 5;
+
+
+
 
 export const UpdateAdminBranchResponse = zod.object({
   "id": zod.number().int(),
@@ -1266,7 +1395,8 @@ export const UpdateAdminBranchResponse = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -1282,7 +1412,21 @@ export const UpdateAdminBranchResponse = zod.object({
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
   "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "preparationTimeMinutes": zod.number().int().min(updateAdminBranchResponseTwoPreparationTimeMinutesMin),
+  "deliveryTimeMinutes": zod.number().int().min(updateAdminBranchResponseTwoDeliveryTimeMinutesMin),
+  "pickupSlotIntervalMinutes": zod.number().int().min(updateAdminBranchResponseTwoPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional()
 }))
 
 
@@ -1325,7 +1469,8 @@ export const ListAdminInventoryResponseItem = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -1347,7 +1492,8 @@ export const ListAdminInventoryResponseItem = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int().optional(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
@@ -1429,7 +1575,8 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "date": zod.string().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
@@ -1451,7 +1598,8 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "categorySlug": zod.string(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean(),
+  "seasonal": zod.boolean().optional(),
+  "minimumLeadTimeHours": zod.number().int().optional(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),

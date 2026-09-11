@@ -57,6 +57,8 @@ type ProductFilters = {
   categorySlug?: string;
   branchSlug?: string;
   featured?: boolean;
+  scheduledStart?: Date;
+  includeUnavailable?: boolean;
   status?: "draft" | "active" | "inactive";
   publicOnly?: boolean;
 };
@@ -129,24 +131,33 @@ export async function listProductCards(filters: ProductFilters = {}) {
     .map(({ product, categoryName, categorySlug }) => {
       const availability = availabilityRows
         .filter(({ branchProduct }) => branchProduct.productId === product.id)
-        .map(({ branchProduct, branchId, branchSlug, branchName, branchPrep }) => ({
+        .map(({ branchProduct, branchId, branchSlug, branchName, branchPrep }) => {
+          const preparationTimeMinutes =
+            branchProduct.preparationTimeMinutes ??
+            branchPrep ??
+            product.minimumLeadTimeHours * 60;
+          const scheduleReady =
+            !filters.scheduledStart ||
+            filters.scheduledStart.getTime() >=
+              Date.now() +
+                Math.max(product.minimumLeadTimeHours * 60, preparationTimeMinutes) *
+                60_000;
+          return {
           branchId,
           branchSlug,
           branchName,
-          available: branchProduct.available,
+          available: branchProduct.available && scheduleReady,
           inventory: branchProduct.inventory,
           price: branchProduct.priceOverride ?? product.price,
           salePrice:
             branchProduct.salePriceOverride !== null
               ? branchProduct.salePriceOverride
               : product.salePrice,
-          preparationTimeMinutes:
-            branchProduct.preparationTimeMinutes ??
-            branchPrep ??
-            product.minimumLeadTimeHours * 60,
+          preparationTimeMinutes,
           pickupAvailable: branchProduct.pickupAvailable,
           deliveryAvailable: branchProduct.deliveryAvailable,
-        }));
+          };
+        });
 
       return {
         id: product.id,
@@ -161,6 +172,7 @@ export async function listProductCards(filters: ProductFilters = {}) {
         imageUrl: product.imageUrl,
         featured: product.featured,
         seasonal: product.seasonal,
+        minimumLeadTimeHours: product.minimumLeadTimeHours,
         availability,
         status: product.status,
         updatedAt: product.updatedAt,
@@ -168,11 +180,20 @@ export async function listProductCards(filters: ProductFilters = {}) {
     })
     .filter((product) => {
       if (!filters.branchSlug) return true;
+      if (filters.includeUnavailable) return true;
       return product.availability.some(
         (item) =>
           item.branchSlug === filters.branchSlug &&
           item.available &&
-          item.inventory > 0,
+          item.inventory > 0 &&
+          (!filters.scheduledStart ||
+            filters.scheduledStart.getTime() >=
+              Date.now() +
+                Math.max(
+                  product.minimumLeadTimeHours * 60,
+                  item.preparationTimeMinutes,
+                ) *
+                60_000),
       );
     });
 }
