@@ -14,6 +14,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isQuickLinksOpen, setIsQuickLinksOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
   const { isSignedIn } = useAuth();
@@ -329,39 +330,52 @@ export function StoreLayout({ children }: { children: ReactNode }) {
       </footer>
 
       <nav aria-label="Accesos rápidos" className="pointer-events-none fixed bottom-24 right-4 z-40 flex flex-col items-end gap-2 sm:bottom-6 sm:right-6">
-        <a
-          href="https://pasteleria-mallorca.mx/bolsa-de-trabajo"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Bolsa de trabajo"
-          title="Bolsa de trabajo"
-          className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-black px-3 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:w-auto"
+        {isQuickLinksOpen && (
+          <div className="flex flex-col items-end gap-2 animate-in slide-in-from-bottom-2">
+            <a
+              href="https://pasteleria-mallorca.mx/bolsa-de-trabajo"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Bolsa de trabajo"
+              title="Bolsa de trabajo"
+              className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-black px-3 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:w-auto"
+            >
+              <span className="hidden text-xs font-semibold sm:inline">Bolsa de trabajo</span>
+              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+            </a>
+            <a
+              href="https://wa.me/525518827979"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Escribir por WhatsApp al 55 1882 7979"
+              title="WhatsApp 55 1882 7979"
+              className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full bg-[#25D366] px-3 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[#1fb958] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366] sm:w-auto"
+            >
+              <span className="hidden text-xs font-semibold sm:inline">WhatsApp</span>
+              <MessageCircle className="h-5 w-5 shrink-0" />
+            </a>
+            <a
+              href="https://xetux-e.com/facturacion/webFact"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Facturación"
+              title="Facturación"
+              className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full border border-black/10 bg-white px-3 text-black shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:w-auto"
+            >
+              <span className="hidden text-xs font-semibold sm:inline">Facturación</span>
+              <FileText className="h-4 w-4 shrink-0" />
+            </a>
+          </div>
+        )}
+        <button
+          type="button"
+          aria-label={isQuickLinksOpen ? "Ocultar accesos rápidos" : "Mostrar accesos rápidos"}
+          aria-expanded={isQuickLinksOpen}
+          onClick={() => setIsQuickLinksOpen((open) => !open)}
+          className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)]"
         >
-          <span className="hidden text-xs font-semibold sm:inline">Bolsa de trabajo</span>
-          <BriefcaseBusiness className="h-4 w-4 shrink-0" />
-        </a>
-        <a
-          href="https://wa.me/525518827979"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Escribir por WhatsApp al 55 1882 7979"
-          title="WhatsApp 55 1882 7979"
-          className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full bg-[#25D366] px-3 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[#1fb958] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366] sm:w-auto"
-        >
-          <span className="hidden text-xs font-semibold sm:inline">WhatsApp</span>
-          <MessageCircle className="h-5 w-5 shrink-0" />
-        </a>
-        <a
-          href="https://xetux-e.com/facturacion/webFact"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Facturación"
-          title="Facturación"
-          className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full border border-black/10 bg-white px-3 text-black shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:w-auto"
-        >
-          <span className="hidden text-xs font-semibold sm:inline">Facturación</span>
-          <FileText className="h-4 w-4 shrink-0" />
-        </a>
+          <Info className="h-5 w-5" />
+        </button>
       </nav>
     </div>
   );
