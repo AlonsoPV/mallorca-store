@@ -599,6 +599,79 @@ export const GetCartResponse = zod.object({
 })
 
 
+/**
+ * @summary Preview cart availability in another branch
+ */
+export const PreviewCartBranchParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PreviewCartBranchBody = zod.object({
+  "branchId": zod.number().int()
+})
+
+export const PreviewCartBranchResponse = zod.object({
+  "branch": zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "shortName": zod.string(),
+  "description": zod.string().nullable(),
+  "address": zod.string(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "phone": zod.string(),
+  "whatsapp": zod.string().nullable(),
+  "email": zod.string(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "preparationTimeMinutes": zod.number().int(),
+  "deliveryTimeMinutes": zod.number().int(),
+  "active": zod.boolean()
+}),
+  "items": zod.array(zod.object({
+  "productId": zod.number().int(),
+  "variantId": zod.number().int().nullable(),
+  "name": zod.string(),
+  "quantity": zod.number().int(),
+  "available": zod.boolean(),
+  "inventory": zod.number().int(),
+  "price": zod.number(),
+  "salePrice": zod.number().nullable()
+})),
+  "unavailableItems": zod.array(zod.object({
+  "productId": zod.number().int(),
+  "variantId": zod.number().int().nullable(),
+  "name": zod.string(),
+  "quantity": zod.number().int(),
+  "available": zod.boolean(),
+  "inventory": zod.number().int(),
+  "price": zod.number(),
+  "salePrice": zod.number().nullable()
+}))
+})
+
+
 export const AddCartItemParams = zod.object({
   "id": zod.coerce.string()
 })

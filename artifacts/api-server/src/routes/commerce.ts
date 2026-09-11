@@ -12,6 +12,7 @@ import {
   ValidateDeliveryBody, ValidateDeliveryResponse, ListFulfillmentSlotsQueryParams,
   ListFulfillmentSlotsResponse, CreateOrderBody, CreateOrderResponse, StartOrderPaymentBody,
   StartOrderPaymentResponse,
+  PreviewCartBranchParams, PreviewCartBranchBody, PreviewCartBranchResponse,
   GetOrderDetailsParams, GetOrderDetailsResponse, GetGuestOrderDetailsParams,
   GetGuestOrderDetailsResponse, GetMeResponse, UpdateMeBody, UpdateMeResponse,
   ListMyOrdersResponse, type Cart as CartShape,
@@ -121,6 +122,54 @@ router.post("/cart/session", async (req, res): Promise<void> => {
 router.get("/cart/:id", async (req, res): Promise<void> => {
   const p = GetCartParams.safeParse(req.params); if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
   const view = await cartView(p.data.id); if (!view) { res.status(404).json({ error: "Cart not found" }); return; } res.json(GetCartResponse.parse(view));
+});
+
+router.post("/cart/:id/branch-preview", async (req, res): Promise<void> => {
+  const p = PreviewCartBranchParams.safeParse(req.params);
+  const b = PreviewCartBranchBody.safeParse(req.body);
+  if (!p.success || !b.success) { res.status(400).json({ error: "Invalid branch preview" }); return; }
+
+  const [targetBranch] = await db.select().from(branchesTable)
+    .where(and(eq(branchesTable.id, b.data.branchId), eq(branchesTable.active, true)));
+  const [cart] = await db.select().from(cartsTable).where(eq(cartsTable.id, p.data.id));
+  if (!targetBranch || !cart) { res.status(404).json({ error: "Cart or branch not found" }); return; }
+
+  const rows = await db.select({
+    item: cartItemsTable,
+    product: productsTable,
+    branchProduct: branchProductsTable,
+  })
+    .from(cartItemsTable)
+    .innerJoin(productsTable, eq(cartItemsTable.productId, productsTable.id))
+    .leftJoin(
+      branchProductsTable,
+      and(
+        eq(branchProductsTable.productId, cartItemsTable.productId),
+        eq(branchProductsTable.branchId, targetBranch.id),
+      ),
+    )
+    .where(eq(cartItemsTable.cartId, cart.id));
+
+  const items = rows.map(({ item, product, branchProduct }) => ({
+    productId: product.id,
+    variantId: item.variantId,
+    name: product.name,
+    quantity: item.quantity,
+    available: Boolean(
+      branchProduct?.available &&
+      branchProduct.inventory >= item.quantity &&
+      product.status === "active",
+    ),
+    inventory: branchProduct?.inventory ?? 0,
+    price: branchProduct?.priceOverride ?? product.price,
+    salePrice: branchProduct?.salePriceOverride ?? product.salePrice,
+  }));
+
+  res.json(PreviewCartBranchResponse.parse({
+    branch: serializeBranch(targetBranch),
+    items,
+    unavailableItems: items.filter((item) => !item.available),
+  }));
 });
 
 router.post("/cart/:id/items", async (req, res): Promise<void> => {

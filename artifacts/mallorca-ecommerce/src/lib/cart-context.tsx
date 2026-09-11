@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 interface CartContextType {
   cartId: string | null;
   branchId: number | null;
+  setBranchId: (branchId: number | null) => void;
   setCartSession: (cartId: string | null, branchId: number | null) => void;
   clearCartSession: () => void;
 }
@@ -38,15 +39,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setSelectedBranch = (newBranchId: number | null) => {
+    setBranchId(newBranchId);
+    if (newBranchId !== null) {
+      localStorage.setItem("mallorca_branch_id", newBranchId.toString());
+    } else {
+      localStorage.removeItem("mallorca_branch_id");
+    }
+  };
+
   const clearCartSession = () => {
     setCartId(null);
-    setBranchId(null);
     localStorage.removeItem("mallorca_cart_id");
-    localStorage.removeItem("mallorca_branch_id");
   };
 
   return (
-    <CartContext.Provider value={{ cartId, branchId, setCartSession, clearCartSession }}>
+    <CartContext.Provider value={{ cartId, branchId, setBranchId: setSelectedBranch, setCartSession, clearCartSession }}>
       {children}
     </CartContext.Provider>
   );

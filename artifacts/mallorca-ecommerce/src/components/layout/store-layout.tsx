@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart-context";
+import { BranchSelector } from "@/components/branch-selector";
 import { useGetCart, useGetMe, getGetCartQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/react";
 import footerLogo from "@assets/MallorcaFooter_1789166205501.webp";
@@ -20,12 +21,13 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   const { isSignedIn } = useAuth();
   const { data: user } = useGetMe({ query: { enabled: !!isSignedIn, queryKey: getGetMeQueryKey() } });
   
-  const { cartId } = useCart();
+  const { cartId, branchId } = useCart();
   const { data: cart } = useGetCart(cartId!, { query: { enabled: !!cartId, queryKey: getGetCartQueryKey(cartId!) } });
   const toggleMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const isAdmin = !!user && ["staff", "branch_manager", "operations_manager", "operations", "manager", "admin"].includes(user.role);
   const isHeroHeader = location === "/" && !isScrolled;
+  const branchRequired = location === "/tienda" || location.startsWith("/producto/") || location === "/carrito" || location === "/checkout";
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 24);
@@ -71,6 +73,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               </Link>
             </nav>
           </div>
+          <BranchSelector required={branchRequired && !branchId} />
 
           <div className="hidden md:flex items-center gap-1">
             {isAdmin && (

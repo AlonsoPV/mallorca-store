@@ -1,5 +1,5 @@
 import { StoreLayout } from "@/components/layout/store-layout";
-import { useGetProduct, useAddCartItem, useCreateCartSession, getGetCartQueryKey } from "@workspace/api-client-react";
+import { useGetProduct, useAddCartItem, useCreateCartSession, getGetCartQueryKey, getGetProductQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus, Minus, Info, AlertCircle, ShoppingBag } from "lucide-react";
@@ -8,19 +8,20 @@ import { cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: product, isLoading, isError } = useGetProduct(slug || "");
+  const { branchId } = useCart();
+  const { data: product, isLoading, isError } = useGetProduct(slug || "", {
+    query: {
+      enabled: Boolean(slug && branchId),
+      queryKey: getGetProductQueryKey(slug || ""),
+    },
+  });
   const [quantity, setQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
   
-  const { cartId, branchId, setCartSession, clearCartSession } = useCart();
-  const [selectedBranch, setSelectedBranch] = useState<number | null>(branchId);
-  const [branchChangeConfirmOpen, setBranchChangeConfirmOpen] = useState(false);
-  const [pendingBranchSelect, setPendingBranchSelect] = useState<number | null>(null);
+  const { cartId, setCartSession } = useCart();
   
   const addCartItem = useAddCartItem();
   const createSession = useCreateCartSession();
@@ -29,9 +30,9 @@ export default function ProductDetail() {
 
   // If a branch is selected, make sure we only show price/availability for that branch.
   const currentBranchAvailability = useMemo(() => {
-    if (!product || !selectedBranch) return null;
-    return product.availability.find(a => a.branchId === selectedBranch);
-  }, [product, selectedBranch]);
+    if (!product || !branchId) return null;
+    return product.availability.find(a => a.branchId === branchId);
+  }, [product, branchId]);
 
   if (isLoading) {
     return (
@@ -76,25 +77,8 @@ export default function ProductDetail() {
     ? (product.variants.find(v => v.id === selectedVariant)?.salePrice || product.variants.find(v => v.id === selectedVariant)?.price || product.price)
     : (currentBranchAvailability?.salePrice || currentBranchAvailability?.price || product.salePrice || product.price);
 
-  const handleBranchSelect = (val: string) => {
-    const newBranchId = parseInt(val, 10);
-    if (cartId && branchId && newBranchId !== branchId) {
-      setPendingBranchSelect(newBranchId);
-      setBranchChangeConfirmOpen(true);
-    } else {
-      setSelectedBranch(newBranchId);
-    }
-  };
-
-  const confirmBranchChange = () => {
-    clearCartSession();
-    setSelectedBranch(pendingBranchSelect);
-    setBranchChangeConfirmOpen(false);
-    setPendingBranchSelect(null);
-  };
-
   const handleAddToCart = async () => {
-    if (!selectedBranch) {
+    if (!branchId) {
       toast({
         title: "Selecciona una sucursal",
         description: "Necesitamos saber en qué sucursal recogerás o desde dónde enviaremos tu pedido.",
@@ -106,12 +90,12 @@ export default function ProductDetail() {
     try {
       let activeCartId = cartId;
       
-      if (!activeCartId || branchId !== selectedBranch) {
+      if (!activeCartId) {
         const session = await createSession.mutateAsync({
-          data: { branchId: selectedBranch, cartId: activeCartId }
+          data: { branchId },
         });
         activeCartId = session.id;
-        setCartSession(session.id, selectedBranch);
+        setCartSession(session.id, branchId);
       }
 
       await addCartItem.mutateAsync({
@@ -200,29 +184,19 @@ export default function ProductDetail() {
               <p>{product.description}</p>
             </div>
 
-            {/* Branch Selection */}
-            <div className="mb-8 p-4 bg-muted/30 border border-border">
-              <h3 className="mallorca-kicker mb-4 flex items-center gap-2 text-primary">
-                <ShoppingBag className="w-4 h-4" />
-                Selecciona una Sucursal
-              </h3>
-              <Select value={selectedBranch?.toString() || ""} onValueChange={handleBranchSelect}>
-              <SelectTrigger className="h-12 w-full rounded-none border-border bg-background">
-                  <SelectValue placeholder="Elige dónde comprar..." />
-                </SelectTrigger>
-                <SelectContent className="rounded-none">
-                  {product.availability.filter(a => a.available).map((branch) => (
-                    <SelectItem key={branch.branchId} value={branch.branchId.toString()} className="cursor-pointer">
-                      {branch.branchName}
-                    </SelectItem>
-                  ))}
-                  {product.availability.filter(a => !a.available).length === product.availability.length && (
-                    <div className="px-2 py-3 text-sm text-muted-foreground italic">
-                      Agotado en todas las sucursales
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+            <div className="mb-8 border-y border-border bg-muted/20 py-4">
+              <div className="flex items-start gap-3">
+                <ShoppingBag className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <span className="mallorca-kicker text-primary">Tu Mallorca</span>
+                  <p className="mt-1 font-serif text-xl">{currentBranchAvailability?.branchName || "Sucursal seleccionada"}</p>
+                  <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                    {currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) > 0
+                      ? `Disponible · ${currentBranchAvailability.inventory} piezas`
+                      : "Agotado en esta sucursal"}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Variants */}
@@ -279,7 +253,7 @@ export default function ProductDetail() {
               
               <Button 
                 onClick={handleAddToCart}
-                disabled={!selectedBranch || addCartItem.isPending || createSession.isPending}
+                disabled={!branchId || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
                 size="lg" 
                 className="h-12 flex-1 rounded-none bg-primary text-base text-primary-foreground hover:bg-primary/90"
               >
@@ -294,7 +268,7 @@ export default function ProductDetail() {
               </div>
               <Button
                 onClick={handleAddToCart}
-                disabled={!selectedBranch || addCartItem.isPending || createSession.isPending}
+                disabled={!branchId || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
                 className="h-12 rounded-md bg-[var(--mallorca-red)] px-5 text-white hover:bg-[var(--mallorca-red-dark)]"
               >
                 {addCartItem.isPending || createSession.isPending ? "Añadiendo" : "Añadir"}
@@ -353,25 +327,6 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        {/* Dialog for Cart Branch Override */}
-        <Dialog open={branchChangeConfirmOpen} onOpenChange={setBranchChangeConfirmOpen}>
-          <DialogContent className="rounded-none border-border">
-            <DialogHeader>
-              <DialogTitle className="font-serif text-2xl">¿Cambiar sucursal?</DialogTitle>
-              <DialogDescription className="text-base mt-2">
-                Ya tienes productos en tu carrito de otra sucursal. Cambiar la sucursal vaciará tu carrito actual. ¿Estás seguro de que deseas continuar?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="mt-6 flex gap-3">
-              <Button variant="outline" className="rounded-none" onClick={() => setBranchChangeConfirmOpen(false)}>
-                Cancelar
-              </Button>
-              <Button variant="destructive" className="rounded-none" onClick={confirmBranchChange}>
-                Vaciar carrito y cambiar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </StoreLayout>
   );

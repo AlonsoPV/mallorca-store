@@ -32,10 +32,14 @@ export function ProductCard({ product, className, showBranchAvailability = false
   const activeAvailability = branchId
     ? product.availability?.find((availability) => availability.branchId === branchId)
     : undefined;
-  const isAvailable = product.availability && product.availability.length > 0 
-    ? product.availability.some(a => a.available && a.inventory > 0)
-    : true; // Default true if no availability data provided
+  const isAvailable = Boolean(
+    branchId &&
+    activeAvailability?.available &&
+    (activeAvailability.inventory ?? 0) > 0,
+  );
   const canQuickAdd = Boolean(branchId && activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0);
+  const currentPrice = activeAvailability?.price ?? product.price;
+  const currentSalePrice = activeAvailability?.salePrice ?? product.salePrice;
 
   const handleQuickAdd = async (event: React.MouseEvent) => {
     event.preventDefault();
@@ -87,7 +91,7 @@ export function ProductCard({ product, className, showBranchAvailability = false
                 Temporada
               </span>
             )}
-            {!isAvailable && (
+            {branchId && !isAvailable && (
               <span className="bg-background/90 text-foreground text-[10px] uppercase tracking-widest px-2 py-1 backdrop-blur-sm">
                 Agotado
               </span>
@@ -114,13 +118,15 @@ export function ProductCard({ product, className, showBranchAvailability = false
 
         <div className="mt-auto flex items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2">
-            {product.salePrice ? (
+            {!branchId ? (
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-xs">Elige sucursal</span>
+            ) : currentSalePrice ? (
               <>
-               <span className="text-xs font-medium text-primary sm:text-base">{formatPrice(product.salePrice)}</span>
-               <span className="hidden text-sm text-muted-foreground line-through sm:inline">{formatPrice(product.price)}</span>
+                <span className="text-xs font-medium text-primary sm:text-base">{formatPrice(currentSalePrice)}</span>
+                <span className="hidden text-sm text-muted-foreground line-through sm:inline">{formatPrice(currentPrice)}</span>
               </>
             ) : (
-               <span className="text-xs font-medium text-foreground sm:text-base">{formatPrice(product.price)}</span>
+               <span className="text-xs font-medium text-foreground sm:text-base">{formatPrice(currentPrice)}</span>
             )}
           </div>
           {canQuickAdd ? (

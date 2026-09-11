@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { StoreLayout } from "@/components/layout/store-layout";
-import { useListBranches, useListCategories, useListProducts } from "@workspace/api-client-react";
+import { useListBranches, useListCategories, useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { ProductCard } from "@/components/product-card";
 import { ArrowDown, ArrowRight, ArrowUpRight, MapPin } from "lucide-react";
+import { useCart } from "@/lib/cart-context";
 
 const categoryImages = [
   "/images/mallorca-chocolate-cake.jpg",
@@ -12,9 +13,19 @@ const categoryImages = [
 ];
 
 export default function Home() {
-  const { data: products, isLoading: isLoadingProducts } = useListProducts({ featured: true });
+  const { branchId } = useCart();
   const { data: categories, isLoading: isLoadingCategories } = useListCategories();
   const { data: branches } = useListBranches();
+  const selectedBranch = branches?.find((branch) => branch.id === branchId);
+  const { data: products, isLoading: isLoadingProducts } = useListProducts({
+    featured: true,
+    branchSlug: selectedBranch?.slug,
+  }, {
+    query: {
+      enabled: Boolean(selectedBranch),
+      queryKey: getListProductsQueryKey({ featured: true, branchSlug: selectedBranch?.slug }),
+    },
+  });
   const [heroShift, setHeroShift] = useState({ x: 0, y: 0 });
 
   const featureProduct = products?.[0];

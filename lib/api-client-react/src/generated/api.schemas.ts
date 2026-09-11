@@ -355,6 +355,29 @@ export interface Cart {
   maxLeadTimeMinutes: number;
 }
 
+export interface BranchPreviewInput {
+  branchId: number;
+}
+
+export interface BranchPreviewItem {
+  productId: number;
+  /** @nullable */
+  variantId: number | null;
+  name: string;
+  quantity: number;
+  available: boolean;
+  inventory: number;
+  price: number;
+  /** @nullable */
+  salePrice: number | null;
+}
+
+export interface BranchPreview {
+  branch: Branch;
+  items: BranchPreviewItem[];
+  unavailableItems: BranchPreviewItem[];
+}
+
 export interface DeliveryValidationInput {
   branchId: number;
   latitude: number;

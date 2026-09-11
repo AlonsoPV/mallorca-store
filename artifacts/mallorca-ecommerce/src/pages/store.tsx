@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { StoreLayout } from "@/components/layout/store-layout";
-import { useListProducts, useListCategories } from "@workspace/api-client-react";
+import { useListProducts, useListCategories, useListBranches, getListProductsQueryKey } from "@workspace/api-client-react";
 import { ProductCard } from "@/components/product-card";
 import { Input } from "@/components/ui/input";
 import { Search, Filter, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useCart } from "@/lib/cart-context";
 
 export default function Store() {
   const [location, setLocation] = useLocation();
@@ -16,6 +17,7 @@ export default function Store() {
   const [search, setSearch] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const { branchId } = useCart();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -24,12 +26,23 @@ export default function Store() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const { data: categories } = useListCategories();
+  const { data: branches } = useListBranches();
+  const selectedBranch = branches?.find((branch) => branch.id === branchId);
   const { data: products, isLoading: isLoadingProducts } = useListProducts({
+    branchSlug: selectedBranch?.slug,
     categorySlug: categorySlug || undefined,
     search: debouncedSearch || undefined,
+  }, {
+    query: {
+      enabled: Boolean(selectedBranch),
+      queryKey: getListProductsQueryKey({
+        branchSlug: selectedBranch?.slug,
+        categorySlug: categorySlug || undefined,
+        search: debouncedSearch || undefined,
+      }),
+    },
   });
-
-  const { data: categories } = useListCategories();
 
   const handleCategorySelect = (slug: string) => {
     if (slug === categorySlug) {

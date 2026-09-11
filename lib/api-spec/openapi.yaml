@@ -255,6 +255,25 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "200": { description: Cart, content: { application/json: { schema: { $ref: "#/components/schemas/Cart" } } } }
+  /cart/{id}/branch-preview:
+    post:
+      operationId: previewCartBranch
+      tags: [storefront]
+      summary: Preview cart availability in another branch
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BranchPreviewInput" }
+      responses:
+        "200": { description: Cart branch change preview, content: { application/json: { schema: { $ref: "#/components/schemas/BranchPreview" } } } }
+        "404":
+          description: Cart or branch not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
   /cart/{id}/items:
     post:
       operationId: addCartItem
@@ -1054,6 +1073,30 @@ components:
         quantity: { type: integer }
         maxLeadTimeMinutes: { type: integer }
       required: [id, branch, items, subtotal, quantity, maxLeadTimeMinutes]
+    BranchPreviewInput:
+      type: object
+      properties:
+        branchId: { type: integer }
+      required: [branchId]
+    BranchPreviewItem:
+      type: object
+      properties:
+        productId: { type: integer }
+        variantId: { type: ["integer", "null"] }
+        name: { type: string }
+        quantity: { type: integer }
+        available: { type: boolean }
+        inventory: { type: integer }
+        price: { type: number }
+        salePrice: { type: ["number", "null"] }
+      required: [productId, variantId, name, quantity, available, inventory, price, salePrice]
+    BranchPreview:
+      type: object
+      properties:
+        branch: { $ref: "#/components/schemas/Branch" }
+        items: { type: array, items: { $ref: "#/components/schemas/BranchPreviewItem" } }
+        unavailableItems: { type: array, items: { $ref: "#/components/schemas/BranchPreviewItem" } }
+      required: [branch, items, unavailableItems]
     DeliveryValidationInput:
       type: object
       properties:

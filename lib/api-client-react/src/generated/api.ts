@@ -27,6 +27,8 @@ import type {
   AssignmentInput,
   Branch,
   BranchDetail,
+  BranchPreview,
+  BranchPreviewInput,
   BranchReport,
   BranchUpdate,
   Cart,
@@ -1062,6 +1064,95 @@ export function useGetCart<TData = Awaited<ReturnType<typeof getCart>>, TError =
 
 
 
+
+export const getPreviewCartBranchUrl = (id: string,) => {
+
+
+
+
+  return `/api/cart/${id}/branch-preview`
+}
+
+/**
+ * @summary Preview cart availability in another branch
+ */
+export const previewCartBranch = async (id: string,
+    branchPreviewInput: BranchPreviewInput, options?: Parameters<typeof customFetch>[1]): Promise<BranchPreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BranchPreview>(getPreviewCartBranchUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(branchPreviewInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewCartBranchMutationKey = () => ['previewCartBranch'] as const;
+
+export const getPreviewCartBranchMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCartBranch>>, TError,PreviewCartBranchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewCartBranch>>, TError,PreviewCartBranchMutationVariables, TContext> => {
+
+const mutationKey = getPreviewCartBranchMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewCartBranch>>, PreviewCartBranchMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  previewCartBranch(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewCartBranchMutationResult = NonNullable<Awaited<ReturnType<typeof previewCartBranch>>>
+    export type PreviewCartBranchMutationBody = BodyType<BranchPreviewInput>
+    export type PreviewCartBranchMutationError = ErrorType<ErrorResponse>
+    export type PreviewCartBranchMutationVariables = {id: string;data: BodyType<BranchPreviewInput>}
+
+    /**
+ * @summary Preview cart availability in another branch
+ */
+export const usePreviewCartBranch = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCartBranch>>, TError,PreviewCartBranchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewCartBranch>>,
+        TError,
+        PreviewCartBranchMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPreviewCartBranchMutationOptions(options));
+    }
 
 export const getAddCartItemUrl = (id: string,) => {
 
