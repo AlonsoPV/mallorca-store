@@ -338,10 +338,14 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               rel="noreferrer"
               aria-label="Bolsa de trabajo"
               title="Bolsa de trabajo"
-              className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-black px-3 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:w-auto"
+              className="pointer-events-auto flex items-center gap-2 transition-transform hover:-translate-x-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)]"
             >
-              <span className="hidden text-xs font-semibold sm:inline">Bolsa de trabajo</span>
-              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+              <span className="min-w-[142px] rounded-sm bg-[#4a4a4c] px-3 py-2 text-right text-xs font-medium text-white shadow-md">
+                Bolsa de trabajo
+              </span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-white/25 bg-[#e58c32] text-white shadow-lg">
+                <BriefcaseBusiness className="h-5 w-5" />
+              </span>
             </a>
             <a
               href="https://wa.me/525518827979"
@@ -349,10 +353,14 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               rel="noreferrer"
               aria-label="Escribir por WhatsApp al 55 1882 7979"
               title="WhatsApp 55 1882 7979"
-              className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full bg-[#25D366] px-3 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[#1fb958] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366] sm:w-auto"
+              className="pointer-events-auto flex items-center gap-2 transition-transform hover:-translate-x-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]"
             >
-              <span className="hidden text-xs font-semibold sm:inline">WhatsApp</span>
-              <MessageCircle className="h-5 w-5 shrink-0" />
+              <span className="min-w-[142px] rounded-sm bg-[#4a4a4c] px-3 py-2 text-right text-xs font-medium text-white shadow-md">
+                Información
+              </span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-white/25 bg-[#25D366] text-white shadow-lg">
+                <MessageCircle className="h-5 w-5" />
+              </span>
             </a>
             <a
               href="https://xetux-e.com/facturacion/webFact"
@@ -360,10 +368,14 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               rel="noreferrer"
               aria-label="Facturación"
               title="Facturación"
-              className="pointer-events-auto flex h-11 w-11 items-center justify-center gap-2 rounded-full border border-black/10 bg-white px-3 text-black shadow-lg transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:w-auto"
+              className="pointer-events-auto flex items-center gap-2 transition-transform hover:-translate-x-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e9a11a]"
             >
-              <span className="hidden text-xs font-semibold sm:inline">Facturación</span>
-              <FileText className="h-4 w-4 shrink-0" />
+              <span className="min-w-[142px] rounded-sm bg-[#4a4a4c] px-3 py-2 text-right text-xs font-medium text-white shadow-md">
+                Facturación
+              </span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-white/25 bg-[#e9a11a] text-white shadow-lg">
+                <FileText className="h-5 w-5" />
+              </span>
             </a>
           </div>
         )}
@@ -372,12 +384,9 @@ export function StoreLayout({ children }: { children: ReactNode }) {
           aria-label={isQuickLinksOpen ? "Ocultar accesos rápidos" : "Mostrar accesos rápidos"}
           aria-expanded={isQuickLinksOpen}
           onClick={() => setIsQuickLinksOpen((open) => !open)}
-          className={`group pointer-events-auto flex h-12 w-12 items-center justify-center gap-3 rounded-full border border-white/70 bg-black/90 px-1 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)] sm:h-11 sm:w-auto sm:pl-4 sm:pr-1 ${isQuickLinksOpen ? "bg-[var(--mallorca-red)] hover:bg-[var(--mallorca-red-dark)]" : ""}`}
+          className="group pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border-4 border-white/20 bg-[var(--mallorca-red)] text-white shadow-[0_8px_24px_rgba(0,0,0,0.3)] transition-all hover:-translate-y-0.5 hover:bg-[var(--mallorca-red-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mallorca-red)]"
         >
-          <span className="hidden text-[10px] font-bold tracking-[0.2em] sm:inline">INFO</span>
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white shadow-inner transition-transform group-hover:scale-105 sm:h-9 sm:w-9">
-            <Info className="h-5 w-5" />
-          </span>
+          <Info className={`h-6 w-6 transition-transform duration-300 ${isQuickLinksOpen ? "rotate-90" : "group-hover:scale-110"}`} />
         </button>
       </nav>
     </div>
