@@ -126,11 +126,6 @@ paths:
           required: true
           schema:
             type: string
-        - name: branchSlug
-          in: query
-          required: false
-          schema:
-            type: string
       responses:
         "200":
           description: Product detail
@@ -181,7 +176,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas<AdminProduct>"
+                  $ref: "#/components/schemas/AdminProduct"
     post:
       operationId: createProduct
       tags: [admin]
@@ -376,7 +371,7 @@ components:
             products:
               type: array
               items:
-                $ref: "#/components/schemas<ProductCard"
+                $ref: "#/components/schemas/ProductCard"
           required: [products]
     Category:
       type: object

@@ -4,6 +4,14 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import Home from '@/pages/home';
+import Store from '@/pages/store';
+import ProductDetail from '@/pages/product-detail';
+import Branches from '@/pages/branches';
+import BranchDetail from '@/pages/branch-detail';
+import AdminDashboard from '@/pages/admin/dashboard';
+import AdminProductsList from '@/pages/admin/products-list';
+import AdminProductForm from '@/pages/admin/product-form';
 import {
   Route,
   Switch,
@@ -13,28 +21,23 @@ import {
 
 const queryClient = new QueryClient();
 
-function Home() {
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Replit Agent is building...
-        </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Your app will appear here once it's ready.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function Router() {
   return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
     <RoutedErrorBoundary>
       <Switch>
+        {/* Storefront Routes */}
         <Route path="/" component={Home} />
+        <Route path="/tienda" component={Store} />
+        <Route path="/producto/:slug" component={ProductDetail} />
+        <Route path="/sucursales" component={Branches} />
+        <Route path="/sucursales/:slug" component={BranchDetail} />
+        
+        {/* Admin Routes */}
+        <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin/productos" component={AdminProductsList} />
+        <Route path="/admin/productos/nuevo" component={AdminProductForm} />
+        <Route path="/admin/productos/:id" component={AdminProductForm} />
+        
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

@@ -5,7 +5,9 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { Branch } from './branch';
+import type { ProductCard } from './productCard';
 
-export interface HealthStatus {
-  status: string;
-}
+export type BranchDetail = Branch & {
+  products: ProductCard[];
+};

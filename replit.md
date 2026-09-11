@@ -1,6 +1,6 @@
-# [Project name]
+# Mallorca Ecommerce
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Nueva tienda online administrable de Pastelería Mallorca México, con catálogo y disponibilidad por sucursal.
 
 ## Run & Operate
 
@@ -22,23 +22,33 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/mallorca-ecommerce` — storefront y panel administrativo
+- `artifacts/api-server/src/routes` — API de sucursales, catálogo y administración
+- `lib/api-spec/openapi.yaml` — contrato fuente de verdad
+- `lib/db/src/schema/ecommerce.ts` — modelo relacional de catálogo
+- `artifacts/mallorca-ecommerce/src/index.css` — tema visual
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- La primera entrega cubre el núcleo de catálogo y administración; carrito, pagos y fulfillment se mantienen como fases posteriores.
+- Se usa PostgreSQL administrado por Replit en lugar de Supabase para mantener la integración nativa del entorno.
+- Un producto es global y su inventario/disponibilidad se relaciona por sucursal mediante `branch_products`; no se duplican productos.
+- Las imágenes iniciales son generadas para el proyecto y no copiadas del sitio de referencia.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Los clientes pueden explorar productos, filtrar el catálogo, revisar variantes y disponibilidad por sucursal, y consultar las sedes Lomas y Reforma. El panel permite revisar métricas, buscar productos y crear o editar el catálogo.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- La marca debe sentirse europea premium, cálida, artesanal y editorial, sin copiar visualmente el sitio actual.
+- Evitar patrones SaaS, marketplace/Amazon, gradientes, exceso de sombras, bordes redondeados exagerados e información simultánea.
+- Priorizar facilidad de compra, facilidad de administración, operación correcta por sucursal, mobile, performance y después efectos visuales.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Tras cambiar `lib/api-spec/openapi.yaml`, ejecutar siempre el codegen antes de usar nuevos tipos o hooks.
+- Las rutas del frontend usan el prefijo configurado por el artifact; no agregar proxies locales de Vite.
 
 ## Pointers
 

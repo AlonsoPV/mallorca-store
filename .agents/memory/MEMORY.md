@@ -1,0 +1,1 @@
+- [Managed database choice](managed-database-choice.md) — Keep Mallorca on Replit PostgreSQL unless an explicit Supabase-only requirement appears.
