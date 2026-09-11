@@ -9,11 +9,12 @@ export default function Branches() {
 
   return (
     <StoreLayout>
-      <div className="bg-foreground text-background py-16 px-4 md:px-6 mb-12">
-        <div className="container mx-auto text-center max-w-2xl">
-          <h1 className="font-serif text-4xl md:text-5xl mb-6">Nuestras Sucursales</h1>
+      <div className="bg-[var(--mallorca-cacao)] px-4 py-20 text-[var(--mallorca-ivory)] md:px-6 md:py-28">
+        <div className="container mx-auto max-w-3xl">
+          <span className="mallorca-kicker text-[var(--mallorca-butter)]">Ven a vernos</span>
+          <h1 className="mallorca-display mt-4 text-6xl leading-[0.9] md:text-8xl">¿Dónde nos vemos?</h1>
           <p className="font-sans text-background/80 opacity-90">
-            Encuentra la sucursal de Mallorca más cercana a ti. Disfruta de nuestra panadería recién horneada, restaurante y tienda gourmet en la Ciudad de México.
+            Encuentra tu Mallorca: pan recién horneado, algo dulce y una pausa en la ciudad.
           </p>
         </div>
       </div>

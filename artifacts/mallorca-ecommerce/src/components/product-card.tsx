@@ -1,6 +1,13 @@
 import type { ProductCard as ProductCardType } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { ArrowUpRight, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useCart } from "@/lib/cart-context";
+import { useAddCartItem, useCreateCartSession, getGetCartQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 interface ProductCardProps {
   product: ProductCardType;
@@ -9,6 +16,12 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, className, showBranchAvailability = false }: ProductCardProps) {
+  const { cartId, branchId, setCartSession } = useCart();
+  const addCartItem = useAddCartItem();
+  const createSession = useCreateCartSession();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [isAdding, setIsAdding] = useState(false);
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
@@ -16,19 +29,45 @@ export function ProductCard({ product, className, showBranchAvailability = false
     }).format(price);
   };
 
+  const activeAvailability = branchId
+    ? product.availability?.find((availability) => availability.branchId === branchId)
+    : undefined;
   const isAvailable = product.availability && product.availability.length > 0 
     ? product.availability.some(a => a.available && a.inventory > 0)
     : true; // Default true if no availability data provided
+  const canQuickAdd = Boolean(branchId && activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0);
+
+  const handleQuickAdd = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!branchId || !canQuickAdd) return;
+    setIsAdding(true);
+    try {
+      let activeCartId = cartId;
+      if (!activeCartId) {
+        const session = await createSession.mutateAsync({ data: { branchId } });
+        activeCartId = session.id;
+        setCartSession(session.id, branchId);
+      }
+      await addCartItem.mutateAsync({ id: activeCartId, data: { productId: product.id, quantity: 1, variantId: null } });
+      queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(activeCartId) });
+      toast({ title: "Añadido a tu bolsa", description: product.name });
+    } catch (error: any) {
+      toast({ title: "No pudimos añadirlo", description: error?.message || "Intenta de nuevo.", variant: "destructive" });
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   return (
-    <Link href={`/producto/${product.slug}`}>
-      <article className={cn("group flex flex-col cursor-pointer", className)}>
-        <div className="relative aspect-[4/5] mb-4 overflow-hidden bg-muted">
+    <article className={cn("group flex flex-col", className)}>
+      <Link href={`/producto/${product.slug}`} className="block">
+        <div className="relative aspect-[4/5] overflow-hidden bg-secondary">
           {product.imageUrl ? (
-            <img 
+            <img
               src={product.imageUrl} 
               alt={product.name} 
-              className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105"
+              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
               loading="lazy"
             />
           ) : (
@@ -37,14 +76,14 @@ export function ProductCard({ product, className, showBranchAvailability = false
             </div>
           )}
           
-          <div className="absolute top-3 left-3 flex flex-col gap-2">
+          <div className="absolute left-4 top-4 flex flex-col gap-2">
             {product.featured && (
-              <span className="bg-foreground text-background text-[10px] uppercase tracking-widest px-2 py-1">
+                <span className="bg-[var(--mallorca-cacao)] px-2 py-1 text-[10px] uppercase tracking-widest text-white">
                 Destacado
               </span>
             )}
             {product.seasonal && (
-              <span className="bg-primary text-primary-foreground text-[10px] uppercase tracking-widest px-2 py-1">
+                <span className="bg-[var(--mallorca-cherry)] px-2 py-1 text-[10px] uppercase tracking-widest text-white">
                 Temporada
               </span>
             )}
@@ -54,20 +93,27 @@ export function ProductCard({ product, className, showBranchAvailability = false
               </span>
             )}
           </div>
+          <span className="absolute bottom-4 right-4 flex h-10 w-10 translate-y-2 items-center justify-center rounded-full bg-[var(--mallorca-ivory)] text-primary opacity-0 shadow-sm transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+            <ArrowUpRight className="h-4 w-4" />
+          </span>
         </div>
-        
-        <div className="flex flex-col flex-1">
-          <div className="flex justify-between items-start gap-2 mb-1">
-            <h3 className="font-serif text-lg leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">
+      </Link>
+
+      <div className="flex flex-1 flex-col pt-4">
+        <Link href={`/producto/${product.slug}`} className="block">
+          <span className="mallorca-kicker text-primary">{product.categoryName}</span>
+          <div className="mb-1 mt-2 flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 font-serif text-xl leading-tight text-foreground transition-colors group-hover:text-primary">
               {product.name}
             </h3>
           </div>
-          
-          <p className="text-sm text-muted-foreground line-clamp-1 mb-3">
+          <p className="mb-3 line-clamp-1 text-sm text-muted-foreground">
             {product.shortDescription}
           </p>
-          
-          <div className="mt-auto flex items-center gap-2">
+        </Link>
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-2">
             {product.salePrice ? (
               <>
                 <span className="font-medium text-primary">{formatPrice(product.salePrice)}</span>
@@ -77,8 +123,18 @@ export function ProductCard({ product, className, showBranchAvailability = false
               <span className="font-medium text-foreground">{formatPrice(product.price)}</span>
             )}
           </div>
+          {canQuickAdd ? (
+            <Button type="button" variant="ghost" size="sm" onClick={handleQuickAdd} disabled={isAdding} className="h-9 gap-1 px-2 text-primary hover:bg-primary/10 hover:text-primary">
+              <Plus className="h-4 w-4" />
+              <span className="text-xs font-bold tracking-wide">{isAdding ? "Añadiendo" : "Añadir"}</span>
+            </Button>
+          ) : (
+            <Link href={`/producto/${product.slug}`} className="editorial-link text-xs font-bold tracking-wide text-primary">
+              Ver opciones
+            </Link>
+          )}
         </div>
-      </article>
-    </Link>
+      </div>
+    </article>
   );
 }

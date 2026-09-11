@@ -11,9 +11,10 @@ export default function Store() {
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const categorySlug = searchParams.get('categorySlug') || "";
+  const initialSearch = searchParams.get('search') || "";
   
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   // Simple debounce for search
@@ -42,17 +43,26 @@ export default function Store() {
 
   return (
     <StoreLayout>
-      <div className="bg-secondary py-12 px-4 md:px-6 mb-8">
-        <div className="container mx-auto">
-          <h1 className="font-serif text-4xl md:text-5xl text-foreground mb-4">Catálogo</h1>
-          <p className="text-muted-foreground font-sans max-w-2xl">
-            Explora nuestra selección completa de panadería artesanal, repostería y opciones gourmet.
+      <div className="relative overflow-hidden bg-[var(--mallorca-burgundy)] px-4 py-16 text-primary-foreground md:px-6 md:py-24">
+        <div className="absolute -right-10 -top-24 h-72 w-72 rounded-full border border-white/15" />
+        <div className="absolute -right-2 -top-16 h-56 w-56 rounded-full border border-white/10" />
+        <div className="container relative mx-auto">
+          <span className="mallorca-kicker text-[var(--mallorca-butter)]">La vitrina está abierta</span>
+          <h1 className="mallorca-display mt-4 max-w-3xl text-5xl leading-[0.96] md:text-7xl">Descubre la pastelería.</h1>
+          <p className="mt-6 max-w-xl text-base leading-relaxed text-primary-foreground/75 md:text-lg">
+            Panadería, pasteles y antojos hechos para cambiarte el día.
           </p>
         </div>
       </div>
 
       <div className="container mx-auto px-4 md:px-6 pb-24">
-        <div className="flex flex-col md:flex-row gap-8 items-start">
+          <div className="mb-10 flex items-center justify-between border-b border-border pb-5">
+            <p className="text-sm text-muted-foreground">
+              {categorySlug ? "Una selección para ese antojo." : "Todo lo que hoy se hornea con cariño."}
+            </p>
+            <span className="mallorca-kicker hidden text-muted-foreground md:block">Hecho en CDMX</span>
+          </div>
+          <div className="flex flex-col md:flex-row gap-8 items-start">
           
           {/* Mobile Filter Toggle */}
           <div className="w-full flex md:hidden items-center justify-between mb-4">
@@ -88,26 +98,27 @@ export default function Store() {
             </div>
 
             <div>
-              <h3 className="font-sans text-sm font-semibold uppercase tracking-wider mb-4 border-b border-border pb-2">
-                Categorías
+              <h3 className="mallorca-kicker mb-4 border-b border-border pb-3 text-primary">
+                ¿Qué se te antoja?
               </h3>
               <ul className="space-y-3">
                 <li>
                   <button 
                     onClick={() => handleCategorySelect("")}
-                    className={`text-sm w-full text-left transition-colors ${!categorySlug ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`group flex w-full items-center justify-between text-left text-sm transition-colors ${!categorySlug ? 'font-medium text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                   >
                     Todos los productos
+                    <span className="opacity-0 transition-opacity group-hover:opacity-100">↗</span>
                   </button>
                 </li>
                 {categories?.map((cat) => (
                   <li key={cat.id}>
                     <button 
                       onClick={() => handleCategorySelect(cat.slug)}
-                      className={`text-sm w-full text-left transition-colors flex justify-between items-center ${categorySlug === cat.slug ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                      className={`group text-sm w-full text-left transition-colors flex justify-between items-center ${categorySlug === cat.slug ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       <span>{cat.name}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 text-muted-foreground">{cat.productCount}</span>
+                      <span className="text-[10px] bg-muted px-1.5 py-0.5 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground">{cat.productCount}</span>
                     </button>
                   </li>
                 ))}

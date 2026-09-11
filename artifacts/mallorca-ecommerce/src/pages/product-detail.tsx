@@ -142,20 +142,20 @@ export default function ProductDetail() {
   return (
     <StoreLayout>
       <div className="container mx-auto px-4 py-8 md:py-16">
-        <Link href="/tienda" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-8 transition-colors">
+        <Link href="/tienda" className="editorial-link mb-8 text-sm font-medium text-muted-foreground hover:text-primary">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Volver al catálogo
         </Link>
 
-        <div className="flex flex-col md:flex-row gap-12 lg:gap-20">
+        <div className="flex flex-col gap-12 md:flex-row lg:gap-20">
           {/* Images */}
-          <div className="w-full md:w-1/2">
-            <div className="aspect-[4/5] bg-secondary relative overflow-hidden mb-4">
+          <div className="w-full md:w-[55%]">
+            <div className="mallorca-paper-edge relative aspect-[0.86] overflow-hidden bg-secondary">
               {product.imageUrl ? (
                 <img 
                   src={product.imageUrl} 
                   alt={product.name}
-                  className="w-full h-full object-cover"
+                  className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -165,7 +165,7 @@ export default function ProductDetail() {
             </div>
             
             {product.gallery && product.gallery.length > 0 && (
-              <div className="grid grid-cols-4 gap-4">
+              <div className="mt-4 grid grid-cols-4 gap-3">
                 {product.gallery.map((img, i) => (
                   <div key={i} className="aspect-square bg-secondary cursor-pointer hover:opacity-80 transition-opacity">
                     <img src={img} alt={`${product.name} ${i}`} className="w-full h-full object-cover" />
@@ -176,18 +176,18 @@ export default function ProductDetail() {
           </div>
 
           {/* Details */}
-          <div className="w-full md:w-1/2 flex flex-col">
-            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+          <div className="w-full md:sticky md:top-24 md:flex md:h-fit md:w-[45%] md:flex-col">
+            <div className="mallorca-kicker mb-3 flex items-center gap-2 text-primary">
               <Link href={`/tienda?categorySlug=${product.categorySlug}`} className="hover:text-primary transition-colors">
                 {product.categoryName}
               </Link>
             </div>
             
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl text-foreground leading-[1.1] mb-4">
+            <h1 className="mallorca-display text-5xl leading-[0.9] text-foreground md:text-7xl">
               {product.name}
             </h1>
             
-            <div className="text-2xl font-serif mb-8 text-foreground flex items-center gap-3">
+            <div className="mb-8 mt-5 flex items-center gap-3 font-serif text-3xl text-foreground">
               {formatPrice(currentPrice)}
               {((currentBranchAvailability?.salePrice || product.salePrice) && !selectedVariant) && (
                 <span className="text-base text-muted-foreground line-through font-sans">
@@ -196,18 +196,18 @@ export default function ProductDetail() {
               )}
             </div>
 
-            <div className="prose prose-sm md:prose-base prose-p:text-muted-foreground max-w-none mb-10 text-foreground/80 font-sans leading-relaxed">
+            <div className="prose prose-sm md:prose-base prose-p:text-muted-foreground mb-10 max-w-none font-sans leading-relaxed text-foreground/80">
               <p>{product.description}</p>
             </div>
 
             {/* Branch Selection */}
             <div className="mb-8 p-4 bg-muted/30 border border-border">
-              <h3 className="font-sans text-sm font-semibold uppercase tracking-wider mb-4 flex items-center gap-2">
+              <h3 className="mallorca-kicker mb-4 flex items-center gap-2 text-primary">
                 <ShoppingBag className="w-4 h-4" />
                 Selecciona una Sucursal
               </h3>
               <Select value={selectedBranch?.toString() || ""} onValueChange={handleBranchSelect}>
-                <SelectTrigger className="w-full rounded-none h-12 bg-background border-border">
+              <SelectTrigger className="h-12 w-full rounded-none border-border bg-background">
                   <SelectValue placeholder="Elige dónde comprar..." />
                 </SelectTrigger>
                 <SelectContent className="rounded-none">
@@ -260,7 +260,7 @@ export default function ProductDetail() {
             )}
 
             {/* Add to Cart Actions */}
-            <div className="flex items-center gap-4 mb-10 pt-8 border-t border-border">
+            <div className="mb-10 flex items-center gap-4 border-t border-border pt-8">
               <div className="flex items-center border border-border h-12">
                 <button 
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -281,7 +281,7 @@ export default function ProductDetail() {
                 onClick={handleAddToCart}
                 disabled={!selectedBranch || addCartItem.isPending || createSession.isPending}
                 size="lg" 
-                className="flex-1 rounded-none h-12 bg-primary text-primary-foreground hover:bg-primary/90 text-base"
+                className="h-12 flex-1 rounded-none bg-primary text-base text-primary-foreground hover:bg-primary/90"
               >
                 {(addCartItem.isPending || createSession.isPending) ? "Agregando..." : "Agregar al carrito"}
               </Button>
@@ -327,7 +327,7 @@ export default function ProductDetail() {
               )}
               
               {product.minimumLeadTimeHours > 0 && (
-                <div className="bg-secondary/50 p-4 border border-border">
+                <div className="border border-[var(--mallorca-butter)] bg-[var(--mallorca-butter)]/20 p-4">
                   <h4 className="font-bold mb-1">Tiempo de preparación</h4>
                   <p className="text-muted-foreground">
                     Este producto requiere un mínimo de {product.minimumLeadTimeHours} horas de anticipación para su preparación.

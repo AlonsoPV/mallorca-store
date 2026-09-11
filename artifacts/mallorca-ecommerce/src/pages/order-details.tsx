@@ -83,13 +83,14 @@ export default function OrderDetailsPage() {
           ) : (
             <Clock className="w-16 h-16 text-primary mx-auto mb-6" />
           )}
-          <h1 className="font-serif text-4xl md:text-5xl mb-4">Detalles del Pedido</h1>
-          <p className="text-xl text-muted-foreground">Número de orden <span className="font-bold text-foreground">#{order.orderNumber}</span></p>
+          <span className="mallorca-kicker text-primary">Todo listo</span>
+          <h1 className="mallorca-display mb-4 mt-3 text-5xl md:text-7xl">Tu pedido está en Mallorca.</h1>
+          <p className="text-xl text-muted-foreground">Pedido <span className="font-bold text-foreground">#{order.orderNumber}</span></p>
           
           {order.paymentStatus === 'pending' && (
             <div className="mt-8 bg-secondary p-6 border border-border inline-block text-left">
-              <h3 className="font-bold text-lg mb-2">Pago en Sucursal</h3>
-              <p className="text-muted-foreground text-sm max-w-sm">Tu pedido está reservado. Debido a mantenimiento en nuestra pasarela de pago, por favor realiza el pago al recibir o recoger tu pedido.</p>
+              <h3 className="font-bold text-lg mb-2">Pago pendiente</h3>
+              <p className="max-w-sm text-sm text-muted-foreground">Tu pedido está reservado. El pago en línea estará disponible próximamente; por ahora, paga al recogerlo o recibirlo.</p>
             </div>
           )}
         </div>

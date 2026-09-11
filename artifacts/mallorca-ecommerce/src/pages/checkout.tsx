@@ -216,7 +216,15 @@ export default function CheckoutPage() {
           Volver al carrito
         </Link>
         
-        <h1 className="font-serif text-4xl mb-12">Finalizar Pedido</h1>
+        <div className="mb-12 flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <span className="mallorca-kicker text-primary">Tu Mallorca está casi lista</span>
+            <h1 className="mallorca-display mt-3 text-5xl md:text-7xl">¿Cómo quieres recibirlo?</h1>
+          </div>
+          <div className="mallorca-kicker flex items-center gap-2 text-muted-foreground">
+            <span className="text-primary">Bolsa</span><span>→</span><span className="text-primary">Entrega</span><span>→</span><span>Pago</span>
+          </div>
+        </div>
         
         <form onSubmit={handleCheckout} className="flex flex-col lg:flex-row gap-12">
           <div className="w-full lg:w-2/3 space-y-12">
@@ -323,15 +331,15 @@ export default function CheckoutPage() {
               <h2 className="font-serif text-2xl mb-6">Tus Datos</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="sm:col-span-2">
-                  <Label htmlFor="name">Nombre completo</Label>
+                <Label htmlFor="name">¿A nombre de quién lo preparamos?</Label>
                   <Input id="name" value={customerName} onChange={e => setCustomerName(e.target.value)} required className="mt-1" />
                 </div>
                 <div>
-                  <Label htmlFor="email">Correo electrónico</Label>
+                  <Label htmlFor="email">Tu correo</Label>
                   <Input id="email" type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} required className="mt-1" />
                 </div>
                 <div>
-                  <Label htmlFor="phone">Teléfono</Label>
+                  <Label htmlFor="phone">Tu teléfono</Label>
                   <Input id="phone" type="tel" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} required className="mt-1" />
                 </div>
                 <div className="sm:col-span-2">

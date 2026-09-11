@@ -73,11 +73,12 @@ export default function CartPage() {
     return (
       <StoreLayout>
         <div className="container mx-auto px-4 py-32 text-center flex flex-col items-center">
-          <ShoppingBag className="h-16 w-16 text-muted-foreground mb-6 opacity-20" />
-          <h2 className="font-serif text-4xl mb-4">Tu carrito está vacío</h2>
-          <p className="text-muted-foreground mb-10 max-w-md">Descubre nuestra selección de panes, pastelería fina y repostería artesanal para empezar a comprar.</p>
-          <Button asChild size="lg" className="rounded-none h-14 px-8 text-base bg-primary text-primary-foreground hover:bg-primary/90">
-            <Link href="/tienda">Explorar catálogo</Link>
+          <ShoppingBag className="mb-6 h-16 w-16 text-primary opacity-30" />
+          <span className="mallorca-kicker text-primary">Tu bolsa</span>
+          <h2 className="mallorca-display mb-4 mt-3 text-5xl">Está un poco triste.</h2>
+          <p className="mb-10 max-w-md text-muted-foreground">Vamos a arreglarlo con algo recién horneado.</p>
+          <Button asChild size="lg" className="h-14 rounded-none bg-primary px-8 text-base text-primary-foreground hover:bg-primary/90">
+            <Link href="/tienda">Seguir descubriendo</Link>
           </Button>
         </div>
       </StoreLayout>
@@ -87,13 +88,14 @@ export default function CartPage() {
   return (
     <StoreLayout>
       <div className="container mx-auto px-4 py-12 md:py-16">
-        <h1 className="font-serif text-4xl md:text-5xl mb-12">Tu Carrito</h1>
+        <span className="mallorca-kicker text-primary">Casi listo</span>
+        <h1 className="mallorca-display mb-12 mt-3 text-5xl md:text-7xl">Tu bolsa.</h1>
         
         <div className="flex flex-col lg:flex-row gap-12 lg:gap-24">
           <div className="w-full lg:w-2/3">
-            <div className="mb-6 p-4 bg-secondary/50 border border-border flex items-center justify-between">
+              <div className="mb-6 flex items-center justify-between border-y border-border py-4">
               <div className="text-sm">
-                Comprando en: <span className="font-bold">{cart.branch.name}</span>
+                Tu Mallorca: <span className="font-bold text-primary">{cart.branch.name}</span>
               </div>
             </div>
 
@@ -147,7 +149,7 @@ export default function CartPage() {
 
           <div className="w-full lg:w-1/3">
             <div className="bg-secondary/30 border border-border p-8 sticky top-24">
-              <h2 className="font-serif text-2xl mb-6 border-b border-border pb-4">Resumen</h2>
+              <h2 className="mallorca-display mb-6 border-b border-border pb-4 text-3xl">Tu pedido</h2>
               
               <div className="space-y-4 mb-8 text-sm">
                 <div className="flex justify-between">
@@ -167,7 +169,7 @@ export default function CartPage() {
               
               <Button asChild size="lg" className="w-full h-14 rounded-none bg-primary text-primary-foreground hover:bg-primary/90 text-base">
                 <Link href="/checkout" className="flex items-center justify-center gap-2">
-                  Proceder al pago
+                  Pasar a entrega
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </Button>

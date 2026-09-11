@@ -1,89 +1,120 @@
+import { useMemo, useState } from "react";
 import { StoreLayout } from "@/components/layout/store-layout";
 import { useListProducts, useListCategories } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { ProductCard } from "@/components/product-card";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, ArrowDown } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, MapPin } from "lucide-react";
+
+const categoryImages = [
+  "/images/mallorca-bolleria.jpg",
+  "/images/mallorca-chocolate-cake.jpg",
+  "/images/mallorca-fruit-tart.jpg",
+  "/images/mallorca-panettone-hero.jpg",
+];
 
 export default function Home() {
   const { data: products, isLoading: isLoadingProducts } = useListProducts({ featured: true });
   const { data: categories, isLoading: isLoadingCategories } = useListCategories();
+  const [heroShift, setHeroShift] = useState({ x: 0, y: 0 });
+
+  const featureProduct = products?.[0];
+  const secondaryProducts = useMemo(() => products?.slice(1, 5) ?? [], [products]);
+
+  const handleHeroMove = (event: React.MouseEvent<HTMLElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setHeroShift({
+      x: ((event.clientX - bounds.left) / bounds.width - 0.5) * 12,
+      y: ((event.clientY - bounds.top) / bounds.height - 0.5) * 8,
+    });
+  };
 
   return (
     <StoreLayout>
-      {/* Hero Section */}
-      <section className="relative h-[85dvh] min-h-[600px] w-full flex items-center justify-center bg-[#211815] overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <img
-            src="/images/mallorca-panettone-hero.jpg"
-            alt="Panettone artesanal de Mallorca"
-            className="h-full w-full object-cover object-center"
-          />
-          <div className="absolute inset-0 bg-[#211815]/55" />
-        </div>
-        
-        <div className="container relative z-10 mx-auto px-4 md:px-6 text-center flex flex-col items-center">
-          <span className="text-[#f2d5ca] font-sans text-sm md:text-base tracking-[0.2em] uppercase mb-4 md:mb-6 block">
-            Arte & Tradición
-          </span>
-          <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl text-white mb-6 md:mb-8 max-w-4xl mx-auto leading-[1.1]">
-            Pastelería Europea <br className="hidden md:block"/> Contemporánea
-          </h1>
-          <p className="text-white/90 font-sans text-lg md:text-xl max-w-2xl mx-auto mb-10">
-            Sabores con raíces españolas, elaborados artesanalmente cada día en el corazón de la Ciudad de México.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button asChild size="lg" className="h-14 px-8 text-base bg-primary text-primary-foreground hover:bg-primary/90 rounded-none">
-              <Link href="/tienda">Comprar Ahora</Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="h-14 px-8 text-base border-white bg-transparent text-white hover:bg-white hover:text-[#211815] rounded-none">
-              <Link href="/sucursales">Nuestras Sucursales</Link>
-            </Button>
+      <section
+        className="relative isolate min-h-[calc(100dvh-4.5rem)] overflow-hidden bg-[var(--mallorca-burgundy)] text-white"
+        onMouseMove={handleHeroMove}
+        onMouseLeave={() => setHeroShift({ x: 0, y: 0 })}
+      >
+        <div className="absolute inset-0 opacity-15" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, #f3d59b 1px, transparent 1px)", backgroundSize: "22px 22px" }} />
+        <div className="container relative mx-auto grid min-h-[calc(100dvh-4.5rem)] items-center gap-10 px-5 py-14 md:grid-cols-[0.9fr_1.1fr] md:px-8 md:py-20">
+          <div className="relative z-10 max-w-xl">
+            <div className="mallorca-reveal flex items-center gap-3 text-[var(--mallorca-butter)]">
+              <span className="h-px w-12 bg-current" />
+              <span className="mallorca-kicker">Desde 2016 · Ciudad de México</span>
+            </div>
+            <h1 className="mallorca-display mallorca-reveal mallorca-reveal-delay mt-7 text-[clamp(3.75rem,8vw,8.5rem)] leading-[0.82]">
+              La temporada<br />
+              <em className="text-[var(--mallorca-butter)]">sabe</em> a Mallorca.
+            </h1>
+            <p className="mallorca-reveal mallorca-reveal-delay-2 mt-8 max-w-md text-base leading-relaxed text-white/75 md:text-lg">
+              Pastelería europea contemporánea, hecha cada mañana para los antojos que sí valen la pena.
+            </p>
+            <div className="mallorca-reveal mallorca-reveal-delay-2 mt-9 flex flex-wrap items-center gap-5">
+              <Link href="/tienda" className="group inline-flex items-center gap-3 bg-[var(--mallorca-butter)] px-6 py-4 text-sm font-bold text-[var(--mallorca-cacao)] transition-transform hover:-translate-y-1">
+                Descubre la pastelería
+                <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
+              </Link>
+              <Link href="/sucursales" className="editorial-link text-sm font-medium text-white/80 hover:text-white">
+                Encuentra tu Mallorca
+              </Link>
+            </div>
+          </div>
+
+          <div className="relative mx-auto w-full max-w-[680px] md:mr-0">
+            <div className="absolute -left-8 top-1/2 h-[78%] w-8 -translate-y-1/2 border-y border-l border-[var(--mallorca-butter)]/45 md:-left-12 md:w-12" />
+            <div className="mallorca-paper-edge relative aspect-[0.92] overflow-hidden bg-[var(--mallorca-cacao)] shadow-2xl">
+              <img
+                src="/images/mallorca-panettone-hero.jpg"
+                alt="Panettone artesanal de Mallorca"
+                className="h-full w-full object-cover transition-transform duration-700 ease-out"
+                style={{ transform: `scale(1.05) translate(${heroShift.x}px, ${heroShift.y}px)` }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-tr from-[var(--mallorca-cacao)]/50 via-transparent to-[var(--mallorca-cherry)]/10" />
+              <div className="absolute bottom-5 left-5 flex items-center gap-3 text-[var(--mallorca-butter)]">
+                <span className="h-8 w-8 rounded-full border border-current" />
+                <span className="mallorca-kicker">Hecho despacio</span>
+              </div>
+            </div>
+            <div className="mallorca-float absolute -bottom-7 -right-2 flex h-28 w-28 rotate-6 items-center justify-center rounded-full bg-[var(--mallorca-butter)] p-5 text-center text-xs font-bold leading-tight text-[var(--mallorca-cacao)] shadow-lg md:-right-10">
+              Recién<br />horneado<br />cada día
+            </div>
           </div>
         </div>
-        
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <ArrowDown className="h-6 w-6 text-white/80" />
+        <div className="absolute bottom-6 left-5 flex items-center gap-3 text-xs text-white/60 md:left-8">
+          <ArrowDown className="h-4 w-4 animate-bounce" />
+          <span className="mallorca-kicker">Sigue bajando</span>
         </div>
       </section>
 
-      {/* Categories Grid */}
-      <section className="py-24 bg-background">
-        <div className="container mx-auto px-4 md:px-6">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+      <section className="bg-[var(--mallorca-cream)] px-5 py-20 md:px-8 md:py-28">
+        <div className="container mx-auto">
+          <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
-              <h2 className="font-serif text-4xl mb-4">Nuestras Especialidades</h2>
-              <p className="text-muted-foreground max-w-lg">Descubre nuestra selección de panes, pastelería fina y repostería salada.</p>
+              <span className="mallorca-kicker text-primary">El primer paso es antojarse</span>
+              <h2 className="mallorca-display mt-4 max-w-2xl text-5xl leading-[0.92] md:text-7xl">¿Qué se te antoja hoy?</h2>
             </div>
-            <Link href="/tienda" className="group flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-foreground hover:text-primary transition-colors">
-              Ver todo el catálogo
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            <Link href="/tienda" className="editorial-link mb-1 text-sm font-bold text-primary">
+              Ver todo <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-
           {isLoadingCategories ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="aspect-square bg-muted animate-pulse" />
-              ))}
+            <div className="mt-12 grid gap-4 md:grid-cols-3">
+              {[1, 2, 3].map((item) => <div key={item} className="aspect-[1.15] animate-pulse bg-black/5" />)}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {categories?.slice(0, 3).map((category) => (
-                <Link key={category.id} href={`/tienda?categorySlug=${category.slug}`}>
-                  <div className="group relative aspect-square overflow-hidden cursor-pointer bg-secondary flex items-end p-8">
-                    {category.imageUrl && (
-                      <img 
-                        src={category.imageUrl} 
-                        alt={category.name}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                    <div className="relative z-10 w-full flex justify-between items-center text-white">
-                      <h3 className="font-serif text-3xl">{category.name}</h3>
-                      <ArrowRight className="h-6 w-6 opacity-0 -translate-x-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
+            <div className="mt-12 grid gap-4 md:grid-cols-3">
+              {categories?.slice(0, 3).map((category, index) => (
+                <Link key={category.id} href={`/tienda?categorySlug=${category.slug}`} className="group relative aspect-[1.15] overflow-hidden bg-[var(--mallorca-cacao)]">
+                  <img src={category.imageUrl || categoryImages[index]} alt={category.name} className="h-full w-full object-cover opacity-85 transition duration-700 group-hover:scale-105 group-hover:opacity-100" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                  <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white">
+                    <div>
+                      <span className="mallorca-kicker text-white/70">Explora</span>
+                      <h3 className="mallorca-display mt-1 text-3xl md:text-4xl">{category.name}</h3>
                     </div>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/50 transition-colors group-hover:bg-white group-hover:text-primary">
+                      <ArrowUpRight className="h-4 w-4" />
+                    </span>
                   </div>
                 </Link>
               ))}
@@ -92,52 +123,74 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Products */}
-      <section className="py-24 bg-muted/30">
-        <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center mb-16">
-            <h2 className="font-serif text-4xl mb-4">Selección Destacada</h2>
-            <p className="text-muted-foreground max-w-lg mx-auto">Lo más apreciado por nuestros clientes. Joyas de temporada y clásicos atemporales.</p>
-          </div>
-
-          {isLoadingProducts ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="space-y-4">
-                  <div className="aspect-[4/5] bg-muted animate-pulse" />
-                  <div className="h-6 bg-muted animate-pulse w-3/4" />
-                  <div className="h-4 bg-muted animate-pulse w-1/2" />
+      <section className="overflow-hidden bg-[var(--mallorca-ivory)] px-5 py-20 md:px-8 md:py-28">
+        <div className="container mx-auto">
+          <div className="grid items-center gap-12 lg:grid-cols-[0.75fr_1.25fr]">
+            <div className="relative">
+              <span className="mallorca-kicker text-primary">Lo que se comparte</span>
+              <h2 className="mallorca-display mt-4 text-5xl leading-[0.92] md:text-7xl">Un clásico,<br /><em>bien hecho.</em></h2>
+              <p className="mt-7 max-w-sm leading-relaxed text-muted-foreground">
+                Hay sabores que no necesitan presentación. Solo una mesa, buena compañía y otra rebanada.
+              </p>
+              <Link href={featureProduct ? `/producto/${featureProduct.slug}` : "/tienda"} className="editorial-link mt-8 text-sm font-bold text-primary">
+                Conocer la estrella <ArrowRight className="h-4 w-4" />
+              </Link>
+              <span className="absolute -left-12 top-24 hidden font-serif text-8xl italic text-primary/10 lg:block">01</span>
+            </div>
+            <div className="relative grid gap-5 md:grid-cols-[1.15fr_0.85fr]">
+              <div className="relative aspect-[0.82] overflow-hidden bg-secondary">
+                <img src={featureProduct?.imageUrl || "/images/mallorca-chocolate-cake.jpg"} alt={featureProduct?.name || "Pastel de chocolate Mallorca"} className="h-full w-full object-cover transition-transform duration-700 hover:scale-105" />
+                <div className="absolute bottom-5 left-5 bg-[var(--mallorca-ivory)] px-4 py-3">
+                  <span className="mallorca-kicker text-primary">Favorito Mallorca</span>
+                  <p className="mt-1 font-serif text-xl">{featureProduct?.name || "Pastel de chocolate"}</p>
                 </div>
-              ))}
+              </div>
+              <div className="flex flex-col justify-end gap-4 md:pb-10">
+                <div className="mallorca-paper-edge aspect-square overflow-hidden bg-[var(--mallorca-butter)] p-2">
+                  <img src="/images/mallorca-fruit-tart.jpg" alt="Tarta de frutas" className="h-full w-full object-cover" />
+                </div>
+                <p className="max-w-[15rem] font-serif text-2xl leading-tight text-primary">Para compartir.<br /><em>Aunque entendemos si no quieres.</em></p>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {products?.slice(0, 4).map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          )}
-          
-          <div className="mt-16 text-center">
-            <Button asChild variant="outline" className="rounded-none border-foreground text-foreground hover:bg-foreground hover:text-background h-12 px-8">
-              <Link href="/tienda">Explorar todos los productos</Link>
-            </Button>
           </div>
         </div>
       </section>
 
-      {/* Editorial Banner */}
-      <section className="py-32 bg-primary text-primary-foreground text-center px-4">
-        <div className="container mx-auto max-w-3xl">
-          <span className="font-sans text-xs tracking-[0.3em] uppercase mb-8 block opacity-80">
-            Nuestra Filosofía
-          </span>
-          <h2 className="font-serif text-4xl md:text-5xl leading-tight mb-8">
-            "El buen pan necesita tiempo, paciencia y respeto por los ingredientes puros."
-          </h2>
-          <p className="font-sans text-lg opacity-90 max-w-xl mx-auto">
-            Desde 2016, traemos la excelencia de la panadería y pastelería madrileña a la vibrante vida de la Ciudad de México.
-          </p>
+      <section className="bg-[var(--mallorca-cacao)] px-5 py-20 text-[var(--mallorca-ivory)] md:px-8 md:py-28">
+        <div className="container mx-auto">
+          <div className="mb-10 flex items-end justify-between gap-6">
+            <div>
+              <span className="mallorca-kicker text-[var(--mallorca-butter)]">Nuestras favoritas</span>
+              <h2 className="mallorca-display mt-4 text-5xl leading-none md:text-6xl">Vuelven por ellas.</h2>
+            </div>
+            <Link href="/tienda" className="editorial-link hidden text-sm font-bold text-[var(--mallorca-butter)] md:inline-flex">Ver catálogo <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+          {isLoadingProducts ? (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((item) => <div key={item} className="aspect-[0.78] animate-pulse bg-white/10" />)}
+            </div>
+          ) : (
+            <div className="grid gap-x-5 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
+              {secondaryProducts.map((product) => <ProductCard key={product.id} product={product} className="[&_h3]:text-white [&_p]:text-white/55 [&_span]:text-white" />)}
+            </div>
+          )}
+          <Link href="/tienda" className="editorial-link mt-12 text-sm font-bold text-[var(--mallorca-butter)] md:hidden">Ver catálogo <ArrowRight className="h-4 w-4" /></Link>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden bg-[var(--mallorca-butter)] px-5 py-20 md:px-8 md:py-24">
+        <div className="absolute right-10 top-10 h-40 w-40 rounded-full border border-[var(--mallorca-cacao)]/15" />
+        <div className="container relative mx-auto grid gap-12 md:grid-cols-[1fr_0.9fr] md:items-center">
+          <div>
+            <span className="mallorca-kicker text-[var(--mallorca-burgundy)]">Momento Mallorca</span>
+            <h2 className="mallorca-display mt-4 max-w-2xl text-5xl leading-[0.9] text-[var(--mallorca-cacao)] md:text-7xl">Una mañana mejor empieza aquí.</h2>
+          </div>
+          <div className="max-w-md md:justify-self-end">
+            <p className="text-lg leading-relaxed text-[var(--mallorca-cacao)]/75">
+              Desde el primer café hasta la sobremesa que se alarga. Horneamos para que la ciudad tenga un pequeño momento de pausa.
+            </p>
+            <Link href="/sucursales" className="editorial-link mt-7 text-sm font-bold text-[var(--mallorca-burgundy)]">Ven a vernos <MapPin className="h-4 w-4" /></Link>
+          </div>
         </div>
       </section>
     </StoreLayout>
