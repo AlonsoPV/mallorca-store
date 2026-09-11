@@ -1,0 +1,677 @@
+==================================================
+SELECCIÓN DE FECHA Y HORA DESPUÉS DE SUCURSAL
+==================================================
+
+Después de que el usuario elija su sucursal, debe seleccionar para qué fecha y hora quiere su pedido.
+
+El flujo debe ser:
+
+1. Elegir sucursal
+2. Elegir fecha
+3. Elegir hora
+4. Entrar al catálogo
+5. Comprar únicamente productos disponibles para esa sucursal, fecha y hora
+
+La fecha y hora seleccionadas deben convertirse también en CONTEXTO de toda la sesión.
+
+Guardar:
+
+selected_branch_id
+selected_date
+selected_time
+
+==================================================
+1. FLUJO INICIAL
+==================================================
+
+Después de seleccionar:
+
+Mallorca Reforma
+o
+Mallorca Lomas
+
+mostrar inmediatamente:
+
+"¿Para cuándo lo necesitas?"
+
+[ Seleccionar fecha ]
+
+Después:
+
+"¿A qué hora?"
+
+[ Seleccionar horario ]
+
+CTA:
+
+[ Ver productos disponibles ]
+
+No entrar al catálogo hasta tener:
+
+sucursal
+fecha
+hora
+
+==================================================
+2. CALENDARIO
+==================================================
+
+Mostrar calendario visual moderno y sencillo.
+
+Debe permitir:
+
+- seleccionar día
+- navegar entre meses
+- bloquear fechas no disponibles
+- bloquear días cerrados
+- bloquear días festivos o excepciones
+- respetar horarios especiales por sucursal
+- respetar anticipación mínima de productos
+
+No permitir seleccionar fechas anteriores a hoy.
+
+==================================================
+3. DISPONIBILIDAD SEGÚN SUCURSAL
+==================================================
+
+El calendario debe depender de la sucursal elegida.
+
+Ejemplo:
+
+Mallorca Reforma
+abre ciertos días/horarios
+
+Mallorca Lomas
+puede tener otros horarios
+
+Por lo tanto:
+
+las fechas y horarios disponibles deben calcularse según la sucursal activa.
+
+==================================================
+4. TIEMPO MÍNIMO DE PREPARACIÓN
+==================================================
+
+Cada producto debe poder tener:
+
+minimum_lead_time
+
+Ejemplo:
+
+Croissant:
+0 horas
+
+Panettone:
+24 horas
+
+Pastel personalizado:
+48 horas
+
+Si el usuario selecciona:
+
+Hoy 18:00
+
+no mostrar como disponible un producto que requiere 48 horas.
+
+==================================================
+5. FILTRADO DEL CATÁLOGO
+==================================================
+
+Una vez seleccionados:
+
+Sucursal:
+Reforma
+
+Fecha:
+15 septiembre
+
+Hora:
+12:30
+
+el catálogo debe mostrar sólo productos que realmente puedan entregarse o recogerse en ese momento.
+
+Cada producto debe evaluarse considerando:
+
+- sucursal
+- stock
+- tiempo de preparación
+- horario
+- disponibilidad por día
+- fechas especiales
+- producto temporal
+
+==================================================
+6. PRODUCTOS NO DISPONIBLES
+==================================================
+
+Preferencia:
+
+mostrar productos no disponibles de manera opcional pero claramente deshabilitados.
+
+Ejemplo:
+
+Pastel personalizado
+
+"No disponible para esta fecha"
+
+"Disponible a partir del 17 de septiembre"
+
+[ Cambiar fecha ]
+
+Esto es mejor que ocultar completamente el producto si queremos permitir descubrimiento.
+
+==================================================
+7. SELECTOR DE FECHA
+==================================================
+
+Diseño:
+
+Calendario limpio.
+
+Encabezado:
+
+¿Para cuándo lo necesitas?
+
+Septiembre 2026
+
+LU MA MI JU VI SA DO
+
+Fechas disponibles:
+normales
+
+Fecha seleccionada:
+usar rojo Mallorca #D43B2B
+
+Fecha bloqueada:
+gris claro
+no clickeable
+
+Hoy:
+marcador discreto
+
+No usar estilos genéricos de datepicker.
+
+==================================================
+8. SELECTOR DE HORA
+==================================================
+
+Después de elegir fecha:
+
+mostrar:
+
+¿A qué hora?
+
+Slots:
+
+10:00
+10:30
+11:00
+11:30
+12:00
+12:30
+
+Diseño tipo botones compactos.
+
+Seleccionado:
+
+background #D43B2B
+color white
+
+No mostrar un <select> tradicional salvo fallback.
+
+==================================================
+9. INTERVALOS CONFIGURABLES
+==================================================
+
+Desde Admin permitir definir:
+
+intervalo de horarios:
+
+15 min
+30 min
+60 min
+
+por sucursal.
+
+Ejemplo:
+
+Reforma:
+30 minutos
+
+Lomas:
+30 minutos
+
+==================================================
+10. CAPACIDAD POR HORARIO
+==================================================
+
+Cada sucursal debe poder definir capacidad máxima por slot.
+
+Ejemplo:
+
+12:00
+máximo 20 pedidos
+
+Si ya existen 20:
+
+12:00 debe aparecer:
+
+"No disponible"
+
+y ofrecer:
+
+12:30
+13:00
+
+==================================================
+11. HORARIOS DE SUCURSAL
+==================================================
+
+Admin:
+
+Sucursales
+→ Reforma
+→ Horarios
+
+Permitir:
+
+Lunes
+09:00–20:00
+
+Martes
+09:00–20:00
+
+etc.
+
+También:
+
+horarios especiales
+
+24 diciembre:
+09:00–15:00
+
+25 diciembre:
+Cerrado
+
+==================================================
+12. PICKUP Y DELIVERY
+==================================================
+
+La fecha/hora elegida inicialmente debe servir como referencia para la compra.
+
+Pero en checkout debe validarse nuevamente.
+
+Si el usuario selecciona:
+
+Pickup
+
+mostrar:
+
+Mallorca Reforma
+15 septiembre
+12:30
+
+[ Cambiar ]
+
+Si selecciona Delivery:
+
+validar que esa fecha/hora también sea posible para entrega.
+
+==================================================
+13. DELIVERY TIME
+==================================================
+
+Para delivery se puede manejar:
+
+franja horaria
+
+Ejemplo:
+
+12:00–13:00
+
+en lugar de minuto exacto.
+
+Dejar arquitectura preparada para:
+
+pickup_slot
+
+delivery_slot
+
+como tipos diferentes.
+
+==================================================
+14. HEADER
+==================================================
+
+Después de seleccionar contexto mostrar discretamente:
+
+Tu Mallorca:
+Reforma
+
+15 Sep · 12:30
+
+Cada elemento clickeable.
+
+Ejemplo:
+
+Reforma ▾
+15 Sep · 12:30 ▾
+
+Al hacer click:
+abrir selector correspondiente.
+
+==================================================
+15. CAMBIAR FECHA U HORA
+==================================================
+
+Si carrito está vacío:
+
+permitir cambiar directamente.
+
+Si carrito tiene productos:
+
+revalidar disponibilidad.
+
+Ejemplo:
+
+"Tienes productos en tu bolsa que podrían no estar disponibles para la nueva fecha."
+
+Mostrar:
+
+Panettone
+✓ Disponible
+
+Pastel personalizado
+× Requiere 48 h
+
+Opciones:
+
+[ Mantener fecha actual ]
+[ Cambiar y eliminar no disponibles ]
+
+Nunca eliminar productos automáticamente.
+
+==================================================
+16. CALENDARIO MOBILE
+==================================================
+
+En mobile:
+
+usar bottom sheet o modal de pantalla casi completa.
+
+No usar datepicker pequeño.
+
+La interacción debe ser táctil y sencilla.
+
+==================================================
+17. PERSISTENCIA
+==================================================
+
+Guardar:
+
+selected_branch_id
+selected_date
+selected_time
+
+en sesión.
+
+Si usuario tiene cuenta:
+
+opcionalmente recordar última sucursal
+
+pero NO asumir fecha/hora anterior en visitas futuras.
+
+La fecha siempre debe seleccionarse nuevamente cuando corresponda.
+
+==================================================
+18. ADMIN
+==================================================
+
+Debe existir configuración por sucursal:
+
+- días abiertos
+- horarios
+- intervalos
+- capacidad por slot
+- anticipación mínima general
+- fechas bloqueadas
+- feriados
+- horarios especiales
+
+==================================================
+19. PRODUCTOS CON REGLAS ESPECIALES
+==================================================
+
+Cada producto puede sobrescribir la regla general.
+
+Campos:
+
+minimum_lead_time_hours
+available_weekdays
+available_from
+available_until
+blocked_dates
+
+Ejemplo:
+
+Rosca de Reyes
+
+available_from:
+1 enero
+
+available_until:
+7 enero
+
+==================================================
+20. PEDIDOS
+==================================================
+
+Todo pedido debe guardar:
+
+branch_id
+fulfillment_date
+fulfillment_time
+fulfillment_type
+
+Ejemplo:
+
+Order #1234
+
+Sucursal:
+Reforma
+
+Fecha:
+15 Sep 2026
+
+Hora:
+12:30
+
+Tipo:
+Pickup
+
+==================================================
+21. ADMIN — PEDIDOS
+==================================================
+
+Permitir filtrar por:
+
+Sucursal
+Fecha
+Hora
+Pickup/Delivery
+Estado
+
+Ejemplo:
+
+Pedidos Reforma
+15 Sep
+
+10:00 — 3
+10:30 — 5
+11:00 — 4
+
+Esto ayuda a producción y operación.
+
+==================================================
+22. VISTA OPERATIVA DEL DÍA
+==================================================
+
+Crear vista:
+
+Admin
+→ Producción / Agenda
+
+Selector:
+
+Sucursal:
+Reforma
+
+Fecha:
+15 septiembre
+
+Mostrar pedidos agrupados por horario.
+
+Ejemplo:
+
+12:00
+
+Pedido #1451
+2 × Croissant
+1 × Panettone
+
+Pedido #1452
+1 × Pastel
+
+12:30
+
+...
+
+Esto debe ayudar al equipo a preparar producción.
+
+==================================================
+23. VALIDACIÓN FINAL ANTES DE PAGAR
+==================================================
+
+Antes de crear el pago:
+
+revalidar:
+
+- stock
+- sucursal
+- fecha
+- hora
+- capacidad del slot
+- disponibilidad del producto
+
+No confiar únicamente en la selección realizada al entrar.
+
+Si algo cambió:
+
+mostrar mensaje claro y permitir seleccionar otro horario.
+
+==================================================
+24. EXPERIENCIA FINAL
+==================================================
+
+Flujo obligatorio:
+
+ENTRO
+
+↓
+
+¿DESDE QUÉ MALLORCA QUIERES PEDIR?
+
+Reforma / Lomas
+
+↓
+
+¿PARA CUÁNDO LO NECESITAS?
+
+[ Calendario ]
+
+↓
+
+¿A QUÉ HORA?
+
+[ Slots ]
+
+↓
+
+VER PRODUCTOS DISPONIBLES
+
+↓
+
+CATÁLOGO
+
+↓
+
+CARRITO
+
+↓
+
+PICKUP / DELIVERY
+
+↓
+
+CHECKOUT
+
+↓
+
+PAGO
+
+==================================================
+25. DISEÑO
+==================================================
+
+Mantener identidad Mallorca.
+
+Colores:
+
+#D43B2B como rojo principal
+
+Cream / warm white
+
+El selector debe sentirse:
+
+simple
+amigable
+premium
+rápido
+
+No parecer formulario administrativo.
+
+Ejemplo de copy:
+
+"¿Desde qué Mallorca pides?"
+
+"¿Para cuándo se te antoja?"
+
+o para mayor claridad:
+
+"¿Para qué fecha necesitas tu pedido?"
+
+"¿A qué hora?"
+
+==================================================
+26. CRITERIO FINAL
+==================================================
+
+La combinación:
+
+Sucursal
++
+Fecha
++
+Hora
+
+debe convertirse en el contexto operativo de toda la compra.
+
+No permitir que el usuario añada productos que no puedan cumplirse para ese contexto.
+
+Pero tampoco hacer que el sistema se sienta restrictivo.
+
+Cuando algo no esté disponible:
+
+explicar por qué
++
+ofrecer automáticamente la siguiente fecha u horario posible.
