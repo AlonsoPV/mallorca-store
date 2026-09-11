@@ -287,6 +287,20 @@ export default function ProductDetail() {
               </Button>
             </div>
 
+            <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-[var(--mallorca-white)]/95 p-3 backdrop-blur-md md:hidden">
+              <div className="min-w-0 flex-1">
+                <span className="mallorca-kicker text-[var(--mallorca-red)]">Tu selección</span>
+                <p className="truncate font-serif text-lg">{formatPrice(currentPrice * quantity)}</p>
+              </div>
+              <Button
+                onClick={handleAddToCart}
+                disabled={!selectedBranch || addCartItem.isPending || createSession.isPending}
+                className="h-12 rounded-md bg-[var(--mallorca-red)] px-5 text-white hover:bg-[var(--mallorca-red-dark)]"
+              >
+                {addCartItem.isPending || createSession.isPending ? "Añadiendo" : "Añadir"}
+              </Button>
+            </div>
+
             {/* Metadata Accordions */}
             <div className="space-y-6 pt-8 border-t border-border text-sm">
               {product.ingredients && (

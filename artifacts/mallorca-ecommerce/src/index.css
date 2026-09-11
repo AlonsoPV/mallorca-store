@@ -303,16 +303,14 @@
   --mallorca-red-dark: #B83225;
   --mallorca-cream: #F5F0E8;
   --mallorca-white: #FBFAF7;
+  --mallorca-ivory: #FBFAF7;
   --mallorca-ink: #25211E;
   --mallorca-cacao: #4B3028;
   --mallorca-olive: #7D8360;
   --mallorca-sand: #E8DED0;
-  --mallorca-cream: #f6f0e6;
-  --mallorca-ivory: #fffdf8;
   --mallorca-burgundy: #D43B2B;
   --mallorca-cherry: #B83225;
   --mallorca-butter: #e8c875;
-  --mallorca-cacao: #271a18;
 }
 
 ::selection {
