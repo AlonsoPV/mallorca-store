@@ -59,11 +59,13 @@ type ProductFilters = {
   featured?: boolean;
   scheduledStart?: Date;
   includeUnavailable?: boolean;
+  branchIds?: number[];
   status?: "draft" | "active" | "inactive";
   publicOnly?: boolean;
 };
 
 export async function listProductCards(filters: ProductFilters = {}) {
+  if (filters.branchIds?.length === 0) return [];
   const conditions: SQL[] = [];
 
   if (filters.publicOnly) {
@@ -124,6 +126,7 @@ export async function listProductCards(filters: ProductFilters = {}) {
       and(
         inArray(branchProductsTable.productId, productIds),
         eq(branchesTable.active, true),
+        filters.branchIds ? inArray(branchesTable.id, filters.branchIds) : undefined,
       ),
     );
 
@@ -179,6 +182,9 @@ export async function listProductCards(filters: ProductFilters = {}) {
       };
     })
     .filter((product) => {
+      if (filters.branchIds) {
+        return product.availability.length > 0;
+      }
       if (!filters.branchSlug) return true;
       if (filters.includeUnavailable) return true;
       return product.availability.some(

@@ -375,28 +375,37 @@ router.post("/admin/inventory/import", async (req, res): Promise<void> => {
 });
 
 router.get("/admin/summary", async (_req, res): Promise<void> => {
+  const branchIds = await getAccessibleBranchIds(_req);
   const [productCounts] = await db
     .select({
-      totalProducts: sql<number>`count(*)::int`,
+      totalProducts: branchIds
+        ? sql<number>`count(distinct ${productsTable.id})::int`
+        : sql<number>`count(*)::int`,
       activeProducts:
-        sql<number>`count(*) filter (where ${productsTable.status} = 'active')::int`,
+        branchIds
+          ? sql<number>`count(distinct ${productsTable.id}) filter (where ${productsTable.status} = 'active')::int`
+          : sql<number>`count(*) filter (where ${productsTable.status} = 'active')::int`,
     })
-    .from(productsTable);
+    .from(productsTable)
+    .leftJoin(branchProductsTable, branchIds ? eq(branchProductsTable.productId, productsTable.id) : sql`false`)
+    .where(branchIds ? (branchIds.length ? inArray(branchProductsTable.branchId, branchIds) : sql`false`) : undefined);
 
   const [branchCount] = await db
     .select({ totalBranches: sql<number>`count(*)::int` })
     .from(branchesTable)
-    .where(eq(branchesTable.active, true));
+    .where(and(
+      eq(branchesTable.active, true),
+      branchIds ? (branchIds.length ? inArray(branchesTable.id, branchIds) : sql`false`) : undefined,
+    ));
 
   const [lowStock] = await db
     .select({ lowStockProducts: sql<number>`count(*)::int` })
     .from(branchProductsTable)
-    .where(
-      and(
-        eq(branchProductsTable.available, true),
-        lt(branchProductsTable.inventory, 6),
-      ),
-    );
+    .where(and(
+      eq(branchProductsTable.available, true),
+      lt(branchProductsTable.inventory, 6),
+      branchIds ? (branchIds.length ? inArray(branchProductsTable.branchId, branchIds) : sql`false`) : undefined,
+    ));
 
   const branchSummaries = await db
     .select({
@@ -412,7 +421,10 @@ router.get("/admin/summary", async (_req, res): Promise<void> => {
       branchProductsTable,
       eq(branchProductsTable.branchId, branchesTable.id),
     )
-    .where(eq(branchesTable.active, true))
+    .where(and(
+      eq(branchesTable.active, true),
+      branchIds ? (branchIds.length ? inArray(branchesTable.id, branchIds) : sql`false`) : undefined,
+    ))
     .groupBy(branchesTable.id)
     .orderBy(branchesTable.id);
 
@@ -434,9 +446,11 @@ router.get("/admin/products", async (req, res): Promise<void> => {
     return;
   }
 
+  const branchIds = await getAccessibleBranchIds(req);
   const products = await listProductCards({
     search: query.data.search,
     status: query.data.status,
+    branchIds: branchIds ?? undefined,
   });
   res.json(ListAdminProductsResponse.parse(products));
 });
@@ -448,6 +462,11 @@ router.post("/admin/products", async (req, res): Promise<void> => {
     const message = !body.success ? body.error.message : configurations.error?.message ?? "Invalid branch configuration";
     req.log.warn({ errors: message }, "Invalid product");
     res.status(400).json({ error: message });
+    return;
+  }
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
     return;
   }
   for (const config of configurations.data ?? []) {
@@ -500,6 +519,15 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const actor = await getRequestUser(req);
+  if (Object.keys(body.data).length > 0 && (!actor || !hasGlobalBranchAccess(actor))) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  for (const config of configurations.data ?? []) {
+    if (!(await canAccessBranch(req, config.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  }
+
   const [product] = await db
     .update(productsTable)
     .set(body.data)
@@ -512,7 +540,6 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   }
 
   for (const config of configurations.data ?? []) {
-    if (!(await canAccessBranch(req, config.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
     const { branchId, ...values } = config;
     await db.insert(branchProductsTable).values({ branchId, productId: product.id, ...values }).onConflictDoUpdate({
       target: [branchProductsTable.branchId, branchProductsTable.productId], set: values,
