@@ -1,0 +1,1165 @@
+Quiero que hagas una AUDITORÍA PROGRESIVA Y VALIDACIÓN FUNCIONAL DEL BACKEND de la plataforma ecommerce multi-sucursal de Pastelería Mallorca.
+
+El objetivo NO es rehacer el backend.
+
+El objetivo es:
+
+1. comprobar que la arquitectura actual funciona
+2. detectar errores lógicos
+3. detectar inconsistencias de datos
+4. validar seguridad y permisos
+5. validar integridad de inventario
+6. validar pedidos
+7. validar sucursales
+8. validar fechas y horarios
+9. validar carrito y checkout
+10. corregir errores de forma incremental
+11. dejar pruebas reproducibles
+
+IMPORTANTE:
+
+NO hagas cambios masivos de arquitectura sin justificarlo.
+
+Primero AUDITA.
+Después REPORTA.
+Luego CORRIGE.
+Finalmente VUELVE A PROBAR.
+
+==================================================
+1. FORMA DE TRABAJO
+==================================================
+
+Trabaja por fases.
+
+Para cada fase debes hacer:
+
+A. INSPECCIÓN
+B. PRUEBAS
+C. RESULTADOS
+D. ERRORES ENCONTRADOS
+E. CORRECCIONES
+F. RE-TEST
+G. ESTADO FINAL
+
+Usa este formato:
+
+FASE X
+Estado: PASS / FAIL / PARTIAL
+
+Qué se validó:
+...
+
+Errores:
+...
+
+Cambios realizados:
+...
+
+Pruebas ejecutadas:
+...
+
+Resultado final:
+...
+
+No continúes automáticamente a una refactorización grande si algo falla.
+
+Corrige primero la causa.
+
+==================================================
+2. PRIMER PASO — INVENTARIO DEL BACKEND
+==================================================
+
+Antes de ejecutar cambios:
+
+identifica:
+
+- framework backend
+- base de datos
+- ORM
+- sistema auth
+- API routes
+- services
+- repositories
+- middlewares
+- edge functions si existen
+- variables de entorno
+- payment providers
+- storage
+- jobs / cron / queue
+- email provider
+- notificaciones
+- estructura de tests
+
+Crear un mapa del backend.
+
+Ejemplo:
+
+Auth
+Products
+Branches
+Inventory
+Cart
+Orders
+Payments
+Fulfillment
+Notifications
+Admin
+
+Identificar dependencias entre módulos.
+
+==================================================
+3. VALIDAR BASE DE DATOS
+==================================================
+
+Revisar esquema completo.
+
+Validar:
+
+- claves primarias
+- claves foráneas
+- índices
+- restricciones UNIQUE
+- NOT NULL
+- cascades
+- relaciones
+- timestamps
+- enums
+- estados
+
+Especialmente revisar:
+
+users
+branches
+branch_users
+products
+product_variants
+branch_products
+inventory
+stock_movements
+carts
+cart_items
+orders
+order_items
+payments
+pickup_slots
+delivery_zones
+notifications
+
+Buscar:
+
+- relaciones rotas
+- filas huérfanas
+- campos duplicados
+- inconsistencias de tipos
+- stock almacenado en lugares incorrectos
+
+==================================================
+4. SUCURSALES
+==================================================
+
+Validar que:
+
+- cada sucursal tenga ID único
+- cada sucursal tenga código único
+- tenga nombre
+- dirección
+- horarios
+- contacto encargado
+- email
+- whatsapp
+- estado activa/inactiva
+
+Probar:
+
+crear sucursal
+editar sucursal
+desactivar sucursal
+consultar sucursal
+
+Validar que una sucursal inactiva:
+
+NO pueda recibir pedidos nuevos.
+
+==================================================
+5. USUARIOS Y ROLES
+==================================================
+
+Validar roles:
+
+admin
+operations_manager
+branch_manager
+staff
+customer
+
+Probar permisos reales.
+
+Ejemplo:
+
+branch_manager Reforma
+
+DEBE poder:
+- ver pedidos Reforma
+- ver inventario Reforma
+- editar stock Reforma
+
+NO debe poder:
+- ver inventario Lomas
+- editar pedidos Lomas
+- cambiar configuración global
+
+Validar backend, no sólo UI.
+
+Intentar requests directos a endpoints prohibidos.
+
+Deben retornar:
+
+401 o 403
+
+según corresponda.
+
+==================================================
+6. PRODUCTOS
+==================================================
+
+Validar:
+
+crear producto
+editar producto
+publicar
+desactivar
+eliminar si aplica
+variantes
+categorías
+imágenes
+SKU único
+
+Probar:
+
+SKU duplicado
+
+Debe bloquearse correctamente.
+
+==================================================
+7. PRODUCTOS POR SUCURSAL
+==================================================
+
+Validar relación:
+
+producto ↔ sucursal
+
+Probar:
+
+Producto A:
+Reforma activo
+Lomas inactivo
+
+Frontend/API debe respetarlo.
+
+No mostrarlo en Lomas.
+
+Validar:
+
+price override
+stock
+pickup
+delivery
+lead time
+min_stock
+
+==================================================
+8. IMPORTACIÓN MASIVA
+==================================================
+
+Validar:
+
+CSV correcto
+CSV con errores
+SKU duplicado
+sucursal inválida
+stock negativo
+campos faltantes
+producto existente
+producto nuevo
+
+Debe existir:
+
+preview
+validación
+confirmación
+resultado
+
+No debe haber importaciones parciales silenciosas.
+
+Idealmente usar transacción.
+
+==================================================
+9. INVENTARIO
+==================================================
+
+Este módulo es CRÍTICO.
+
+Validar que stock viva por sucursal.
+
+Ejemplo:
+
+Panettone:
+
+Reforma:
+10
+
+Lomas:
+6
+
+Venta Reforma:
+2
+
+Resultado esperado:
+
+Reforma:
+8
+
+Lomas:
+6
+
+Nunca tocar otra sucursal.
+
+==================================================
+10. STOCK NEGATIVO
+==================================================
+
+Intentar:
+
+stock = 1
+pedido cantidad = 2
+
+Debe rechazarse.
+
+Nunca permitir:
+
+stock < 0
+
+ni por:
+- checkout
+- import
+- ajuste manual
+- concurrencia
+
+==================================================
+11. RESERVA DE STOCK
+==================================================
+
+Validar flujo:
+
+stock:
+5
+
+checkout inicia:
+2 unidades
+
+reserved:
+2
+
+available:
+3
+
+Pago confirmado:
+
+stock final:
+3
+
+reserved:
+0
+
+Pago fallido/expirado:
+
+stock:
+5
+
+reserved:
+0
+
+==================================================
+12. CONCURRENCIA
+==================================================
+
+Simular dos usuarios comprando última unidad.
+
+stock = 1
+
+Usuario A:
+compra 1
+
+Usuario B:
+compra 1
+
+Sólo uno debe poder confirmar.
+
+Evitar overselling.
+
+Usar:
+
+transaction
+row lock
+atomic update
+o mecanismo equivalente.
+
+==================================================
+13. MOVIMIENTOS DE STOCK
+==================================================
+
+Toda modificación debe crear registro.
+
+Validar:
+
+sale
+restock
+manual_adjustment
+refund
+cancellation
+import
+
+Campos:
+
+previous_stock
+new_stock
+quantity
+branch
+product
+user
+order
+timestamp
+
+No permitir cambios sin trazabilidad.
+
+==================================================
+14. STOCK BAJO
+==================================================
+
+Ejemplo:
+
+min_stock = 3
+
+stock:
+4 → 3
+
+Debe generar:
+
+LOW STOCK
+
+Validar notificación.
+
+Stock:
+3 → 2
+
+NO volver a mandar la misma alerta repetidamente.
+
+Stock:
+2 → 5
+
+estado vuelve a NORMAL.
+
+Después:
+
+5 → 3
+
+debe volver a alertar.
+
+==================================================
+15. STOCK AGOTADO
+==================================================
+
+stock:
+1 → 0
+
+Generar:
+
+OUT OF STOCK
+
+Notificar al encargado correcto.
+
+Validar:
+
+branch_manager / branch contact
+
+No mandar alerta de Reforma al encargado de Lomas.
+
+==================================================
+16. FLUJO BRANCH-FIRST
+==================================================
+
+Validar que usuario no pueda comprar sin sucursal.
+
+Debe existir:
+
+selected_branch_id
+
+antes de:
+
+- catálogo operativo
+- add to cart
+- checkout
+
+Probar request directo sin branch.
+
+Debe fallar o pedir contexto.
+
+==================================================
+17. FECHA Y HORA
+==================================================
+
+Validar:
+
+selected_date
+selected_time
+
+Reglas:
+
+- no fechas pasadas
+- sucursal abierta
+- día disponible
+- horario válido
+- no slot lleno
+- lead time
+- producto disponible
+
+Intentar enviar fecha inválida vía API.
+
+Backend debe rechazarla.
+
+==================================================
+18. LEAD TIME
+==================================================
+
+Ejemplo:
+
+Producto:
+lead time 48h
+
+Hoy:
+12 Sep 10:00
+
+Pedido:
+13 Sep 10:00
+
+Debe rechazarse.
+
+Pedido:
+15 Sep 10:00
+
+Debe aceptar.
+
+La validación debe ser server-side.
+
+==================================================
+19. SLOTS
+==================================================
+
+Validar capacidad.
+
+Ejemplo:
+
+slot:
+12:30
+
+capacidad:
+5
+
+ya existen:
+5
+
+nuevo pedido:
+
+debe rechazarse.
+
+Evitar race condition.
+
+==================================================
+20. CARRITO
+==================================================
+
+Validar:
+
+agregar
+quitar
+cantidad
+vaciar
+persistencia
+productos inactivos
+stock
+sucursal
+
+No permitir productos de dos sucursales en mismo carrito.
+
+==================================================
+21. CAMBIO DE SUCURSAL
+==================================================
+
+Con carrito vacío:
+
+permitir.
+
+Con carrito con productos:
+
+revalidar.
+
+No eliminar productos automáticamente.
+
+Backend debe comprobar compatibilidad.
+
+==================================================
+22. CHECKOUT
+==================================================
+
+Validar flujo completo.
+
+Antes de crear pago:
+
+recalcular en servidor:
+
+- precios
+- descuentos
+- subtotal
+- delivery
+- impuestos
+- total
+- stock
+- sucursal
+- fecha
+- hora
+
+Nunca confiar en valores del frontend.
+
+==================================================
+23. PEDIDOS
+==================================================
+
+Todo pedido debe tener:
+
+branch_id
+customer_id o guest
+fulfillment_type
+fulfillment_date
+fulfillment_time
+status
+payment_status
+total
+
+Validar estados.
+
+No permitir transiciones inválidas.
+
+Ejemplo:
+
+DELIVERED
+→
+PREPARING
+
+debe bloquearse salvo mecanismo administrativo especial.
+
+==================================================
+24. PEDIDOS POR SUCURSAL
+==================================================
+
+Validar filtros.
+
+Admin general:
+ve todos.
+
+Manager Reforma:
+sólo Reforma.
+
+API debe respetarlo.
+
+==================================================
+25. CANCELACIONES
+==================================================
+
+Validar:
+
+cancelar antes de preparación
+
+Debe:
+
+- cambiar estado
+- devolver stock si aplica
+- liberar reserva
+- registrar movimiento
+- gestionar pago/refund según flujo
+
+No duplicar devolución de stock.
+
+==================================================
+26. REFUNDS
+==================================================
+
+Validar idempotencia.
+
+Si webhook de refund llega dos veces:
+
+NO devolver stock dos veces.
+
+NO registrar dos refunds.
+
+==================================================
+27. PAGOS
+==================================================
+
+Auditar provider actual.
+
+Validar:
+
+- payment intent / order
+- status
+- success
+- failure
+- cancelled
+- webhook
+- signature verification
+- idempotency
+
+Secret keys:
+
+backend only.
+
+Nunca exponer.
+
+==================================================
+28. WEBHOOKS
+==================================================
+
+Muy importante.
+
+Validar:
+
+- firma
+- evento duplicado
+- evento fuera de orden
+- evento inválido
+- retry
+
+Todo webhook debe ser idempotente.
+
+==================================================
+29. DELIVERY
+==================================================
+
+Validar:
+
+dirección
+lat/lng
+radio/zona
+branch
+fee
+
+No confiar en distancia calculada sólo en cliente.
+
+Backend debe validar cobertura.
+
+==================================================
+30. PICKUP
+==================================================
+
+Validar:
+
+branch
+fecha
+hora
+slot
+horario
+capacidad
+
+No aceptar pickup en sucursal cerrada.
+
+==================================================
+31. NOTIFICACIONES
+==================================================
+
+Validar:
+
+- stock bajo
+- agotado
+- nuevo pedido
+- cancelación
+- pedido listo
+
+Si email falla:
+
+NO debe romper transacción principal.
+
+Registrar error.
+
+Permitir retry.
+
+==================================================
+32. CONTACTO ENCARGADO
+==================================================
+
+Validar:
+
+cada sucursal activa tenga responsable o fallback.
+
+Si no tiene:
+
+mostrar warning en Admin.
+
+No permitir alertas sin destino silenciosamente.
+
+==================================================
+33. ADMIN
+==================================================
+
+Validar endpoints para:
+
+dashboard
+productos
+inventario
+pedidos
+sucursales
+alertas
+
+Buscar:
+
+N+1 queries
+requests innecesarios
+filtros inseguros
+
+==================================================
+34. SEGURIDAD
+==================================================
+
+Auditar:
+
+SQL injection
+XSS
+CSRF si aplica
+IDOR
+broken access control
+mass assignment
+exposición de secrets
+logs sensibles
+
+Probar especialmente:
+
+/orders/:id
+/branches/:id
+/inventory/:id
+/users/:id
+
+Nunca asumir que ID válido implica permiso.
+
+==================================================
+35. VALIDACIÓN DE INPUT
+==================================================
+
+Todo endpoint debe validar schema.
+
+Ejemplo:
+
+stock:
+integer >= 0
+
+price:
+number >= 0
+
+email:
+valid
+
+branch_id:
+existing
+
+product_id:
+existing
+
+date:
+valid
+
+time:
+valid
+
+==================================================
+36. MANEJO DE ERRORES
+==================================================
+
+Estandarizar respuestas.
+
+Ejemplo:
+
+{
+  "error": {
+    "code": "OUT_OF_STOCK",
+    "message": "Producto no disponible",
+    "details": {}
+  }
+}
+
+No retornar stack traces a producción.
+
+==================================================
+37. LOGGING
+==================================================
+
+Agregar logs útiles.
+
+Registrar:
+
+- error
+- order
+- payment
+- inventory
+- webhook
+- notification
+
+No loggear:
+
+- password
+- card info
+- secrets
+- tokens completos
+
+==================================================
+38. TESTS
+==================================================
+
+Crear tests automáticos.
+
+Mínimo:
+
+unit tests
+integration tests
+
+Prioridad:
+
+inventory
+orders
+payments
+permissions
+fulfillment
+
+==================================================
+39. TESTS E2E DE BACKEND
+==================================================
+
+Crear escenarios completos.
+
+CASO 1:
+Reforma
+producto disponible
+pickup válido
+pago exitoso
+pedido creado
+stock reducido
+
+CASO 2:
+stock insuficiente
+checkout rechazado
+
+CASO 3:
+slot lleno
+checkout rechazado
+
+CASO 4:
+manager Reforma intenta acceder Lomas
+403
+
+CASO 5:
+webhook duplicado
+no duplicar operación
+
+==================================================
+40. SEED DE PRUEBAS
+==================================================
+
+Crear datos controlados.
+
+Sucursales:
+
+REF
+LOM
+
+Productos:
+
+TEST-PAN-001
+TEST-CRO-001
+
+No usar datos reales de producción para tests destructivos.
+
+==================================================
+41. NO BORRAR PRODUCCIÓN
+==================================================
+
+Nunca ejecutar:
+
+DROP
+TRUNCATE
+DELETE masivo
+
+en producción.
+
+Identificar ambiente.
+
+Si no hay ambiente de testing:
+
+crear uno antes de pruebas destructivas.
+
+==================================================
+42. MIGRACIONES
+==================================================
+
+Si detectas necesidad de cambiar DB:
+
+crear migración versionada.
+
+No editar base manualmente sin migración.
+
+Toda migración debe tener:
+
+up
+down o rollback strategy
+
+==================================================
+43. PERFORMANCE
+==================================================
+
+Revisar:
+
+queries lentos
+índices
+N+1
+payloads excesivos
+
+Especial atención:
+
+product list
+inventory list
+orders dashboard
+
+==================================================
+44. REPORTE DE HALLAZGOS
+==================================================
+
+Clasificar:
+
+CRITICAL
+HIGH
+MEDIUM
+LOW
+
+Ejemplo:
+
+CRITICAL
+overselling posible
+
+HIGH
+manager puede ver otra sucursal
+
+MEDIUM
+query pedidos lenta
+
+LOW
+error message poco claro
+
+==================================================
+45. NO SOBRE-REFACTORIZAR
+==================================================
+
+No cambiar código que funciona sólo por preferencias personales.
+
+Cambiar sólo si:
+
+- hay bug
+- riesgo
+- seguridad
+- inconsistencia
+- deuda técnica clara
+- performance relevante
+
+==================================================
+46. CHECKLIST FINAL
+==================================================
+
+Antes de declarar backend estable:
+
+[ ] Auth funciona
+[ ] Roles funcionan
+[ ] Branch isolation funciona
+[ ] Products funcionan
+[ ] Import funciona
+[ ] Inventory funciona
+[ ] Stock reservations funcionan
+[ ] Low stock alerts funcionan
+[ ] Orders funcionan
+[ ] Pickup funciona
+[ ] Delivery funciona
+[ ] Date/time funciona
+[ ] Payments funcionan
+[ ] Webhooks idempotentes
+[ ] Refunds funcionan
+[ ] Notifications funcionan
+[ ] Admin permissions funcionan
+[ ] Tests pasan
+[ ] No errores críticos
+[ ] No secrets expuestos
+
+==================================================
+47. SALIDA FINAL
+==================================================
+
+Al terminar cada fase, generar:
+
+BACKEND VALIDATION REPORT
+
+Phase:
+Status:
+
+Tests:
+X passed
+X failed
+
+Critical:
+...
+
+High:
+...
+
+Medium:
+...
+
+Fixed:
+...
+
+Pending:
+...
+
+Next recommended validation:
+...
+
+No digas "todo funciona" sin pruebas.
+
+Usa evidencia:
+
+test results
+requests
+database checks
+logs
+assertions.
+
+==================================================
+48. PRIMERA EJECUCIÓN
+==================================================
+
+Comienza únicamente con:
+
+FASE 1 — Arquitectura + DB + Auth + Roles
+
+No intentes validar todo de una vez.
+
+Al terminar Fase 1:
+
+detente.
+
+Entrega reporte.
+
+Espera confirmación antes de avanzar a:
+
+FASE 2 — Sucursales + Productos + Inventario.
