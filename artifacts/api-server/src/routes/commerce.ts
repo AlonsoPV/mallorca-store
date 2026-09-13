@@ -19,6 +19,7 @@ import {
   ListMyOrdersResponse, type Cart as CartShape,
 } from "@workspace/api-zod";
 import { serializeBranch } from "../lib/catalog";
+import { buildBranchPreviewItems } from "../lib/branch-preview";
 import { getRequestUser, requireAuth } from "../middlewares/auth";
 import crypto from "node:crypto";
 import { stockState, enteredAlertState } from "../lib/inventory";
@@ -159,20 +160,7 @@ router.post("/cart/:id/branch-preview", async (req, res): Promise<void> => {
     )
     .where(eq(cartItemsTable.cartId, cart.id));
 
-  const items = rows.map(({ item, product, branchProduct }) => ({
-    productId: product.id,
-    variantId: item.variantId,
-    name: product.name,
-    quantity: item.quantity,
-    available: Boolean(
-      branchProduct?.available &&
-      branchProduct.inventory >= item.quantity &&
-      product.status === "active",
-    ),
-    inventory: branchProduct?.inventory ?? 0,
-    price: branchProduct?.priceOverride ?? product.price,
-    salePrice: branchProduct?.salePriceOverride ?? product.salePrice,
-  }));
+  const items = buildBranchPreviewItems(rows);
 
   res.json(PreviewCartBranchResponse.parse({
     branch: serializeBranch(targetBranch),
@@ -438,8 +426,8 @@ router.post("/orders", async (req, res): Promise<void> => {
         const updated = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} - ${item.quantity}` }).where(and(eq(branchProductsTable.id, bp.id), sql`${branchProductsTable.inventory} >= ${item.quantity}`)).returning({ inventory: branchProductsTable.inventory });
         if (!updated.length) throw new Error("OUT_OF_STOCK");
         await tx.insert(orderItemsTable).values({ orderId, productId: item.productId, variantId: item.variantId, sku: item.sku, name: item.name, variantLabel: item.variantLabel, quantity: item.quantity, unitPrice: serverPrice, lineTotal: serverPrice * item.quantity });
-         await applyInventoryAlert(tx, { ...bp, inventory: updated[0].inventory }, updated[0].inventory);
-         await tx.insert(inventoryReservationsTable).values({ orderId, branchProductId: bp.id, quantity: item.quantity, expiresAt: reservationExpiresAt });
+        await applyInventoryAlert(tx, { ...bp, inventory: updated[0].inventory }, updated[0].inventory);
+        await tx.insert(inventoryReservationsTable).values({ orderId, branchProductId: bp.id, quantity: item.quantity, expiresAt: reservationExpiresAt });
         await tx.insert(inventoryLedgerTable).values({ branchProductId: bp.id, orderId, movement: "reserve", quantityDelta: -item.quantity, balanceAfter: updated[0].inventory, reason: "Order reservation" });
       }
       return o;

@@ -14,6 +14,7 @@ import { useCart } from "@/lib/cart-context";
 import { trackBranchEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { getCampaignBranchId, keepAvailableCartItems, shouldPreviewBranchChange } from "@/lib/branch-flow";
 
 interface BranchSelectorProps {
   required?: boolean;
@@ -44,20 +45,22 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
   );
 
   useEffect(() => {
-    setIsOpen(required && !branchId);
+    if (required && !branchId) setIsOpen(true);
   }, [required, branchId]);
 
   useEffect(() => {
-    const branchSlug = new URLSearchParams(window.location.search).get("branch");
-    if (branchId || !branchSlug || !branches?.length) return;
-    const campaignBranch = branches.find((branch) => branch.slug === branchSlug);
-    if (campaignBranch) {
-      setBranchId(campaignBranch.id);
-      trackBranchEvent("branch_selected", {
-        branchId: campaignBranch.id,
-        branchSlug: campaignBranch.slug,
-        source: "campaign",
-      });
+    if (branchId || !branches?.length) return;
+    const campaignBranchId = getCampaignBranchId(window.location.search, branches);
+    if (campaignBranchId) {
+      const campaignBranch = branches.find((branch) => branch.id === campaignBranchId);
+      setBranchId(campaignBranchId);
+      if (campaignBranch) {
+        trackBranchEvent("branch_selected", {
+          branchId: campaignBranch.id,
+          branchSlug: campaignBranch.slug,
+          source: "campaign",
+        });
+      }
       setIsOpen(false);
       window.history.replaceState({}, "", location.split("?")[0]);
     }
@@ -94,6 +97,17 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
       return;
     }
 
+    if (!shouldPreviewBranchChange({
+      currentBranchId: branchId,
+      targetBranchId: branch.id,
+      cartId,
+      cartItemCount: cart.items.length,
+    })) {
+      setBranchId(branch.id);
+      setIsOpen(false);
+      return;
+    }
+
     setPendingBranch(branch);
     try {
       const result = await previewCartBranch.mutateAsync({
@@ -113,8 +127,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
       const session = await createCartSession.mutateAsync({
         data: { branchId: pendingBranch.id },
       });
-      const unavailableIds = new Set(preview.unavailableItems.map((item) => item.productId));
-      const keepItems = cart.items.filter((item) => !unavailableIds.has(item.productId));
+      const keepItems = keepAvailableCartItems(cart.items, preview.items);
 
       for (const item of keepItems) {
         await addCartItem.mutateAsync({
@@ -272,7 +285,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
                         <button
                           key={branch.id}
                           type="button"
-                          onClick={() => (cart?.items.length && branch.id !== branchId ? chooseBranch(branch) : selectWithoutCart(branch))}
+                          onClick={() => (cart && branch.id !== branchId ? chooseBranch(branch) : selectWithoutCart(branch))}
                           className={`group border p-5 text-left transition-colors hover:border-primary ${isSelected ? "border-primary bg-primary/5" : "border-border bg-background"}`}
                         >
                           <div className="flex items-start justify-between gap-4">

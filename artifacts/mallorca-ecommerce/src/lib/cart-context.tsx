@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { persistSelectedBranchId, readStoredBranchId } from "@/lib/branch-flow";
 
 interface CartContextType {
   cartId: string | null;
@@ -22,12 +23,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const storedCartId = localStorage.getItem("mallorca_cart_id");
-    const storedBranchId = localStorage.getItem("mallorca_branch_id");
     const storedDate = sessionStorage.getItem("mallorca_selected_date");
     const storedTime = sessionStorage.getItem("mallorca_selected_time");
-    
+
     if (storedCartId) setCartId(storedCartId);
-    if (storedBranchId) setBranchId(parseInt(storedBranchId, 10));
+    const storedBranchId = readStoredBranchId(localStorage);
+    if (storedBranchId !== null) setBranchId(storedBranchId);
     if (storedDate) setSelectedDate(storedDate);
     if (storedTime) setSelectedTime(storedTime);
   }, []);
@@ -41,18 +42,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem("mallorca_selected_time");
     }
     setBranchId(newBranchId);
-    
+
     if (newCartId) {
       localStorage.setItem("mallorca_cart_id", newCartId);
     } else {
       localStorage.removeItem("mallorca_cart_id");
     }
-    
-    if (newBranchId !== null) {
-      localStorage.setItem("mallorca_branch_id", newBranchId.toString());
-    } else {
-      localStorage.removeItem("mallorca_branch_id");
-    }
+    persistSelectedBranchId(localStorage, newBranchId);
   };
 
   const setSelectedBranch = (newBranchId: number | null) => {
@@ -63,11 +59,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem("mallorca_selected_time");
     }
     setBranchId(newBranchId);
-    if (newBranchId !== null) {
-      localStorage.setItem("mallorca_branch_id", newBranchId.toString());
-    } else {
-      localStorage.removeItem("mallorca_branch_id");
-    }
+    persistSelectedBranchId(localStorage, newBranchId);
   };
 
   const setFulfillmentContext = (date: string, time: string) => {
