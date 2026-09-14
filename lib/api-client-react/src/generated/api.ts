@@ -1188,6 +1188,173 @@ export const useCreateProductPromotion = <TError = ErrorType<ErrorResponse>,
       return useMutation(getCreateProductPromotionMutationOptions(options));
     }
 
+export const getUpdateProductPromotionUrl = (id: number,
+    promotionId: number,) => {
+
+
+
+
+  return `/api/admin/products/${id}/promotions/${promotionId}`
+}
+
+/**
+ * @summary Edit a scheduled promotion for a product
+ */
+export const updateProductPromotion = async (id: number,
+    promotionId: number,
+    promotionInput: PromotionInput, options?: Parameters<typeof customFetch>[1]): Promise<PromotionHistoryItem> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PromotionHistoryItem>(getUpdateProductPromotionUrl(id,promotionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(promotionInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProductPromotionMutationKey = () => ['updateProductPromotion'] as const;
+
+export const getUpdateProductPromotionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProductPromotion>>, TError,UpdateProductPromotionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProductPromotion>>, TError,UpdateProductPromotionMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProductPromotionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProductPromotion>>, UpdateProductPromotionMutationVariables> = (props) => {
+          const {id,promotionId,data} = props ?? {};
+
+          return  updateProductPromotion(id,promotionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProductPromotionMutationResult = NonNullable<Awaited<ReturnType<typeof updateProductPromotion>>>
+    export type UpdateProductPromotionMutationBody = BodyType<PromotionInput>
+    export type UpdateProductPromotionMutationError = ErrorType<ErrorResponse>
+    export type UpdateProductPromotionMutationVariables = {id: number;promotionId: number;data: BodyType<PromotionInput>}
+
+    /**
+ * @summary Edit a scheduled promotion for a product
+ */
+export const useUpdateProductPromotion = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProductPromotion>>, TError,UpdateProductPromotionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProductPromotion>>,
+        TError,
+        UpdateProductPromotionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProductPromotionMutationOptions(options));
+    }
+
+export const getCancelProductPromotionUrl = (id: number,
+    promotionId: number,) => {
+
+
+
+
+  return `/api/admin/products/${id}/promotions/${promotionId}/cancel`
+}
+
+/**
+ * @summary Cancel a scheduled promotion before it starts
+ */
+export const cancelProductPromotion = async (id: number,
+    promotionId: number, options?: Parameters<typeof customFetch>[1]): Promise<PromotionHistoryItem> => {
+
+  return customFetch<PromotionHistoryItem>(getCancelProductPromotionUrl(id,promotionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelProductPromotionMutationKey = () => ['cancelProductPromotion'] as const;
+
+export const getCancelProductPromotionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelProductPromotion>>, TError,CancelProductPromotionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelProductPromotion>>, TError,CancelProductPromotionMutationVariables, TContext> => {
+
+const mutationKey = getCancelProductPromotionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelProductPromotion>>, CancelProductPromotionMutationVariables> = (props) => {
+          const {id,promotionId} = props ?? {};
+
+          return  cancelProductPromotion(id,promotionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelProductPromotionMutationResult = NonNullable<Awaited<ReturnType<typeof cancelProductPromotion>>>
+
+    export type CancelProductPromotionMutationError = ErrorType<ErrorResponse>
+    export type CancelProductPromotionMutationVariables = {id: number;promotionId: number}
+
+    /**
+ * @summary Cancel a scheduled promotion before it starts
+ */
+export const useCancelProductPromotion = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelProductPromotion>>, TError,CancelProductPromotionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelProductPromotion>>,
+        TError,
+        CancelProductPromotionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCancelProductPromotionMutationOptions(options));
+    }
+
 export const getCreateCartSessionUrl = () => {
 
 

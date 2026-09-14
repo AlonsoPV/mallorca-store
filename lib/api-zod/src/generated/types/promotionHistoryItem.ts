@@ -11,4 +11,8 @@ export type PromotionHistoryItem = Promotion & ({
   createdAt: Date;
   /** @nullable */
   createdBy: string | null;
+  /** @nullable */
+  cancelledAt: Date | null;
+  /** @nullable */
+  cancelledBy: string | null;
 });

@@ -173,7 +173,7 @@ export const GetBranchResponse = zod.object({
   "value": zod.number().min(getBranchResponseTwoProductsItemAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(getBranchResponseTwoProductsItemAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(getBranchResponseTwoProductsItemAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
@@ -249,7 +249,7 @@ export const ListProductsResponseItem = zod.object({
   "value": zod.number().min(listProductsResponseAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listProductsResponseAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listProductsResponseAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
@@ -310,7 +310,7 @@ export const GetProductResponse = zod.object({
   "value": zod.number().min(getProductResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(getProductResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(getProductResponseOneAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
@@ -402,7 +402,7 @@ export const ListAdminProductsResponseItem = zod.object({
   "value": zod.number().min(listAdminProductsResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listAdminProductsResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listAdminProductsResponseOneAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
@@ -510,7 +510,7 @@ export const CreateProductResponse = zod.object({
   "value": zod.number().min(createProductResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(createProductResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(createProductResponseOneAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
@@ -632,7 +632,7 @@ export const UpdateProductResponse = zod.object({
   "value": zod.number().min(updateProductResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(updateProductResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(updateProductResponseOneAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
@@ -681,13 +681,15 @@ export const ListProductPromotionsResponseItem = zod.object({
   "value": zod.number().min(listProductPromotionsResponseOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listProductPromotionsResponseOneFinalPriceMin),
   "savings": zod.number().min(listProductPromotionsResponseOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
 }).and(zod.object({
   "createdAt": zod.coerce.date(),
-  "createdBy": zod.string().nullable()
+  "createdBy": zod.string().nullable(),
+  "cancelledAt": zod.coerce.date().nullable(),
+  "cancelledBy": zod.string().nullable()
 }))
 export const ListProductPromotionsResponse = zod.array(ListProductPromotionsResponseItem)
 
@@ -728,13 +730,99 @@ export const CreateProductPromotionResponse = zod.object({
   "value": zod.number().min(createProductPromotionResponseOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(createProductPromotionResponseOneFinalPriceMin),
   "savings": zod.number().min(createProductPromotionResponseOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
 }).and(zod.object({
   "createdAt": zod.coerce.date(),
-  "createdBy": zod.string().nullable()
+  "createdBy": zod.string().nullable(),
+  "cancelledAt": zod.coerce.date().nullable(),
+  "cancelledBy": zod.string().nullable()
+}))
+
+
+/**
+ * @summary Edit a scheduled promotion for a product
+ */
+export const UpdateProductPromotionParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "promotionId": zod.coerce.number().int()
+})
+
+
+export const updateProductPromotionBodyValueMin = 0;
+
+
+
+export const UpdateProductPromotionBody = zod.object({
+  "name": zod.string().min(1),
+  "type": zod.enum(['fixed', 'percentage', 'amount']),
+  "value": zod.number().min(updateProductPromotionBodyValueMin),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "branchIds": zod.array(zod.number().int())
+})
+
+export const updateProductPromotionResponseOneValueMin = 0;
+
+export const updateProductPromotionResponseOneFinalPriceMin = 0;
+
+export const updateProductPromotionResponseOneSavingsMin = 0;
+
+
+
+export const UpdateProductPromotionResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "type": zod.enum(['fixed', 'percentage', 'amount']),
+  "value": zod.number().min(updateProductPromotionResponseOneValueMin),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
+  "finalPrice": zod.number().min(updateProductPromotionResponseOneFinalPriceMin),
+  "savings": zod.number().min(updateProductPromotionResponseOneSavingsMin),
+  "branchIds": zod.array(zod.number().int())
+}).and(zod.object({
+  "createdAt": zod.coerce.date(),
+  "createdBy": zod.string().nullable(),
+  "cancelledAt": zod.coerce.date().nullable(),
+  "cancelledBy": zod.string().nullable()
+}))
+
+
+/**
+ * @summary Cancel a scheduled promotion before it starts
+ */
+export const CancelProductPromotionParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "promotionId": zod.coerce.number().int()
+})
+
+export const cancelProductPromotionResponseOneValueMin = 0;
+
+export const cancelProductPromotionResponseOneFinalPriceMin = 0;
+
+export const cancelProductPromotionResponseOneSavingsMin = 0;
+
+
+
+export const CancelProductPromotionResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "type": zod.enum(['fixed', 'percentage', 'amount']),
+  "value": zod.number().min(cancelProductPromotionResponseOneValueMin),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
+  "finalPrice": zod.number().min(cancelProductPromotionResponseOneFinalPriceMin),
+  "savings": zod.number().min(cancelProductPromotionResponseOneSavingsMin),
+  "branchIds": zod.array(zod.number().int())
+}).and(zod.object({
+  "createdAt": zod.coerce.date(),
+  "createdBy": zod.string().nullable(),
+  "cancelledAt": zod.coerce.date().nullable(),
+  "cancelledBy": zod.string().nullable()
 }))
 
 
@@ -1772,7 +1860,7 @@ export const ListAdminInventoryResponseItem = zod.object({
   "value": zod.number().min(listAdminInventoryResponseProductAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listAdminInventoryResponseProductAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listAdminInventoryResponseProductAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())
@@ -1898,7 +1986,7 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "value": zod.number().min(listInventoryAlertsResponseProductAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
-  "status": zod.enum(['scheduled', 'active', 'finished']),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listInventoryAlertsResponseProductAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listInventoryAlertsResponseProductAvailabilityItemPromotionOneSavingsMin),
   "branchIds": zod.array(zod.number().int())

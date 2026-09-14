@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, lt, sql, inArray, desc } from "drizzle-orm";
+import { and, eq, gt, lt, sql, inArray, desc, isNull } from "drizzle-orm";
 import {
   branchProductsTable,
   branchesTable,
@@ -22,6 +22,11 @@ import {
   CreateProductPromotionResponse,
   ListProductPromotionsParams,
   ListProductPromotionsResponse,
+  UpdateProductPromotionParams,
+  UpdateProductPromotionBody,
+  UpdateProductPromotionResponse,
+  CancelProductPromotionParams,
+  CancelProductPromotionResponse,
 } from "@workspace/api-zod";
 import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, usersTable, branchUserAssignmentsTable, categoryResponsibleAssignmentsTable, categoriesTable } from "@workspace/db";
 import { ListAdminOrdersQueryParams, ListAdminOrdersResponse, UpdateAdminOrderParams, UpdateAdminOrderBody, UpdateAdminOrderResponse } from "@workspace/api-zod";
@@ -273,6 +278,8 @@ function promotionHistoryShape(
     branchIds,
     createdAt: promotion.createdAt,
     createdBy: promotion.createdBy,
+    cancelledAt: promotion.cancelledAt,
+    cancelledBy: promotion.cancelledBy,
   };
 }
 
@@ -977,6 +984,183 @@ router.post("/admin/products/:id/promotions", async (req, res): Promise<void> =>
     }
     throw error;
   }
+});
+
+router.patch("/admin/products/:id/promotions/:promotionId", async (req, res): Promise<void> => {
+  const params = UpdateProductPromotionParams.safeParse(req.params);
+  const body = UpdateProductPromotionBody.safeParse(req.body);
+  const promotion = promotionInputSchema.safeParse(req.body);
+  if (!params.success || !body.success || !promotion.success) {
+    res.status(400).json({ error: "Invalid promotion" });
+    return;
+  }
+  const productId = params.data.id;
+  const promotionId = params.data.promotionId;
+
+  const [current] = await db
+    .select({
+      promotion: promotionsTable,
+      productPrice: productsTable.price,
+    })
+    .from(promotionsTable)
+    .innerJoin(productsTable, eq(productsTable.id, promotionsTable.productId))
+    .where(and(eq(promotionsTable.id, promotionId), eq(promotionsTable.productId, productId)));
+  if (!current) {
+    res.status(404).json({ error: "Promotion not found" });
+    return;
+  }
+
+  const currentStatus = promotionStatus(current.promotion);
+  if (currentStatus !== "scheduled") {
+    res.status(409).json({ error: "Only scheduled promotions can be edited" });
+    return;
+  }
+  if (body.data.startsAt <= new Date()) {
+    res.status(400).json({ error: "Edited promotions must start in the future" });
+    return;
+  }
+  try {
+    await validatePromotionScope(req, [body.data]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
+      return;
+    }
+    if (message === "UNKNOWN_BRANCH") {
+      res.status(400).json({ error: "Unknown branch" });
+      return;
+    }
+    throw error;
+  }
+
+  const accessibleBranchIds = await getAccessibleBranchIds(req);
+  const existingBranches = await db
+    .select({ branchId: promotionBranchesTable.branchId })
+    .from(promotionBranchesTable)
+    .where(eq(promotionBranchesTable.promotionId, promotionId));
+  if (
+    accessibleBranchIds !== null &&
+    (
+      existingBranches.length === 0 ||
+      existingBranches.some(({ branchId }) => !accessibleBranchIds.includes(branchId))
+    )
+  ) {
+    res.status(403).json({ error: "Branch access denied" });
+    return;
+  }
+
+  const updated = await db.transaction(async (tx) => {
+    const [promotion] = await tx
+      .update(promotionsTable)
+      .set({
+        name: body.data.name,
+        type: body.data.type,
+        value: body.data.value,
+        startsAt: body.data.startsAt,
+        endsAt: body.data.endsAt,
+      })
+      .where(
+        and(
+          eq(promotionsTable.id, promotionId),
+          eq(promotionsTable.productId, productId),
+          gt(promotionsTable.startsAt, new Date()),
+          isNull(promotionsTable.cancelledAt),
+        ),
+      )
+      .returning();
+    if (!promotion) return null;
+
+    await tx
+      .delete(promotionBranchesTable)
+      .where(eq(promotionBranchesTable.promotionId, promotionId));
+    if (body.data.branchIds.length) {
+      await tx.insert(promotionBranchesTable).values(
+        body.data.branchIds.map((branchId) => ({ promotionId, branchId })),
+      );
+    }
+    return promotion;
+  });
+
+  if (!updated) {
+    res.status(409).json({ error: "Only scheduled promotions can be edited" });
+    return;
+  }
+  res.json(
+    UpdateProductPromotionResponse.parse(
+      promotionHistoryShape(updated, body.data.branchIds, current.productPrice),
+    ),
+  );
+});
+
+router.post("/admin/products/:id/promotions/:promotionId/cancel", async (req, res): Promise<void> => {
+  const params = CancelProductPromotionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid promotion" });
+    return;
+  }
+  const productId = params.data.id;
+  const promotionId = params.data.promotionId;
+
+  const [current] = await db
+    .select({
+      promotion: promotionsTable,
+      productPrice: productsTable.price,
+    })
+    .from(promotionsTable)
+    .innerJoin(productsTable, eq(productsTable.id, promotionsTable.productId))
+    .where(and(eq(promotionsTable.id, promotionId), eq(promotionsTable.productId, productId)));
+  if (!current) {
+    res.status(404).json({ error: "Promotion not found" });
+    return;
+  }
+  if (promotionStatus(current.promotion) !== "scheduled") {
+    res.status(409).json({ error: "Only scheduled promotions can be cancelled" });
+    return;
+  }
+
+  const accessibleBranchIds = await getAccessibleBranchIds(req);
+  const existingBranches = await db
+    .select({ branchId: promotionBranchesTable.branchId })
+    .from(promotionBranchesTable)
+    .where(eq(promotionBranchesTable.promotionId, promotionId));
+  if (
+    accessibleBranchIds !== null &&
+    (
+      existingBranches.length === 0 ||
+      existingBranches.some(({ branchId }) => !accessibleBranchIds.includes(branchId))
+    )
+  ) {
+    res.status(403).json({ error: "Branch access denied" });
+    return;
+  }
+
+  const actor = await getRequestUser(req);
+  const [cancelled] = await db
+    .update(promotionsTable)
+    .set({
+      cancelledAt: new Date(),
+      cancelledBy: actor?.id ?? null,
+    })
+    .where(
+      and(
+        eq(promotionsTable.id, promotionId),
+        eq(promotionsTable.productId, productId),
+        gt(promotionsTable.startsAt, new Date()),
+        isNull(promotionsTable.cancelledAt),
+      ),
+    )
+    .returning();
+  if (!cancelled) {
+    res.status(409).json({ error: "Only scheduled promotions can be cancelled" });
+    return;
+  }
+
+  res.json(
+    CancelProductPromotionResponse.parse(
+      promotionHistoryShape(cancelled, existingBranches.map(({ branchId }) => branchId), current.productPrice),
+    ),
+  );
 });
 
 router.post("/admin/products", async (req, res): Promise<void> => {

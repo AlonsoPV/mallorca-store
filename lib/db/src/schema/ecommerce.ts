@@ -227,6 +227,8 @@ export const promotionsTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledBy: text("cancelled_by"),
   },
   (table) => [
     uniqueIndex("promotions_product_name_start_unique").on(

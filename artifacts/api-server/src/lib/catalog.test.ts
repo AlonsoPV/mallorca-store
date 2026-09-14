@@ -16,6 +16,7 @@ const promotion = (
     startsAt: Date;
     endsAt: Date;
     createdAt: Date;
+    cancelledAt?: Date | null;
   }> = {},
 ) => ({
   id: 1,
@@ -52,7 +53,7 @@ test("calculates fixed-price, percentage and amount promotions", () => {
   });
 });
 
-test("reports scheduled, active and finished promotion states", () => {
+test("reports scheduled, active, finished and cancelled promotion states", () => {
   const now = date("2026-09-14T12:00:00.000Z");
 
   assert.equal(
@@ -72,6 +73,13 @@ test("reports scheduled, active and finished promotion states", () => {
       now,
     ),
     "finished",
+  );
+  assert.equal(
+    promotionStatus(
+      promotion({ cancelledAt: date("2026-09-14T09:30:00.000Z") }),
+      now,
+    ),
+    "cancelled",
   );
 });
 

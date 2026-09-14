@@ -81,6 +81,7 @@ export const PromotionStatus = {
   scheduled: 'scheduled',
   active: 'active',
   finished: 'finished',
+  cancelled: 'cancelled',
 } as const;
 
 export interface Promotion {
@@ -182,6 +183,10 @@ export type PromotionHistoryItem = Promotion & ({
   createdAt: string;
   /** @nullable */
   createdBy: string | null;
+  /** @nullable */
+  cancelledAt: string | null;
+  /** @nullable */
+  cancelledBy: string | null;
 });
 
 export type ProductDetail = ProductCard & ({

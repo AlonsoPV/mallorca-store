@@ -338,6 +338,96 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /admin/products/{id}/promotions/{promotionId}:
+    patch:
+      operationId: updateProductPromotion
+      tags: [admin]
+      summary: Edit a scheduled promotion for a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: promotionId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionInput"
+      responses:
+        "200":
+          description: Updated scheduled promotion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionHistoryItem"
+        "400":
+          description: Invalid promotion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Branch access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Promotion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Promotion is no longer editable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/products/{id}/promotions/{promotionId}/cancel:
+    post:
+      operationId: cancelProductPromotion
+      tags: [admin]
+      summary: Cancel a scheduled promotion before it starts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: promotionId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Cancelled promotion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionHistoryItem"
+        "403":
+          description: Branch access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Promotion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Promotion is no longer cancellable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /cart/session:
     post:
       operationId: createCartSession
@@ -962,7 +1052,7 @@ components:
         endsAt: { type: string, format: date-time }
         status:
           type: string
-          enum: [scheduled, active, finished]
+          enum: [scheduled, active, finished, cancelled]
         finalPrice: { type: number, minimum: 0 }
         savings: { type: number, minimum: 0 }
         branchIds:
@@ -990,7 +1080,9 @@ components:
           properties:
             createdAt: { type: string, format: date-time }
             createdBy: { type: ["string", "null"] }
-          required: [createdAt, createdBy]
+            cancelledAt: { type: ["string", "null"], format: date-time }
+            cancelledBy: { type: ["string", "null"] }
+          required: [createdAt, createdBy, cancelledAt, cancelledBy]
     ProductDetail:
       allOf:
         - $ref: "#/components/schemas/ProductCard"

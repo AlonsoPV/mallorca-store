@@ -12,6 +12,8 @@ import {
   useListAdminProducts,
   useListAdminBranches,
   useListProductPromotions,
+  useUpdateProductPromotion,
+  useCancelProductPromotion,
   getListProductPromotionsQueryKey,
   type ProductInput,
   type PromotionType,
@@ -116,6 +118,8 @@ export default function AdminProductForm() {
   const [promotionEnabled, setPromotionEnabled] = useState(false);
   const [promotionAllBranches, setPromotionAllBranches] = useState(true);
   const [promotionDraft, setPromotionDraft] = useState<PromotionDraft>(initialPromotionDraft);
+  const [editingPromotionId, setEditingPromotionId] = useState<number | null>(null);
+  const [editingPromotionBranchIds, setEditingPromotionBranchIds] = useState<number[] | null>(null);
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubmitData, setPendingSubmitData] = useState<FormValues | null>(null);
@@ -147,6 +151,8 @@ export default function AdminProductForm() {
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
+  const updatePromotionMutation = useUpdateProductPromotion();
+  const cancelPromotionMutation = useCancelProductPromotion();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -406,6 +412,100 @@ export default function AdminProductForm() {
     setShowConfirmDialog(true);
   };
 
+  const promotionBranchIds = editingPromotionId !== null
+    ? editingPromotionBranchIds ?? []
+    : promotionAllBranches
+      ? []
+      : Object.entries(branchConfigurations)
+        .filter(([, config]) => config.available)
+        .map(([branchId]) => Number(branchId));
+
+  const validatePromotionDraft = () => {
+    if (!promotionDraft.name.trim() || !promotionDraft.startsAt || !promotionDraft.endsAt) {
+      toast({ title: "Promoción incompleta", description: "Agrega un nombre y el horario de la promoción.", variant: "destructive" });
+      return false;
+    }
+    if (new Date(promotionDraft.endsAt) <= new Date(promotionDraft.startsAt)) {
+      toast({ title: "Horario inválido", description: "La fecha final debe ser posterior a la fecha inicial.", variant: "destructive" });
+      return false;
+    }
+    if (promotionDraft.type === "percentage" && (promotionDraft.value < 0 || promotionDraft.value > 100)) {
+      toast({ title: "Porcentaje inválido", description: "El porcentaje debe estar entre 0 y 100.", variant: "destructive" });
+      return false;
+    }
+    if (!promotionAllBranches && !promotionBranchIds.length) {
+      toast({ title: "Alcance vacío", description: "Selecciona al menos una sucursal para esta promoción.", variant: "destructive" });
+      return false;
+    }
+    return true;
+  };
+
+  const promotionPayload = () => ({
+    name: promotionDraft.name.trim(),
+    type: promotionDraft.type,
+    value: promotionDraft.value,
+    startsAt: new Date(promotionDraft.startsAt).toISOString(),
+    endsAt: new Date(promotionDraft.endsAt).toISOString(),
+    branchIds: promotionBranchIds,
+  });
+
+  const startEditingPromotion = (promotion: NonNullable<typeof promotionHistory>[number]) => {
+    setEditingPromotionId(promotion.id);
+    setEditingPromotionBranchIds(promotion.branchIds);
+    setPromotionAllBranches(promotion.branchIds.length === 0);
+    setPromotionDraft({
+      name: promotion.name,
+      type: promotion.type,
+      value: promotion.value,
+      startsAt: localDateTimeValue(new Date(promotion.startsAt)),
+      endsAt: localDateTimeValue(new Date(promotion.endsAt)),
+    });
+    setPromotionEnabled(true);
+  };
+
+  const stopEditingPromotion = () => {
+    setEditingPromotionId(null);
+    setEditingPromotionBranchIds(null);
+    setPromotionEnabled(false);
+    setPromotionDraft(initialPromotionDraft());
+  };
+
+  const savePromotionEdit = () => {
+    if (!editingPromotionId || !id || !validatePromotionDraft()) return;
+    updatePromotionMutation.mutate(
+      { id: Number(id), promotionId: editingPromotionId, data: promotionPayload() },
+      {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: getListProductPromotionsQueryKey(Number(id)) });
+          void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+          toast({ title: "Promoción actualizada", description: "La promoción programada conserva su registro histórico." });
+          stopEditingPromotion();
+        },
+        onError: () => {
+          toast({ title: "No se pudo actualizar la promoción", description: "Puede que ya haya comenzado o sido cancelada.", variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  const cancelPromotion = (promotionId: number) => {
+    if (!id || !window.confirm("¿Cancelar esta promoción programada? La entrada permanecerá en el historial.")) return;
+    cancelPromotionMutation.mutate(
+      { id: Number(id), promotionId },
+      {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: getListProductPromotionsQueryKey(Number(id)) });
+          void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+          if (editingPromotionId === promotionId) stopEditingPromotion();
+          toast({ title: "Promoción cancelada", description: "La promoción ya no se aplicará cuando llegue su horario." });
+        },
+        onError: () => {
+          toast({ title: "No se pudo cancelar la promoción", description: "Puede que ya haya comenzado o sido cancelada.", variant: "destructive" });
+        },
+      },
+    );
+  };
+
   const confirmSubmit = () => {
     if (!pendingSubmitData) return;
     const data = pendingSubmitData;
@@ -414,16 +514,12 @@ export default function AdminProductForm() {
       ...data,
       imageUrl: data.imageUrl || null,
       salePrice: data.salePrice || null,
-      promotions: promotionEnabled ? [{
+       promotions: promotionEnabled && editingPromotionId === null ? [{
         ...promotionDraft,
         name: promotionDraft.name.trim(),
         startsAt: new Date(promotionDraft.startsAt).toISOString(),
         endsAt: new Date(promotionDraft.endsAt).toISOString(),
-        branchIds: promotionAllBranches
-          ? []
-          : Object.entries(branchConfigurations)
-            .filter(([, config]) => config.available)
-            .map(([branchId]) => Number(branchId)),
+         branchIds: promotionBranchIds,
       }] : undefined,
       branchConfigurations: Object.entries(branchConfigurations).map(([branchId, config]) => ({
         branchId: Number(branchId), ...config,
@@ -685,14 +781,22 @@ export default function AdminProductForm() {
                         <h2 className="text-lg font-semibold font-serif text-[#25211E] dark:text-foreground">Promociones programadas</h2>
                         <p className="mt-1 text-xs text-muted-foreground">El precio final se calcula en el servidor y cambia automáticamente según el horario.</p>
                       </div>
-                      <label className="flex shrink-0 items-center gap-2 text-sm font-medium cursor-pointer">
-                        <Checkbox checked={promotionEnabled} onCheckedChange={(value) => setPromotionEnabled(!!value)} className="data-[state=checked]:bg-[#D43B2B] data-[state=checked]:border-[#D43B2B]" />
-                        Programar
-                      </label>
+                      {editingPromotionId === null && (
+                        <label className="flex shrink-0 items-center gap-2 text-sm font-medium cursor-pointer">
+                          <Checkbox checked={promotionEnabled} onCheckedChange={(value) => setPromotionEnabled(!!value)} className="data-[state=checked]:bg-[#D43B2B] data-[state=checked]:border-[#D43B2B]" />
+                          Programar
+                        </label>
+                      )}
                     </div>
 
                     {promotionEnabled && (
                       <div className="space-y-5">
+                        {editingPromotionId !== null && (
+                          <div className="flex items-center justify-between gap-3 border border-[#D43B2B]/30 bg-[#D43B2B]/5 px-3 py-2 text-sm">
+                            <span className="font-medium text-[#4B3028] dark:text-foreground">Editando una promoción programada</span>
+                            <Button type="button" variant="ghost" size="sm" onClick={stopEditingPromotion} className="rounded-none">Descartar</Button>
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_140px] gap-4">
                           <label className="text-sm font-medium text-muted-foreground">
                             Nombre de la promoción
@@ -724,13 +828,46 @@ export default function AdminProductForm() {
                         <div className="space-y-3 border-t border-dashed border-[#E8DED0] pt-4">
                           <p className="text-sm font-medium text-muted-foreground">Alcance por sucursal</p>
                           <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox checked={promotionAllBranches} onCheckedChange={(value) => setPromotionAllBranches(!!value)} className="data-[state=checked]:bg-[#D43B2B] data-[state=checked]:border-[#D43B2B]" />
+                            <Checkbox
+                              checked={promotionAllBranches}
+                              onCheckedChange={(value) => {
+                                const allBranches = !!value;
+                                setPromotionAllBranches(allBranches);
+                                if (editingPromotionId !== null) {
+                                  setEditingPromotionBranchIds(allBranches
+                                    ? []
+                                    : (editingPromotionBranchIds?.length
+                                      ? editingPromotionBranchIds
+                                      : Object.entries(branchConfigurations)
+                                        .filter(([, config]) => config.available)
+                                        .map(([branchId]) => Number(branchId))));
+                                }
+                              }}
+                              className="data-[state=checked]:bg-[#D43B2B] data-[state=checked]:border-[#D43B2B]"
+                            />
                             Todas las sucursales
                           </label>
                           {!promotionAllBranches && (
-                            <p className="text-xs text-muted-foreground">Se aplicará a las sucursales marcadas como “Publicar aquí” abajo.</p>
+                            <p className="text-xs text-muted-foreground">
+                              {editingPromotionId !== null
+                                ? "Se conservarán las sucursales asignadas a esta promoción."
+                                : "Se aplicará a las sucursales marcadas como “Publicar aquí” abajo."}
+                            </p>
                           )}
                         </div>
+                        {editingPromotionId !== null && (
+                          <div className="flex justify-end border-t border-dashed border-[#E8DED0] pt-4">
+                            <Button
+                              type="button"
+                              onClick={savePromotionEdit}
+                              disabled={updatePromotionMutation.isPending}
+                              className="rounded-none bg-[#D43B2B] text-white hover:bg-[#B83225]"
+                            >
+                              {updatePromotionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Guardar promoción
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -748,8 +885,18 @@ export default function AdminProductForm() {
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                  <span>{promotion.status === "scheduled" ? "Programada" : promotion.status === "active" ? "Activa" : "Finalizada"}</span>
+                                   <span>{promotion.status === "scheduled" ? "Programada" : promotion.status === "active" ? "Activa" : promotion.status === "cancelled" ? "Cancelada" : "Finalizada"}</span>
                                   <span>{new Intl.DateTimeFormat("es-MX", { dateStyle: "short", timeStyle: "short" }).format(new Date(promotion.startsAt))}</span>
+                                   {promotion.status === "scheduled" && (
+                                     <>
+                                       <Button type="button" variant="ghost" size="sm" onClick={() => startEditingPromotion(promotion)} className="h-7 rounded-none px-2 text-[#4B3028]">
+                                         Editar
+                                       </Button>
+                                       <Button type="button" variant="ghost" size="sm" onClick={() => cancelPromotion(promotion.id)} disabled={cancelPromotionMutation.isPending} className="h-7 rounded-none px-2 text-destructive hover:text-destructive">
+                                         Cancelar
+                                       </Button>
+                                     </>
+                                   )}
                                 </div>
                               </div>
                             ))}

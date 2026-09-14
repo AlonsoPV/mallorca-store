@@ -7,6 +7,7 @@ import {
   inArray,
   lte,
   or,
+  isNull,
   type SQL,
 } from "drizzle-orm";
 import {
@@ -99,6 +100,7 @@ async function activePromotionCandidates(
     .where(
       and(
         inArray(promotionsTable.productId, productIds),
+        isNull(promotionsTable.cancelledAt),
         lte(promotionsTable.startsAt, now),
         gt(promotionsTable.endsAt, now),
       ),

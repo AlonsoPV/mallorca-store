@@ -10,16 +10,18 @@ export type PromotionCandidate = {
     startsAt: Date;
     endsAt: Date;
     createdAt: Date;
+    cancelledAt?: Date | null;
   };
   branchIds: number[];
 };
 
-export type PromotionStatus = "scheduled" | "active" | "finished";
+export type PromotionStatus = "scheduled" | "active" | "finished" | "cancelled";
 
 export function promotionStatus(
-  promotion: Pick<PromotionCandidate["promotion"], "startsAt" | "endsAt">,
+  promotion: Pick<PromotionCandidate["promotion"], "startsAt" | "endsAt" | "cancelledAt">,
   now = new Date(),
 ): PromotionStatus {
+  if (promotion.cancelledAt) return "cancelled";
   if (promotion.startsAt.getTime() > now.getTime()) return "scheduled";
   if (promotion.endsAt.getTime() <= now.getTime()) return "finished";
   return "active";

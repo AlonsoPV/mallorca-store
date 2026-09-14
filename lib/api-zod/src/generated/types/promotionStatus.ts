@@ -13,4 +13,5 @@ export const PromotionStatus = {
   scheduled: 'scheduled',
   active: 'active',
   finished: 'finished',
+  cancelled: 'cancelled',
 } as const;
