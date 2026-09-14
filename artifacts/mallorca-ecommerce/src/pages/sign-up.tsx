@@ -1,6 +1,8 @@
 import { SignUp } from "@clerk/react";
+import { Link } from "wouter";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+const clerkConfigured = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
 function getRedirectPath() {
   const requestedPath = new URLSearchParams(window.location.search).get("redirect_url");
@@ -23,13 +25,25 @@ export default function SignUpPage() {
           Crea tu cuenta para continuar
         </p>
       </div>
-      <SignUp
-        routing="path"
-        path={`${basePath}/sign-up`}
-        signInUrl={`${basePath}/sign-in?redirect_url=${encodeURIComponent(redirectPath)}`}
-        fallbackRedirectUrl={redirectPath}
-        signInFallbackRedirectUrl={redirectPath}
-      />
+      {clerkConfigured ? (
+        <SignUp
+          routing="path"
+          path={`${basePath}/sign-up`}
+          signInUrl={`${basePath}/sign-in?redirect_url=${encodeURIComponent(redirectPath)}`}
+          fallbackRedirectUrl={redirectPath}
+          signInFallbackRedirectUrl={redirectPath}
+        />
+      ) : (
+        <div className="w-full max-w-[440px] space-y-4 border border-border bg-card p-6 text-sm text-muted-foreground">
+          <p>
+            El registro no está disponible en local sin{" "}
+            <code className="text-foreground">VITE_CLERK_PUBLISHABLE_KEY</code>.
+          </p>
+          <Link href="/" className="inline-block text-primary underline underline-offset-2">
+            Volver al inicio
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,7 +5,8 @@ import { MapPin, Clock, Phone, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Branches() {
-  const { data: branches, isLoading } = useListBranches();
+  const { data: branchesData, isLoading } = useListBranches();
+  const branches = Array.isArray(branchesData) ? branchesData : undefined;
 
   return (
     <StoreLayout>

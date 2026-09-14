@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { ClerkProvider, Show, useClerk } from '@clerk/react';
+import { ClerkProvider } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
@@ -31,9 +31,13 @@ import AdminDashboard from '@/pages/admin/dashboard';
 import AdminProductsList from '@/pages/admin/products-list';
 import AdminProductForm from '@/pages/admin/product-form';
 import AdminOrdersList from '@/pages/admin/orders-list';
+import AdminOrderDetail from '@/pages/admin/order-detail';
+import AdminOrderNew from '@/pages/admin/order-new';
+import AdminAgenda from '@/pages/admin/agenda';
 import AdminInventory from '@/pages/admin/inventory';
 import AdminImport from '@/pages/admin/import';
 import AdminBranches from '@/pages/admin/branches';
+import AdminBranchForm from '@/pages/admin/branch-form';
 import AdminAlerts from '@/pages/admin/alerts';
 import AdminBranchDetail from '@/pages/admin/branch-detail';
 import AdminReports from '@/pages/admin/reports';
@@ -41,25 +45,37 @@ import AdminResponsibles from '@/pages/admin/responsibles';
 import { AdminGuard } from '@/components/layout/admin-guard';
 
 import { CartProvider } from '@/lib/cart-context';
+import {
+  AuthShow,
+  ClerkAuthBridge,
+  LocalAuthProvider,
+  useAppClerkListener,
+} from '@/lib/app-auth';
 
 const queryClient = new QueryClient();
 
-// Setup Clerk
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const hostname = window.location.hostname.toLowerCase();
+const isLoopbackHost = hostname === "localhost" || hostname === "127.0.0.1";
+const envClerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as
+  | string
+  | undefined;
+
+// On loopback, never call publishableKeyFromHost — it invents clerk.localhost
+// and Clerk JS fails to load from https://clerk.localhost/...
+const clerkPubKey = isLoopbackHost
+  ? envClerkPubKey
+  : publishableKeyFromHost(hostname, envClerkPubKey);
+
+// Clerk's FAPI proxy only works behind the production API; skip it locally.
+const clerkProxyUrl = isLoopbackHost
+  ? undefined
+  : (import.meta.env.VITE_CLERK_PROXY_URL as string | undefined);
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
     ? path.slice(basePath.length) || "/"
     : path;
-}
-
-if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
 }
 
 const clerkAppearance = {
@@ -112,11 +128,12 @@ const clerkAppearance = {
 };
 
 function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
+  const addListener = useAppClerkListener();
   const queryClient = useQueryClient();
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
+    if (!addListener) return;
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
       if (
@@ -134,14 +151,19 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function HomeRedirect() {
+  // Local dummy auth should not bounce every visit to /cuenta.
+  if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) {
+    return <Home />;
+  }
+
   return (
     <>
-      <Show when="signed-in">
+      <AuthShow when="signed-in">
         <Redirect to="/cuenta" />
-      </Show>
-      <Show when="signed-out">
+      </AuthShow>
+      <AuthShow when="signed-out">
         <Home />
-      </Show>
+      </AuthShow>
     </>
   );
 }
@@ -149,12 +171,12 @@ function HomeRedirect() {
 function AccountRedirect() {
   return (
     <>
-      <Show when="signed-in">
+      <AuthShow when="signed-in">
         <Account />
-      </Show>
-      <Show when="signed-out">
+      </AuthShow>
+      <AuthShow when="signed-out">
         <Redirect to="/" />
-      </Show>
+      </AuthShow>
     </>
   );
 }
@@ -169,8 +191,103 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+function AppRoutes() {
+  return (
+    <Switch>
+      <Route path="/" component={HomeRedirect} />
+      <Route path="/tienda" component={Store} />
+      <Route path="/producto/:slug" component={ProductDetail} />
+      <Route path="/sucursales" component={Branches} />
+      <Route path="/sucursales/:slug" component={BranchDetail} />
+
+      <Route path="/carrito" component={Cart} />
+      <Route path="/checkout" component={Checkout} />
+      <Route path="/pedido/:id/:token" component={OrderDetails} />
+      <Route path="/cuenta" component={AccountRedirect} />
+
+      <Route path="/sign-in/*?" component={SignInPage} />
+      <Route path="/sign-up/*?" component={SignUpPage} />
+
+      <Route path="/admin">
+        <AdminGuard><AdminDashboard /></AdminGuard>
+      </Route>
+      <Route path="/admin/productos">
+        <AdminGuard><AdminProductsList /></AdminGuard>
+      </Route>
+      <Route path="/admin/productos/nuevo">
+        <AdminGuard><AdminProductForm /></AdminGuard>
+      </Route>
+      <Route path="/admin/productos/:id">
+        <AdminGuard><AdminProductForm /></AdminGuard>
+      </Route>
+      <Route path="/admin/pedidos/nuevo">
+        <AdminGuard><AdminOrderNew /></AdminGuard>
+      </Route>
+      <Route path="/admin/pedidos/:id">
+        <AdminGuard><AdminOrderDetail /></AdminGuard>
+      </Route>
+      <Route path="/admin/pedidos">
+        <AdminGuard><AdminOrdersList /></AdminGuard>
+      </Route>
+      <Route path="/admin/agenda">
+        <AdminGuard><AdminAgenda /></AdminGuard>
+      </Route>
+      <Route path="/admin/inventario">
+        <AdminGuard><AdminInventory /></AdminGuard>
+      </Route>
+      <Route path="/admin/importar">
+        <AdminGuard><AdminImport /></AdminGuard>
+      </Route>
+      <Route path="/admin/sucursales">
+        <AdminGuard><AdminBranches /></AdminGuard>
+      </Route>
+      <Route path="/admin/sucursales/nueva">
+        <AdminGuard><AdminBranchForm /></AdminGuard>
+      </Route>
+      <Route path="/admin/sucursales/:id/editar">
+        <AdminGuard><AdminBranchForm /></AdminGuard>
+      </Route>
+      <Route path="/admin/sucursales/:id">
+        <AdminGuard><AdminBranchDetail /></AdminGuard>
+      </Route>
+      <Route path="/admin/reportes">
+        <AdminGuard><AdminReports /></AdminGuard>
+      </Route>
+      <Route path="/admin/responsables">
+        <AdminGuard><AdminResponsibles /></AdminGuard>
+      </Route>
+      <Route path="/admin/alertas">
+        <AdminGuard><AdminAlerts /></AdminGuard>
+      </Route>
+
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
+function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ClerkQueryClientCacheInvalidator />
+      <CartProvider>
+        <RoutedErrorBoundary>{children}</RoutedErrorBoundary>
+      </CartProvider>
+    </QueryClientProvider>
+  );
+}
+
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
+
+  if (!clerkPubKey) {
+    return (
+      <LocalAuthProvider>
+        <AppShell>
+          <AppRoutes />
+        </AppShell>
+      </LocalAuthProvider>
+    );
+  }
 
   return (
     <ClerkProvider
@@ -196,68 +313,11 @@ function ClerkProviderWithRoutes() {
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
-      <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <CartProvider>
-          <RoutedErrorBoundary>
-            <Switch>
-              <Route path="/" component={HomeRedirect} />
-              <Route path="/tienda" component={Store} />
-              <Route path="/producto/:slug" component={ProductDetail} />
-              <Route path="/sucursales" component={Branches} />
-              <Route path="/sucursales/:slug" component={BranchDetail} />
-              
-              <Route path="/carrito" component={Cart} />
-              <Route path="/checkout" component={Checkout} />
-              <Route path="/pedido/:id/:token" component={OrderDetails} />
-              <Route path="/cuenta" component={AccountRedirect} />
-
-              <Route path="/sign-in/*?" component={SignInPage} />
-              <Route path="/sign-up/*?" component={SignUpPage} />
-
-              {/* Admin Routes */}
-              <Route path="/admin">
-                <AdminGuard><AdminDashboard /></AdminGuard>
-              </Route>
-              <Route path="/admin/productos">
-                <AdminGuard><AdminProductsList /></AdminGuard>
-              </Route>
-              <Route path="/admin/productos/nuevo">
-                <AdminGuard><AdminProductForm /></AdminGuard>
-              </Route>
-              <Route path="/admin/productos/:id">
-                <AdminGuard><AdminProductForm /></AdminGuard>
-              </Route>
-              <Route path="/admin/pedidos">
-                <AdminGuard><AdminOrdersList /></AdminGuard>
-              </Route>
-              <Route path="/admin/inventario">
-                <AdminGuard><AdminInventory /></AdminGuard>
-              </Route>
-              <Route path="/admin/importar">
-                <AdminGuard><AdminImport /></AdminGuard>
-              </Route>
-              <Route path="/admin/sucursales">
-                <AdminGuard><AdminBranches /></AdminGuard>
-              </Route>
-              <Route path="/admin/sucursales/:id">
-                <AdminGuard><AdminBranchDetail /></AdminGuard>
-              </Route>
-              <Route path="/admin/reportes">
-                <AdminGuard><AdminReports /></AdminGuard>
-              </Route>
-              <Route path="/admin/responsables">
-                <AdminGuard><AdminResponsibles /></AdminGuard>
-              </Route>
-              <Route path="/admin/alertas">
-                <AdminGuard><AdminAlerts /></AdminGuard>
-              </Route>
-              
-              <Route component={NotFound} />
-            </Switch>
-          </RoutedErrorBoundary>
-        </CartProvider>
-      </QueryClientProvider>
+      <ClerkAuthBridge>
+        <AppShell>
+          <AppRoutes />
+        </AppShell>
+      </ClerkAuthBridge>
     </ClerkProvider>
   );
 }

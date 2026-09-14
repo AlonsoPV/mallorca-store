@@ -42,17 +42,22 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { getImageUrl } from "@/lib/image-url";
 import { ImageWithFallback } from "@/components/image-with-fallback";
+import { CategoryMultiSelect } from "@/components/category-multi-select";
+import { GenerateInventoryAlertDialog } from "@/components/generate-inventory-alert-dialog";
+import { TagInput } from "@/components/tag-input";
+import { CrossSellPicker } from "@/components/cross-sell-picker";
 
 const formSchema = z.object({
-  sku: z.string().min(1, "SKU es requerido"),
+  sku: z.string().optional().default(""),
   name: z.string().min(1, "Nombre es requerido"),
-  slug: z.string().min(1, "Slug es requerido"),
+  slug: z.string().optional().default(""),
   shortDescription: z.string().min(1, "Descripción corta requerida"),
-  description: z.string().min(1, "Descripción completa requerida"),
+  description: z.string().optional().default(""),
   price: z.coerce.number().min(0, "Precio debe ser mayor o igual a 0"),
   salePrice: z.coerce.number().nullable().optional(),
   categoryId: z.coerce.number().min(1, "Seleccione una categoría"),
@@ -125,13 +130,20 @@ export default function AdminProductForm() {
   const [pendingSubmitData, setPendingSubmitData] = useState<FormValues | null>(null);
   const [imageAssets, setImageAssets] = useState<ImageAsset[]>([]);
   const [isImageDropActive, setIsImageDropActive] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(() => !!id && id !== "nuevo");
+  const [alertBranchId, setAlertBranchId] = useState<number | null>(null);
+  const [categoryIds, setCategoryIds] = useState<number[]>([]);
+  const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null);
+  const [tagNames, setTagNames] = useState<string[]>([]);
+  const [crossSellProductIds, setCrossSellProductIds] = useState<number[]>([]);
+  const [showCrossSell, setShowCrossSell] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const imageId = useRef(0);
 
   const adminProductParams = {};
   const { data: adminProducts, isLoading: isLoadingList } = useListAdminProducts(
     adminProductParams,
-    { query: { enabled: isEditing, queryKey: getListAdminProductsQueryKey(adminProductParams) } },
+    { query: { enabled: true, queryKey: getListAdminProductsQueryKey(adminProductParams) } },
   );
 
   const existingProduct = isEditing ? adminProducts?.find(p => p.id === Number(id)) : undefined;
@@ -344,6 +356,9 @@ export default function AdminProductForm() {
       setBranchConfigurations(Object.fromEntries((productDetail.availability || []).map((availability) => [availability.branchId, {
         available: availability.available,
         inventory: availability.inventory,
+        minStock: (availability as any).minStock ?? 0,
+        criticalStock: (availability as any).criticalStock ?? null,
+        autoAlertEnabled: (availability as any).autoAlertEnabled !== false,
         priceOverride: availability.price,
         pickupAvailable: availability.pickupAvailable,
         deliveryAvailable: availability.deliveryAvailable,
@@ -365,6 +380,22 @@ export default function AdminProductForm() {
         status: (existingProduct as any)?.status || "draft",
         minimumLeadTimeHours: productDetail.minimumLeadTimeHours,
       });
+      const detailCategories = (productDetail as any).categories as
+        | Array<{ id: number; isPrimary?: boolean; slug: string }>
+        | undefined;
+      if (detailCategories?.length) {
+        setCategoryIds(detailCategories.map((c) => c.id));
+        setPrimaryCategoryId(
+          detailCategories.find((c) => c.isPrimary)?.id ?? detailCategories[0].id,
+        );
+      } else {
+        const primary = categories?.find((c) => c.slug === productDetail.categorySlug)?.id ?? null;
+        setCategoryIds(primary ? [primary] : []);
+        setPrimaryCategoryId(primary);
+      }
+      setTagNames(productDetail.tags ?? []);
+      setCrossSellProductIds((productDetail as any).crossSellProductIds ?? []);
+      setShowCrossSell(Boolean((productDetail as any).crossSellProductIds?.length));
       setImageAssets(assetsFromPaths(productDetail.imageUrl, productDetail.gallery));
       initialized.current = true;
     }
@@ -380,19 +411,44 @@ export default function AdminProductForm() {
     return () => clearTimeout(timer);
   }, [formValues, branchConfigurations, isEditing]);
 
-  const preSubmit = (data: FormValues) => {
+  const preSubmit = (data: FormValues, intentStatus?: FormValues["status"]) => {
     if (imageAssets.some((asset) => asset.status === "uploading")) {
       toast({ title: "Espera a que terminen las imágenes", description: "Puedes seguir editando el formulario mientras se completan las subidas." });
       return;
     }
 
+    const slug =
+      data.slug?.trim() ||
+      data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "") ||
+      `producto-${Date.now()}`;
+    const normalized: FormValues = {
+      ...data,
+      status: intentStatus ?? data.status,
+      slug,
+      sku: data.sku?.trim() || slug.toUpperCase().replace(/-/g, "-").slice(0, 32) || `SKU-${Date.now()}`,
+      description: data.description?.trim() || data.shortDescription,
+    };
+
     // Validation: At least one branch must be available if active
-    if (data.status === 'active') {
+    if (normalized.status === 'active') {
       const isAvailableAnywhere = Object.values(branchConfigurations).some(c => c.available);
       if (!isAvailableAnywhere) {
         toast({ title: "Validación Fallida", description: "El producto debe estar disponible en al menos una sucursal para ser publicado.", variant: "destructive" });
         return;
       }
+    }
+    if (!categoryIds.length && !normalized.categoryId) {
+      toast({
+        title: "Categorías requeridas",
+        description: "Selecciona al menos una categoría.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (normalized.categoryId && !categoryIds.includes(normalized.categoryId)) {
+      normalized.categoryId = primaryCategoryId ?? categoryIds[0] ?? normalized.categoryId;
+    } else if (!normalized.categoryId) {
+      normalized.categoryId = primaryCategoryId ?? categoryIds[0];
     }
 
     if (promotionEnabled) {
@@ -414,7 +470,7 @@ export default function AdminProductForm() {
       }
     }
 
-    setPendingSubmitData(data);
+    setPendingSubmitData(normalized);
     setShowConfirmDialog(true);
   };
 
@@ -522,7 +578,12 @@ export default function AdminProductForm() {
       ...data,
       imageUrl: data.imageUrl || null,
       salePrice: data.salePrice || null,
-       promotions: promotionEnabled && editingPromotionId === null ? [{
+      categoryId: primaryCategoryId ?? data.categoryId,
+      categoryIds: categoryIds.length ? categoryIds : [primaryCategoryId ?? data.categoryId],
+      primaryCategoryId: primaryCategoryId ?? data.categoryId,
+      tags: tagNames,
+      crossSellProductIds,
+      promotions: promotionEnabled && editingPromotionId === null ? [{
         ...promotionDraft,
         name: promotionDraft.name.trim(),
         startsAt: new Date(promotionDraft.startsAt).toISOString(),
@@ -584,20 +645,44 @@ export default function AdminProductForm() {
     <AdminLayout>
       <div className="flex-1 overflow-y-auto bg-[#FBFAF7] dark:bg-background pb-32">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(preSubmit)} className="space-y-0">
+          <form onSubmit={form.handleSubmit((data) => preSubmit(data))} className="space-y-0">
 
             <div className="px-8 py-6 border-b border-[#E8DED0] dark:border-border bg-white dark:bg-card sticky top-0 z-10 shadow-sm">
-              <div className="max-w-5xl mx-auto flex items-center justify-between">
+              <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <Button variant="ghost" size="icon" asChild className="rounded-none text-[#4B3028] dark:text-foreground">
                     <Link href="/admin/productos"><ArrowLeft className="h-5 w-5" /></Link>
                   </Button>
                   <div>
                     <h1 className="text-2xl font-serif tracking-tight text-[#25211E] dark:text-foreground">
-                      {isEditing ? `Editar: ${existingProduct?.name || ''}` : "Nuevo Producto"}
+                      {isEditing ? `Editar: ${existingProduct?.name || ''}` : "Alta rápida de producto"}
                     </h1>
+                    {!isEditing ? (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Nombre, categoría, precio, sucursales e imagen. Lo demás es opcional.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
+                {!isEditing ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-none"
+                    onClick={() => setShowAdvanced((v) => !v)}
+                  >
+                    {showAdvanced ? "Ocultar avanzado" : "Configuración adicional"}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-none"
+                    onClick={() => setShowAdvanced((v) => !v)}
+                  >
+                    {showAdvanced ? "Vista simple" : "Mostrar todo"}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -619,7 +704,7 @@ export default function AdminProductForm() {
                       </FormItem>
                     )} />
 
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className={`grid grid-cols-2 gap-6 ${showAdvanced ? "" : "hidden"}`}>
                       <FormField control={form.control} name="sku" render={({ field }) => (
                         <FormItem>
                           <FormLabel>SKU</FormLabel>
@@ -639,17 +724,18 @@ export default function AdminProductForm() {
 
                   {/* Pricing */}
                   <div className="bg-white dark:bg-card p-8 border border-[#E8DED0] dark:border-border space-y-6">
-                    <h2 className="text-lg font-semibold font-serif text-[#25211E] dark:text-foreground border-b border-[#E8DED0] dark:border-border pb-3">Precios</h2>
+                    <h2 className="text-lg font-semibold font-serif text-[#25211E] dark:text-foreground border-b border-[#E8DED0] dark:border-border pb-3">Precio</h2>
 
-                    <div className="grid grid-cols-2 gap-6 items-start">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                       <FormField control={form.control} name="price" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Precio Base (MXN)</FormLabel>
+                          <FormLabel>Precio normal (MXN)</FormLabel>
                           <FormControl><Input type="number" step="0.01" {...field} className="rounded-none border-[#E8DED0] dark:border-border text-lg font-medium focus-visible:ring-[#D43B2B]" /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
 
+                      <div className={showAdvanced ? "" : "hidden"}>
                       <FormField control={form.control} name="salePrice" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex justify-between items-center w-full">
@@ -669,6 +755,7 @@ export default function AdminProductForm() {
                           <FormMessage />
                         </FormItem>
                       )} />
+                      </div>
                     </div>
                   </div>
 
@@ -685,15 +772,15 @@ export default function AdminProductForm() {
                     )} />
 
                     <FormField control={form.control} name="description" render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={showAdvanced ? "" : "hidden"}>
                         <FormLabel>Descripción Completa</FormLabel>
                         <FormControl><Textarea {...field} className="min-h-[140px] rounded-none border-[#E8DED0] dark:border-border focus-visible:ring-[#D43B2B]" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
 
-                  <FormItem>
-                    <FormLabel>Imágenes del producto</FormLabel>
+                  <div className="space-y-2">
+                    <Label>Imágenes del producto</Label>
                     <div
                       role="button"
                       tabIndex={0}
@@ -780,11 +867,11 @@ export default function AdminProductForm() {
                       </div>
                     )}
                     {imageAssets.length > 0 && <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><Info className="h-3 w-3" /> Usa las flechas para reordenar. La primera imagen será la principal.</p>}
-                  </FormItem>
+                  </div>
                   </div>
 
                   {/* Promotions */}
-                  <div className="bg-white dark:bg-card p-8 border border-[#E8DED0] dark:border-border space-y-6">
+                  <div className={`bg-white dark:bg-card p-8 border border-[#E8DED0] dark:border-border space-y-6 ${showAdvanced ? "" : "hidden"}`}>
                     <div className="flex items-start justify-between gap-4 border-b border-[#E8DED0] dark:border-border pb-3">
                       <div>
                         <h2 className="text-lg font-semibold font-serif text-[#25211E] dark:text-foreground">Promociones programadas</h2>
@@ -928,6 +1015,34 @@ export default function AdminProductForm() {
                     )}
                   </div>
 
+                  <div className={`bg-white dark:bg-card p-8 border border-[#E8DED0] dark:border-border space-y-4 ${showAdvanced || showCrossSell ? "" : "hidden"}`}>
+                    <div className="flex items-start justify-between gap-4 border-b border-[#E8DED0] dark:border-border pb-3">
+                      <div>
+                        <h2 className="text-lg font-semibold font-serif text-[#25211E] dark:text-foreground">Productos recomendados</h2>
+                        <p className="mt-1 text-xs text-muted-foreground">Cross-sell manual para ficha, carrito y checkout.</p>
+                      </div>
+                      <label className="flex shrink-0 items-center gap-2 text-sm font-medium cursor-pointer">
+                        <Checkbox
+                          checked={showCrossSell || crossSellProductIds.length > 0}
+                          onCheckedChange={(value) => setShowCrossSell(!!value)}
+                        />
+                        Configurar
+                      </label>
+                    </div>
+                    {(showCrossSell || crossSellProductIds.length > 0) && (
+                      <CrossSellPicker
+                        products={(adminProducts ?? []).map((product) => ({
+                          id: product.id,
+                          name: product.name,
+                          sku: product.sku,
+                        }))}
+                        selectedIds={crossSellProductIds}
+                        excludeId={isEditing ? Number(id) : null}
+                        onChange={setCrossSellProductIds}
+                      />
+                    )}
+                  </div>
+
                   {/* Branches */}
                   <div className="bg-white dark:bg-card p-0 border border-[#E8DED0] dark:border-border shadow-sm">
                     <div className="p-6 border-b border-[#E8DED0] dark:border-border flex items-center gap-2 bg-[#FBFAF7] dark:bg-muted/10">
@@ -950,24 +1065,53 @@ export default function AdminProductForm() {
                             </div>
 
                             <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 items-end mt-4 transition-opacity ${config.available ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                              <label className="text-sm font-medium text-muted-foreground">Inventario<Input type="number" min="0" value={config.inventory ?? 0} onChange={e => setConfig("inventory", Number(e.target.value))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" disabled={!config.available}/></label>
-                              <label className="text-sm font-medium text-muted-foreground">Stock Mínimo<Input type="number" min="0" value={config.minStock ?? 0} onChange={e => setConfig("minStock", Number(e.target.value))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" disabled={!config.available}/></label>
-                              <label className="text-sm font-medium text-muted-foreground relative">
+                              <label className="text-sm font-medium text-muted-foreground">Stock<Input type="number" min="0" value={config.inventory ?? 0} onChange={e => setConfig("inventory", Number(e.target.value))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" disabled={!config.available}/></label>
+                              <label className={`text-sm font-medium text-muted-foreground ${showAdvanced ? "" : "hidden"}`}>Stock Mínimo<Input type="number" min="0" value={config.minStock ?? 0} onChange={e => setConfig("minStock", Number(e.target.value))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" disabled={!config.available}/></label>
+                              <label className={`text-sm font-medium text-muted-foreground ${showAdvanced ? "" : "hidden"}`}>Stock crítico<Input type="number" min="0" value={config.criticalStock ?? ""} onChange={e => setConfig("criticalStock", e.target.value === "" ? null : Number(e.target.value))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" disabled={!config.available} placeholder="Opcional"/></label>
+                              <label className={`text-sm font-medium text-muted-foreground relative ${showAdvanced ? "" : "hidden"}`}>
                                 Precio local
                                 <Input type="number" min="0" step="0.01" placeholder="Usar base" value={config.priceOverride ?? ""} onChange={e => setConfig("priceOverride", e.target.value ? Number(e.target.value) : null)} className="mt-1 rounded-none border-[#E8DED0] dark:border-border pl-6 bg-white" disabled={!config.available}/>
                                 <span className="absolute left-2.5 top-[34px] text-muted-foreground text-xs">$</span>
                               </label>
-                              <label className="text-sm font-medium text-muted-foreground">Prep. (min)<Input type="number" min="0" value={config.preparationTimeMinutes ?? branch.preparationTimeMinutes} onChange={e => setConfig("preparationTimeMinutes", Number(e.target.value))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" disabled={!config.available}/></label>
+                              <label className={`text-sm font-medium text-muted-foreground ${showAdvanced ? "" : "hidden"}`}>Prep. (min)<Input type="number" min="0" value={config.preparationTimeMinutes ?? branch.preparationTimeMinutes} onChange={e => setConfig("preparationTimeMinutes", Number(e.target.value))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" disabled={!config.available}/></label>
                             </div>
 
-                            <div className={`flex gap-6 mt-4 pt-4 border-t border-dashed border-[#E8DED0] dark:border-border transition-opacity ${config.available ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                            <div className={`flex flex-wrap gap-6 mt-4 pt-4 border-t border-dashed border-[#E8DED0] dark:border-border transition-opacity ${showAdvanced && config.available ? 'opacity-100' : showAdvanced ? 'opacity-40 pointer-events-none' : 'hidden'}`}>
                               <label className="flex gap-2 items-center text-sm cursor-pointer text-[#25211E] dark:text-foreground font-medium">
                                 <Checkbox checked={config.pickupAvailable ?? branch.pickupAvailable} onCheckedChange={v => setConfig("pickupAvailable", !!v)} disabled={!config.available} /> Pick-up
                               </label>
                               <label className="flex gap-2 items-center text-sm cursor-pointer text-[#25211E] dark:text-foreground font-medium">
                                 <Checkbox checked={config.deliveryAvailable ?? branch.deliveryAvailable} onCheckedChange={v => setConfig("deliveryAvailable", !!v)} disabled={!config.available} /> Delivery
                               </label>
+                              <label className="flex gap-2 items-center text-sm cursor-pointer text-[#25211E] dark:text-foreground font-medium">
+                                <Checkbox checked={config.autoAlertEnabled !== false} onCheckedChange={v => setConfig("autoAlertEnabled", !!v)} disabled={!config.available} /> Alertas automáticas
+                              </label>
+                              {isEditing && config.available ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-none"
+                                  onClick={() => setAlertBranchId(branch.id)}
+                                >
+                                  Generar alerta
+                                </Button>
+                              ) : null}
                             </div>
+                            {showAdvanced && config.available ? (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Preview estado:{" "}
+                                {(() => {
+                                  const inv = Number(config.inventory ?? 0);
+                                  const min = Number(config.minStock ?? 0);
+                                  const crit = config.criticalStock == null ? null : Number(config.criticalStock);
+                                  if (inv <= 0) return "Agotado";
+                                  if (crit != null && crit > 0 && inv <= crit) return "Crítico";
+                                  if (min > 0 && inv <= min) return "Stock bajo";
+                                  return "Normal";
+                                })()}
+                              </p>
+                            ) : null}
                           </div>
                         )
                       })}
@@ -997,26 +1141,28 @@ export default function AdminProductForm() {
                       </FormItem>
                     )} />
 
-                    <FormField control={form.control} name="categoryId" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Categoría Principal</FormLabel>
-                        <FormControl>
-                          <select
-                            {...field}
-                            className="flex h-10 w-full items-center justify-between rounded-none border border-[#E8DED0] dark:border-border bg-white dark:bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#D43B2B] appearance-none"
-                          >
-                            <option value="0">Seleccionar...</option>
-                            {categories?.map(c => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                          </select>
-                        </FormControl>
+                    <CategoryMultiSelect
+                      categories={categories ?? []}
+                      selectedIds={categoryIds}
+                      primaryId={primaryCategoryId}
+                      required
+                      onChange={(ids, primary) => {
+                        setCategoryIds(ids);
+                        setPrimaryCategoryId(primary);
+                        form.setValue("categoryId", primary ?? 0, { shouldValidate: true });
+                      }}
+                    />
+
+                    <TagInput value={tagNames} onChange={setTagNames} />
+
+                    <FormField control={form.control} name="categoryId" render={() => (
+                      <FormItem className="hidden">
                         <FormMessage />
                       </FormItem>
                     )} />
 
                     <FormField control={form.control} name="minimumLeadTimeHours" render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={showAdvanced ? "" : "hidden"}>
                         <FormLabel>Lead Time Global (Horas)</FormLabel>
                         <FormControl><Input type="number" {...field} className="rounded-none border-[#E8DED0] dark:border-border" /></FormControl>
                         <p className="text-xs text-muted-foreground mt-1 leading-snug">Tiempo mínimo de anticipación para pedidos programados.</p>
@@ -1024,7 +1170,7 @@ export default function AdminProductForm() {
                     )} />
                   </div>
 
-                  <div className="bg-white dark:bg-card p-6 border border-[#E8DED0] dark:border-border space-y-4">
+                  <div className={`bg-white dark:bg-card p-6 border border-[#E8DED0] dark:border-border space-y-4 ${showAdvanced ? "" : "hidden"}`}>
                     <h2 className="text-lg font-semibold font-serif text-[#25211E] dark:text-foreground border-b border-[#E8DED0] dark:border-border pb-3">Atributos Especiales</h2>
 
                     <div className="flex flex-col gap-3 pt-2">
@@ -1059,13 +1205,27 @@ export default function AdminProductForm() {
               <div className="hidden sm:block text-sm text-muted-foreground font-medium">
                 {!isEditing && initializedDraft.current && <span className="flex items-center gap-1.5"><Save className="w-4 h-4 text-emerald-600"/> Borrador local guardado</span>}
               </div>
-              <div className="flex gap-4 w-full sm:w-auto">
-                <Button variant="outline" type="button" asChild className="rounded-none border-[#E8DED0] dark:border-border text-[#4B3028] dark:text-foreground flex-1 sm:flex-none hover:bg-[#F5F0E8] dark:hover:bg-muted h-11 px-8">
+              <div className="flex gap-3 w-full sm:w-auto flex-wrap justify-end">
+                <Button variant="outline" type="button" asChild className="rounded-none border-[#E8DED0] dark:border-border text-[#4B3028] dark:text-foreground hover:bg-[#F5F0E8] dark:hover:bg-muted h-11 px-6">
                   <Link href="/admin/productos">Descartar</Link>
                 </Button>
-                <Button type="submit" disabled={isSaving} className="rounded-none bg-[#D43B2B] hover:bg-[#B83225] text-white flex-1 sm:flex-none h-11 px-8 font-medium">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSaving}
+                  className="rounded-none h-11 px-6"
+                  onClick={() => form.handleSubmit((data) => preSubmit(data, "draft"))()}
+                >
+                  Guardar borrador
+                </Button>
+                <Button
+                  type="button"
+                  disabled={isSaving}
+                  className="rounded-none bg-[#D43B2B] hover:bg-[#B83225] text-white h-11 px-8 font-medium"
+                  onClick={() => form.handleSubmit((data) => preSubmit(data, "active"))()}
+                >
                   {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                  {isSaving ? "Guardando..." : "Guardar Producto"}
+                  {isSaving ? "Guardando..." : isEditing ? "Guardar cambios" : "Publicar"}
                 </Button>
               </div>
             </div>
@@ -1118,6 +1278,16 @@ export default function AdminProductForm() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {alertBranchId != null && isEditing ? (
+        <GenerateInventoryAlertDialog
+          open={alertBranchId != null}
+          onOpenChange={(open) => !open && setAlertBranchId(null)}
+          productId={Number(id)}
+          branchId={alertBranchId}
+          productLabel={formValues?.name || productDetail?.name}
+        />
+      ) : null}
     </AdminLayout>
   );
 }

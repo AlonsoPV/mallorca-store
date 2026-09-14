@@ -10,4 +10,5 @@ import type { ImportResultErrorsItem } from './importResultErrorsItem';
 export interface ImportResult {
   imported: number;
   errors: ImportResultErrorsItem[];
+  jobId?: string;
 }

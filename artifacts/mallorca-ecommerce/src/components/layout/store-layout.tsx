@@ -7,8 +7,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { useCart } from "@/lib/cart-context";
 import { BranchSelector } from "@/components/branch-selector";
 import { FulfillmentSelector } from "@/components/fulfillment-selector";
-import { useGetCart, useGetMe, getGetCartQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
-import { useAuth } from "@clerk/react";
+import { useGetCart, useGetMe, useListBranches, getGetCartQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
+import { useAppAuth } from "@/lib/app-auth";
 import footerLogo from "@assets/MallorcaFooter_1789166205501.webp";
 
 export function StoreLayout({ children }: { children: ReactNode }) {
@@ -19,8 +19,9 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   const [isQuickLinksOpen, setIsQuickLinksOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
-  const { isSignedIn } = useAuth();
+  const { isSignedIn } = useAppAuth();
   const { data: user } = useGetMe({ query: { enabled: !!isSignedIn, queryKey: getGetMeQueryKey() } });
+  const { data: footerBranches } = useListBranches();
   
   const { cartId, branchId } = useCart();
   const { data: cart } = useGetCart(cartId!, { query: { enabled: !!cartId, queryKey: getGetCartQueryKey(cartId!) } });
@@ -232,7 +233,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
 
       <footer className="mt-auto bg-black text-white">
         <div className="mx-auto max-w-[1180px] px-5 pb-6 pt-10 sm:px-8 sm:py-12 md:px-10 md:py-14">
-          <div className="grid gap-9 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-10 md:grid-cols-[1.05fr_1.05fr_1.55fr_1.55fr] md:gap-8 lg:gap-12">
+          <div className="grid gap-9 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-10 md:grid-cols-2 lg:grid-cols-4 md:gap-8 lg:gap-12">
             <div className="flex flex-col items-center text-center sm:col-span-2 md:col-span-1 md:items-start md:text-left">
               <Link href="/" aria-label="Pastelería Mallorca" className="inline-flex items-center">
                 <img src={footerLogo} alt="Mallorca Pastelería" className="h-auto w-[170px] max-w-full object-contain md:w-[180px]" />
@@ -284,41 +285,38 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               </ul>
             </div>
 
-            <div className="sm:col-span-1">
-              <h2 className="mb-4 text-[15px] font-semibold">Mallorca Lomas</h2>
-              <div className="space-y-3 text-[12px] leading-relaxed text-white/90 sm:text-[13px]">
-                <a href="tel:+525591317108" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
-                  <Phone className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>55 9131 7108</span>
-                </a>
-                <a href="mailto:explanada@pasteleria-mallorca.mx" className="flex items-start gap-3 break-all transition-colors hover:text-[var(--mallorca-red)]">
-                  <Mail className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>explanada@pasteleria-mallorca.mx</span>
-                </a>
-                <a href="https://www.google.com.mx/maps/place/Av.+Explanada+710,+Lomas+-+Virreyes,+Lomas+de+Chapultepec+IV+Secc,+Miguel+Hidalgo,+11000+Ciudad+de+M%C3%A9xico,+CDMX/@19.4208159,-99.2133058,17z/data=!3m1!4b1!4m5!3m4!1s0x85d201f326971107:0x100907e0f999f89c!8m2!3d19.4208109!4d-99.2111171" target="_blank" rel="noreferrer" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>Av. Explanada 710, Lomas - Virreyes, Lomas de Chapultepec IV Secc, Miguel Hidalgo, 11000</span>
-                </a>
+            {(footerBranches || []).slice(0, 4).map((branch) => (
+              <div key={branch.id} className="sm:col-span-1">
+                <h2 className="mb-4 text-[15px] font-semibold">
+                  <Link href={`/sucursales/${branch.slug}`} className="hover:text-[var(--mallorca-red)] transition-colors">
+                    {branch.name}
+                  </Link>
+                </h2>
+                <div className="space-y-3 text-[12px] leading-relaxed text-white/90 sm:text-[13px]">
+                  {branch.phone && (
+                    <a href={`tel:${branch.phone}`} className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
+                      <Phone className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{branch.phone}</span>
+                    </a>
+                  )}
+                  {branch.email && (
+                    <a href={`mailto:${branch.email}`} className="flex items-start gap-3 break-all transition-colors hover:text-[var(--mallorca-red)]">
+                      <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{branch.email}</span>
+                    </a>
+                  )}
+                  <a
+                    href={branch.mapsUrl || `/sucursales/${branch.slug}`}
+                    target={branch.mapsUrl ? "_blank" : undefined}
+                    rel={branch.mapsUrl ? "noreferrer" : undefined}
+                    className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]"
+                  >
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{branch.address}</span>
+                  </a>
+                </div>
               </div>
-            </div>
-
-            <div className="sm:col-span-1">
-              <h2 className="mb-4 text-[15px] font-semibold">Mallorca Reforma</h2>
-              <div className="space-y-3 text-[12px] leading-relaxed text-white/90 sm:text-[13px]">
-                <a href="tel:+525512685557" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
-                  <Phone className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>55 1268 5557</span>
-                </a>
-                <a href="mailto:reforma@pasteleria-mallorca.mx" className="flex items-start gap-3 break-all transition-colors hover:text-[var(--mallorca-red)]">
-                  <Mail className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>reforma@pasteleria-mallorca.mx</span>
-                </a>
-                <a href="https://www.google.com.mx/maps/search/Av.+Paseo+de+la+Reforma+365,+Cuauht%C3%A9moc,+06500,+Ciudad+de+M%C3%A9xico" target="_blank" rel="noreferrer" className="flex items-start gap-3 transition-colors hover:text-[var(--mallorca-red)]">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>Av. Paseo de la Reforma 365, Cuauhtémoc, 06500</span>
-                </a>
-              </div>
-            </div>
+            ))}
           </div>
 
           <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/45 pt-3 text-[10px] text-white/55 md:mt-9">

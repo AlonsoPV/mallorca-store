@@ -28,7 +28,8 @@ export default function Store() {
   }, [search]);
 
   const { data: categories } = useListCategories();
-  const { data: branches } = useListBranches();
+  const { data: branchesData } = useListBranches();
+  const branches = Array.isArray(branchesData) ? branchesData : undefined;
   const selectedBranch = branches?.find((branch) => branch.id === branchId);
   const { data: products, isLoading: isLoadingProducts } = useListProducts({
     branchSlug: selectedBranch?.slug,

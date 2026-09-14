@@ -19,6 +19,12 @@ export interface ProductUpdate {
   /** @nullable */
   salePrice?: number | null;
   categoryId?: number;
+  /** @minItems 1 */
+  categoryIds?: number[];
+  primaryCategoryId?: number;
+  tags?: string[];
+  /** @maxItems 6 */
+  crossSellProductIds?: number[];
   /** @nullable */
   imageUrl?: string | null;
   gallery?: string[];

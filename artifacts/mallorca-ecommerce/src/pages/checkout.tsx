@@ -10,7 +10,7 @@ import {
   getGetCartQueryKey,
   getListFulfillmentSlotsQueryKey
 } from "@workspace/api-client-react";
-import { useUser } from "@clerk/react";
+import { useAppUser } from "@/lib/app-auth";
 import { Link, useLocation, Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ export default function CheckoutPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   
-  const { user, isSignedIn } = useUser();
+  const { user, isSignedIn } = useAppUser();
   
   useEffect(() => {
     if (isSignedIn && user) {

@@ -1,0 +1,94 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  canApplyManualDiscount,
+  canOverrideAvailability,
+  canAddManualLineItem,
+  discountPercentEquivalent,
+  maxManualDiscountPercent,
+} from "./order-permissions.ts";
+import { computeDeliveryFee, validateDeliveryCoverage } from "./delivery-validation.ts";
+import { fulfillmentSchedule, isValidSlotTime } from "./fulfillment-schedule.ts";
+
+describe("order-permissions", () => {
+  it("blocks staff from 20% discount", () => {
+    assert.equal(canApplyManualDiscount("staff", 20), false);
+    assert.equal(maxManualDiscountPercent("staff"), 0);
+  });
+
+  it("allows branch_manager up to 10%", () => {
+    assert.equal(canApplyManualDiscount("branch_manager", 10), true);
+    assert.equal(canApplyManualDiscount("branch_manager", 11), false);
+  });
+
+  it("allows admin unlimited discount", () => {
+    assert.equal(canApplyManualDiscount("admin", 100), true);
+    assert.equal(maxManualDiscountPercent("admin"), null);
+  });
+
+  it("restricts override and manual lines", () => {
+    assert.equal(canOverrideAvailability("staff"), false);
+    assert.equal(canOverrideAvailability("branch_manager"), true);
+    assert.equal(canAddManualLineItem("staff"), false);
+    assert.equal(canAddManualLineItem("operations"), true);
+  });
+
+  it("computes percent equivalent from amount", () => {
+    assert.equal(discountPercentEquivalent({ type: "amount", value: 100, subtotal: 1000 }), 10);
+  });
+});
+
+describe("delivery-validation", () => {
+  const branch = {
+    id: 1,
+    latitude: 19.43,
+    longitude: -99.13,
+    deliveryAvailable: true,
+    deliveryRadiusKm: 5,
+    deliveryFee: 80,
+    freeDeliveryFrom: 1000,
+    minimumOrder: 200,
+  };
+
+  it("rejects outside radius", () => {
+    const result = validateDeliveryCoverage({
+      branch,
+      latitude: 20,
+      longitude: -100,
+      subtotal: 500,
+    });
+    assert.equal(result.eligible, false);
+  });
+
+  it("applies freeDeliveryFrom", () => {
+    assert.equal(computeDeliveryFee({ branch, method: "delivery", subtotal: 1200 }), 0);
+    assert.equal(computeDeliveryFee({ branch, method: "delivery", subtotal: 500 }), 80);
+    assert.equal(computeDeliveryFee({ branch, method: "pickup", subtotal: 1200 }), 0);
+  });
+});
+
+describe("fulfillment-schedule", () => {
+  it("builds slots from branch hours", () => {
+    const branch = {
+      hours: [
+        { day: "monday", label: "Monday", open: "09:00", close: "18:00", closed: false },
+      ],
+      pickupSlotIntervalMinutes: 30,
+      preparationTimeMinutes: 60,
+      deliveryTimeMinutes: 30,
+      pickupSlotCapacity: 5,
+    } as any;
+    const date = "2026-09-14";
+    const schedule = fulfillmentSchedule(
+      branch,
+      date,
+      "pickup",
+      0,
+      Date.parse("2026-09-14T10:00:00-06:00"),
+    );
+    assert.ok(schedule);
+    assert.equal(schedule!.capacity, 5);
+    const slot = new Date(schedule!.first);
+    assert.equal(isValidSlotTime(schedule!, slot), true);
+  });
+});

@@ -15,6 +15,7 @@ import {
   branchesTable,
   categoriesTable,
   db,
+  productCategoriesTable,
   productsTable,
   productVariantsTable,
   promotionBranchesTable,
@@ -28,15 +29,22 @@ import {
   selectPromotionForBranch,
   type PromotionCandidate,
 } from "./catalog-promotions.ts";
+import { loadProductCategorySummaries, loadProductCrossSellIds } from "./product-aggregate";
 
 export function serializeBranch(branch: Branch) {
+  const status = (branch as Branch & { status?: string }).status;
+  const active = branch.active ?? status === "active";
   return {
     id: branch.id,
     name: branch.name,
     slug: branch.slug,
     shortName: branch.shortName,
+    shortDescription: (branch as Branch & { shortDescription?: string | null }).shortDescription ?? null,
     description: branch.description,
     address: branch.address,
+    street: (branch as Branch & { street?: string | null }).street ?? null,
+    externalNumber: (branch as Branch & { externalNumber?: string | null }).externalNumber ?? null,
+    internalNumber: (branch as Branch & { internalNumber?: string | null }).internalNumber ?? null,
     neighborhood: branch.neighborhood,
     borough: branch.borough,
     city: branch.city,
@@ -45,12 +53,22 @@ export function serializeBranch(branch: Branch) {
     country: branch.country,
     latitude: branch.latitude,
     longitude: branch.longitude,
+    placeId: (branch as Branch & { placeId?: string | null }).placeId ?? null,
     phone: branch.phone,
+    secondaryPhone: (branch as Branch & { secondaryPhone?: string | null }).secondaryPhone ?? null,
     whatsapp: branch.whatsapp,
+    whatsappDefaultMessage:
+      (branch as Branch & { whatsappDefaultMessage?: string | null }).whatsappDefaultMessage ?? null,
     email: branch.email,
+    ordersEmail: (branch as Branch & { ordersEmail?: string | null }).ordersEmail ?? null,
+    reservationsEmail: (branch as Branch & { reservationsEmail?: string | null }).reservationsEmail ?? null,
     mapsUrl: branch.mapsUrl,
     openTableUrl: branch.openTableUrl,
     instagramUrl: branch.instagramUrl,
+    reservationProvider:
+      (branch as Branch & { reservationProvider?: string }).reservationProvider ?? "none",
+    reservationUrl: (branch as Branch & { reservationUrl?: string | null }).reservationUrl ?? null,
+    reservationCta: (branch as Branch & { reservationCta?: string | null }).reservationCta ?? "Reservar mesa",
     imageUrl: branch.imageUrl,
     gallery: branch.gallery,
     hours: branch.hours,
@@ -58,9 +76,15 @@ export function serializeBranch(branch: Branch) {
     deliveryAvailable: branch.deliveryAvailable,
     deliveryRadiusKm: branch.deliveryRadiusKm,
     minimumOrder: branch.minimumOrder,
+    freeDeliveryFrom: (branch as Branch & { freeDeliveryFrom?: number | null }).freeDeliveryFrom ?? null,
     preparationTimeMinutes: branch.preparationTimeMinutes,
     deliveryTimeMinutes: branch.deliveryTimeMinutes,
-    active: branch.active,
+    featured: (branch as Branch & { featured?: boolean }).featured ?? false,
+    seoTitle: (branch as Branch & { seoTitle?: string | null }).seoTitle ?? null,
+    metaDescription: (branch as Branch & { metaDescription?: string | null }).metaDescription ?? null,
+    ogImageUrl: (branch as Branch & { ogImageUrl?: string | null }).ogImageUrl ?? null,
+    status: status ?? (active ? "active" : "inactive"),
+    active,
   };
 }
 
@@ -173,7 +197,24 @@ export async function listProductCards(filters: ProductFilters = {}) {
   }
 
   if (filters.categorySlug) {
-    conditions.push(eq(categoriesTable.slug, filters.categorySlug));
+    const matching = await db
+      .select({ productId: productCategoriesTable.productId })
+      .from(productCategoriesTable)
+      .innerJoin(categoriesTable, eq(categoriesTable.id, productCategoriesTable.categoryId))
+      .where(eq(categoriesTable.slug, filters.categorySlug));
+    const legacy = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .innerJoin(categoriesTable, eq(productsTable.categoryId, categoriesTable.id))
+      .where(eq(categoriesTable.slug, filters.categorySlug));
+    const ids = [
+      ...new Set([
+        ...matching.map((row) => row.productId),
+        ...legacy.map((row) => row.id),
+      ]),
+    ];
+    if (!ids.length) return [];
+    conditions.push(inArray(productsTable.id, ids));
   }
 
   if (filters.search) {
@@ -207,6 +248,7 @@ export async function listProductCards(filters: ProductFilters = {}) {
   if (!productRows.length) return [];
 
   const productIds = productRows.map(({ product }) => product.id);
+  const categoriesByProduct = await loadProductCategorySummaries(productIds);
   const promotionsByProduct = await activePromotionCandidates(productIds);
   const availabilityRows = await db
     .select({
@@ -262,6 +304,10 @@ export async function listProductCards(filters: ProductFilters = {}) {
           branchName,
           available: branchProduct.available && scheduleReady,
           inventory: branchProduct.inventory,
+          minStock: branchProduct.minStock,
+          criticalStock: branchProduct.criticalStock ?? null,
+          autoAlertEnabled: branchProduct.autoAlertEnabled !== false,
+          alertState: branchProduct.alertState,
            price: basePrice,
            salePrice: promotionView?.finalPrice ?? legacySalePrice,
            promotion: promotionView,
@@ -281,6 +327,25 @@ export async function listProductCards(filters: ProductFilters = {}) {
         salePrice: product.salePrice,
         categoryName,
         categorySlug,
+        categories: (() => {
+          const cats = categoriesByProduct.get(product.id) ?? [];
+          if (cats.length) {
+            return cats.map((c) => ({
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              isPrimary: c.isPrimary,
+            }));
+          }
+          return [
+            {
+              id: product.categoryId,
+              name: categoryName,
+              slug: categorySlug,
+              isPrimary: true,
+            },
+          ];
+        })(),
         imageUrl: product.imageUrl,
         featured: product.featured,
         seasonal: product.seasonal,
@@ -355,6 +420,8 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
     : card.availability.find((item) => item.branchId === branchId);
   const inheritedSalePrice = branchAvailability?.salePrice ?? row.product.salePrice;
 
+  const crossSellProductIds = await loadProductCrossSellIds(row.product.id);
+
   return {
     ...card,
     description: row.product.description,
@@ -366,6 +433,7 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
     weight: row.product.weight,
     portions: row.product.portions,
     minimumLeadTimeHours: row.product.minimumLeadTimeHours,
+    crossSellProductIds,
     variants: variants.map((variant) => ({
       id: variant.id,
       name: variant.name,

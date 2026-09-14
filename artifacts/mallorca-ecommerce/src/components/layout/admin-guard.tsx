@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { useAuth } from "@clerk/react";
+import { useAppAuth } from "@/lib/app-auth";
 import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Redirect, Link, useLocation } from "wouter";
 import { StoreLayout } from "./store-layout";
@@ -7,7 +7,7 @@ import { Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function AdminGuard({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAppAuth();
   const [location] = useLocation();
   
   const { data: user, isLoading: isUserLoading, isError } = useGetMe({

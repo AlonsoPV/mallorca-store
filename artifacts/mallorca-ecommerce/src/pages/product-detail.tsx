@@ -1,6 +1,13 @@
 import { StoreLayout } from "@/components/layout/store-layout";
 import { ImageWithFallback } from "@/components/image-with-fallback";
-import { useGetProduct, useAddCartItem, useCreateCartSession, getGetCartQueryKey, getGetProductQueryKey } from "@workspace/api-client-react";
+import {
+  useGetProduct,
+  useAddCartItem,
+  useCreateCartSession,
+  useListProducts,
+  getGetCartQueryKey,
+  getGetProductQueryKey,
+} from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus, Minus, Info, AlertCircle, ShoppingBag } from "lucide-react";
@@ -9,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { ProductCard } from "@/components/product-card";
 
 const PRODUCT_PRICE_REFRESH_INTERVAL_MS = 30_000;
 
@@ -64,6 +72,28 @@ export default function ProductDetail() {
     if (!product || !branchId) return null;
     return product.availability.find(a => a.branchId === branchId);
   }, [product, branchId]);
+
+  const crossSellIds = (product as any)?.crossSellProductIds as number[] | undefined;
+  const { data: catalogProducts } = useListProducts(undefined, {
+    query: {
+      enabled: Boolean(crossSellIds?.length),
+      queryKey: ["/api/products", "cross-sell"],
+    },
+  });
+  const crossSellProducts = useMemo(() => {
+    if (!catalogProducts?.length || !crossSellIds?.length || !product) return [];
+    return crossSellIds
+      .map((id) => catalogProducts.find((item) => item.id === id))
+      .filter((item): item is NonNullable<typeof item> => {
+        if (!item || item.id === product.id) return false;
+        if (!branchId) return true;
+        return item.availability.some(
+          (avail) =>
+            avail.branchId === branchId && avail.available && avail.inventory > 0,
+        );
+      })
+      .slice(0, 6);
+  }, [branchId, catalogProducts, crossSellIds, product]);
 
   if (isLoading) {
     return (
@@ -389,6 +419,20 @@ export default function ProductDetail() {
 
           </div>
         </div>
+
+        {crossSellProducts.length > 0 && (
+          <section className="mt-16 border-t border-border pt-12">
+            <h2 className="mallorca-display mb-2 text-3xl md:text-4xl">Combina bien con</h2>
+            <p className="mb-8 text-sm text-muted-foreground">
+              Recomendaciones disponibles en tu sucursal.
+            </p>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {crossSellProducts.map((item) => (
+                <ProductCard key={item.id} product={item} />
+              ))}
+            </div>
+          </section>
+        )}
 
       </div>
     </StoreLayout>

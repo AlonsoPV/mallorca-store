@@ -20,7 +20,67 @@ export interface BranchHour {
   close: string;
   closed: boolean;
   date?: string;
+  slotOrder?: number;
 }
+
+export interface BranchLink {
+  id?: number;
+  type: string;
+  label: string;
+  url: string;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+export type BranchImageType = typeof BranchImageType[keyof typeof BranchImageType];
+
+
+export const BranchImageType = {
+  hero: 'hero',
+  gallery: 'gallery',
+  logo: 'logo',
+  card: 'card',
+} as const;
+
+export interface BranchImage {
+  id?: number;
+  url: string;
+  type: BranchImageType;
+  /** @nullable */
+  alt?: string | null;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+export interface BranchSpecialHour {
+  id?: number;
+  date: string;
+  /** @nullable */
+  openTime?: string | null;
+  /** @nullable */
+  closeTime?: string | null;
+  closed: boolean;
+  /** @nullable */
+  label?: string | null;
+}
+
+export type BranchReservationProvider = typeof BranchReservationProvider[keyof typeof BranchReservationProvider];
+
+
+export const BranchReservationProvider = {
+  opentable: 'opentable',
+  external: 'external',
+  none: 'none',
+} as const;
+
+export type BranchStatus = typeof BranchStatus[keyof typeof BranchStatus];
+
+
+export const BranchStatus = {
+  active: 'active',
+  inactive: 'inactive',
+  archived: 'archived',
+} as const;
 
 export interface Branch {
   id: number;
@@ -28,8 +88,16 @@ export interface Branch {
   slug: string;
   shortName: string;
   /** @nullable */
+  shortDescription?: string | null;
+  /** @nullable */
   description: string | null;
   address: string;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  externalNumber?: string | null;
+  /** @nullable */
+  internalNumber?: string | null;
   neighborhood: string;
   /** @nullable */
   borough: string | null;
@@ -41,15 +109,30 @@ export interface Branch {
   latitude: number | null;
   /** @nullable */
   longitude: number | null;
+  /** @nullable */
+  placeId?: string | null;
   phone: string;
   /** @nullable */
+  secondaryPhone?: string | null;
+  /** @nullable */
   whatsapp: string | null;
+  /** @nullable */
+  whatsappDefaultMessage?: string | null;
   email: string;
+  /** @nullable */
+  ordersEmail?: string | null;
+  /** @nullable */
+  reservationsEmail?: string | null;
   mapsUrl: string;
   /** @nullable */
   openTableUrl: string | null;
   /** @nullable */
   instagramUrl: string | null;
+  reservationProvider?: BranchReservationProvider;
+  /** @nullable */
+  reservationUrl?: string | null;
+  /** @nullable */
+  reservationCta?: string | null;
   /** @nullable */
   imageUrl: string | null;
   gallery: string[];
@@ -60,8 +143,18 @@ export interface Branch {
   deliveryRadiusKm: number | null;
   /** @nullable */
   minimumOrder: number | null;
+  /** @nullable */
+  freeDeliveryFrom?: number | null;
   preparationTimeMinutes: number;
   deliveryTimeMinutes: number;
+  featured?: boolean;
+  /** @nullable */
+  seoTitle?: string | null;
+  /** @nullable */
+  metaDescription?: string | null;
+  /** @nullable */
+  ogImageUrl?: string | null;
+  status?: BranchStatus;
   active: boolean;
 }
 
@@ -107,6 +200,11 @@ export interface BranchAvailability {
   branchName: string;
   available: boolean;
   inventory: number;
+  minStock?: number;
+  /** @nullable */
+  criticalStock?: number | null;
+  autoAlertEnabled?: boolean;
+  alertState?: string;
   price: number;
   /** @nullable */
   salePrice: number | null;
@@ -115,6 +213,13 @@ export interface BranchAvailability {
   deliveryAvailable: boolean;
   promotion: Promotion | null;
 }
+
+export type ProductCardCategoriesItem = {
+  id: number;
+  name: string;
+  slug: string;
+  isPrimary: boolean;
+};
 
 export interface ProductCard {
   id: number;
@@ -127,11 +232,12 @@ export interface ProductCard {
   salePrice: number | null;
   categoryName: string;
   categorySlug: string;
+  categories?: ProductCardCategoriesItem[];
   /** @nullable */
   imageUrl: string | null;
   featured: boolean;
-  seasonal?: boolean;
-  minimumLeadTimeHours?: number;
+  seasonal: boolean;
+  minimumLeadTimeHours: number;
   availability: BranchAvailability[];
 }
 
@@ -206,40 +312,10 @@ export type ProductDetail = ProductCard & ({
   /** @nullable */
   portions: string | null;
   minimumLeadTimeHours: number;
+  /** @maxItems 6 */
+  crossSellProductIds?: number[];
   variants: ProductVariant[];
-}) & Required<Pick<ProductCard & ({
-  description: string;
-  tags: string[];
-  gallery: string[];
-  /** @nullable */
-  ingredients: string | null;
-  /** @nullable */
-  allergens: string | null;
-  /** @nullable */
-  conservation: string | null;
-  /** @nullable */
-  weight: string | null;
-  /** @nullable */
-  portions: string | null;
-  minimumLeadTimeHours: number;
-  variants: ProductVariant[];
-}), Extract<keyof (ProductCard & ({
-  description: string;
-  tags: string[];
-  gallery: string[];
-  /** @nullable */
-  ingredients: string | null;
-  /** @nullable */
-  allergens: string | null;
-  /** @nullable */
-  conservation: string | null;
-  /** @nullable */
-  weight: string | null;
-  /** @nullable */
-  portions: string | null;
-  minimumLeadTimeHours: number;
-  variants: ProductVariant[];
-})), 'seasonal - minimumLeadTimeHours'>>>;
+});
 
 export type ProductInputStatus = typeof ProductInputStatus[keyof typeof ProductInputStatus];
 
@@ -257,6 +333,12 @@ export interface BranchConfiguration {
   inventory?: number;
   /** @minimum 0 */
   minStock?: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  criticalStock?: number | null;
+  autoAlertEnabled?: boolean;
   /** @nullable */
   priceOverride?: number | null;
   /** @nullable */
@@ -280,7 +362,14 @@ export interface ProductInput {
   price: number;
   /** @nullable */
   salePrice: number | null;
+  /** Primary category (legacy). Prefer categoryIds + primaryCategoryId. */
   categoryId: number;
+  /** @minItems 1 */
+  categoryIds?: number[];
+  primaryCategoryId?: number;
+  tags?: string[];
+  /** @maxItems 6 */
+  crossSellProductIds?: number[];
   /** @nullable */
   imageUrl: string | null;
   gallery?: string[];
@@ -312,6 +401,12 @@ export interface ProductUpdate {
   /** @nullable */
   salePrice?: number | null;
   categoryId?: number;
+  /** @minItems 1 */
+  categoryIds?: number[];
+  primaryCategoryId?: number;
+  tags?: string[];
+  /** @maxItems 6 */
+  crossSellProductIds?: number[];
   /** @nullable */
   imageUrl?: string | null;
   gallery?: string[];
@@ -345,22 +440,112 @@ export interface StorageUploadResponse {
   metadata: StorageUploadResponseMetadata;
 }
 
-export type BranchUpdateNotificationPreferences = {[key: string]: boolean};
+export interface BranchNotificationPreferences {
+  email?: boolean;
+  inApp?: boolean;
+  /** Queues whatsapp_pending; outbound send not implemented */
+  whatsapp?: boolean;
+  lowStock?: boolean;
+  criticalStock?: boolean;
+  outOfStock?: boolean;
+  newOrder?: boolean;
+  cancelledOrder?: boolean;
+  incident?: boolean;
+}
+
+export type BranchUpdateReservationProvider = typeof BranchUpdateReservationProvider[keyof typeof BranchUpdateReservationProvider];
+
+
+export const BranchUpdateReservationProvider = {
+  opentable: 'opentable',
+  external: 'external',
+  none: 'none',
+} as const;
+
+export type BranchUpdateStatus = typeof BranchUpdateStatus[keyof typeof BranchUpdateStatus];
+
+
+export const BranchUpdateStatus = {
+  active: 'active',
+  inactive: 'inactive',
+  archived: 'archived',
+} as const;
 
 export interface BranchUpdate {
   name?: string;
+  shortName?: string;
+  /** @nullable */
+  shortDescription?: string | null;
+  /** @nullable */
+  description?: string | null;
+  slug?: string;
   branchCode?: string;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  externalNumber?: string | null;
+  /** @nullable */
+  internalNumber?: string | null;
+  neighborhood?: string;
+  /** @nullable */
+  borough?: string | null;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  address?: string;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
+  placeId?: string | null;
+  phone?: string;
+  /** @nullable */
+  secondaryPhone?: string | null;
+  /** @nullable */
+  whatsapp?: string | null;
+  /** @nullable */
+  whatsappDefaultMessage?: string | null;
+  email?: string;
+  /** @nullable */
+  ordersEmail?: string | null;
+  /** @nullable */
+  reservationsEmail?: string | null;
+  /** @nullable */
+  adminEmail?: string | null;
   /** @nullable */
   managerName?: string | null;
   /** @nullable */
   managerEmail?: string | null;
   /** @nullable */
   managerPhone?: string | null;
-  notificationPreferences?: BranchUpdateNotificationPreferences;
-  active?: boolean;
+  notificationPreferences?: BranchNotificationPreferences;
+  mapsUrl?: string;
+  /** @nullable */
+  openTableUrl?: string | null;
+  /** @nullable */
+  instagramUrl?: string | null;
+  reservationProvider?: BranchUpdateReservationProvider;
+  /** @nullable */
+  reservationUrl?: string | null;
+  /** @nullable */
+  reservationCta?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  gallery?: string[];
   hours?: BranchHour[];
+  specialHours?: BranchSpecialHour[];
+  links?: BranchLink[];
+  images?: BranchImage[];
   pickupAvailable?: boolean;
   deliveryAvailable?: boolean;
+  /** @nullable */
+  deliveryRadiusKm?: number | null;
+  /** @nullable */
+  minimumOrder?: number | null;
+  /** @nullable */
+  freeDeliveryFrom?: number | null;
   /** @minimum 0 */
   preparationTimeMinutes?: number;
   /** @minimum 0 */
@@ -369,17 +554,72 @@ export interface BranchUpdate {
   pickupSlotIntervalMinutes?: number;
   /** @minimum 1 */
   pickupSlotCapacity?: number;
+  deliveryFee?: number;
+  featured?: boolean;
+  /** @nullable */
+  seoTitle?: string | null;
+  /** @nullable */
+  metaDescription?: string | null;
+  /** @nullable */
+  ogImageUrl?: string | null;
+  status?: BranchUpdateStatus;
+  active?: boolean;
 }
 
-export type AdminBranch = Branch & BranchUpdate;
+export type BranchCreate = BranchUpdate & { [key: string]: unknown } & Required<Pick<BranchUpdate & { [key: string]: unknown }, 'name' | 'branchCode' | 'phone' | 'email'>>;
+
+export interface BranchDuplicateInput {
+  name: string;
+  shortName?: string;
+  branchCode: string;
+  slug?: string;
+  copyHours?: boolean;
+  copyPickupDelivery?: boolean;
+  copyNotifications?: boolean;
+  copyProductAssignments?: boolean;
+  copyTeamStructure?: boolean;
+}
+
+/**
+ * @nullable
+ */
+export type AdminBranchPrimaryResponsible = { [key: string]: unknown } | null;
+
+export type AdminBranch = Branch & BranchUpdate & ({
+  /** @nullable */
+  whatsappUrl?: string | null;
+  ordersToday?: number;
+  alertsOpen?: number;
+  /** @nullable */
+  primaryResponsible?: AdminBranchPrimaryResponsible;
+  links?: BranchLink[];
+  images?: BranchImage[];
+  specialHours?: BranchSpecialHour[];
+});
 
 export type InventoryRowBranchProduct = { [key: string]: unknown };
+
+export type InventoryRowInventoryStatus = typeof InventoryRowInventoryStatus[keyof typeof InventoryRowInventoryStatus];
+
+
+export const InventoryRowInventoryStatus = {
+  NORMAL: 'NORMAL',
+  LOW_STOCK: 'LOW_STOCK',
+  CRITICAL_STOCK: 'CRITICAL_STOCK',
+  OUT_OF_STOCK: 'OUT_OF_STOCK',
+} as const;
 
 export interface InventoryRow {
   branchProduct: InventoryRowBranchProduct;
   branch: Branch;
   product: ProductCard;
   reservedStock: number;
+  availableStock?: number;
+  /** @nullable */
+  criticalStock?: number | null;
+  autoAlertEnabled?: boolean;
+  openAlertCount?: number;
+  inventoryStatus?: InventoryRowInventoryStatus;
 }
 
 export type InventoryAlertRowAlert = { [key: string]: unknown };
@@ -388,6 +628,69 @@ export interface InventoryAlertRow {
   alert: InventoryAlertRowAlert;
   branch: Branch;
   product: ProductCard;
+}
+
+export type CreateInventoryAlertInputType = typeof CreateInventoryAlertInputType[keyof typeof CreateInventoryAlertInputType];
+
+
+export const CreateInventoryAlertInputType = {
+  INVENTORY_REVIEW: 'INVENTORY_REVIEW',
+  RESTOCK_REQUEST: 'RESTOCK_REQUEST',
+  INVENTORY_MISMATCH: 'INVENTORY_MISMATCH',
+  CUSTOM: 'CUSTOM',
+  LOW_STOCK: 'LOW_STOCK',
+  CRITICAL_STOCK: 'CRITICAL_STOCK',
+  OUT_OF_STOCK: 'OUT_OF_STOCK',
+} as const;
+
+export type CreateInventoryAlertInputPriority = typeof CreateInventoryAlertInputPriority[keyof typeof CreateInventoryAlertInputPriority];
+
+
+export const CreateInventoryAlertInputPriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL',
+} as const;
+
+export interface CreateInventoryAlertInput {
+  productId?: number;
+  productIds?: number[];
+  branchId: number;
+  type: CreateInventoryAlertInputType;
+  priority?: CreateInventoryAlertInputPriority;
+  message: string;
+  /** @nullable */
+  assignedUserId?: string | null;
+}
+
+export type UpdateInventoryAlertInputStatus = typeof UpdateInventoryAlertInputStatus[keyof typeof UpdateInventoryAlertInputStatus];
+
+
+export const UpdateInventoryAlertInputStatus = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+  DISMISSED: 'DISMISSED',
+} as const;
+
+export type UpdateInventoryAlertInputPriority = typeof UpdateInventoryAlertInputPriority[keyof typeof UpdateInventoryAlertInputPriority];
+
+
+export const UpdateInventoryAlertInputPriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL',
+} as const;
+
+export interface UpdateInventoryAlertInput {
+  status?: UpdateInventoryAlertInputStatus;
+  priority?: UpdateInventoryAlertInputPriority;
+  /** @nullable */
+  assignedUserId?: string | null;
+  /** @nullable */
+  resolutionNote?: string | null;
 }
 
 export interface InventoryUpdate {
@@ -401,8 +704,168 @@ export interface InventoryUpdate {
   reference?: string;
 }
 
+export type ProductImportInputMapping = {[key: string]: string};
+
+/**
+ * How to apply categories, tags and cross-sell when updating
+ */
+export type ProductImportInputRelationMode = typeof ProductImportInputRelationMode[keyof typeof ProductImportInputRelationMode];
+
+
+export const ProductImportInputRelationMode = {
+  add: 'add',
+  replace: 'replace',
+} as const;
+
+export interface ProductImportInput {
+  csv: string;
+  mapping?: ProductImportInputMapping;
+  /** When false, existing SKUs are skipped (reported as errors) instead of updated */
+  updateExisting?: boolean;
+  /** When updating existing products, only these product-level fields/groups are applied */
+  updateFields?: string[];
+  /** How to apply categories, tags and cross-sell when updating */
+  relationMode?: ProductImportInputRelationMode;
+  /** Optional key to avoid double-processing the same import job */
+  idempotencyKey?: string;
+  filename?: string;
+}
+
+export type ProductExportInputStatus = typeof ProductExportInputStatus[keyof typeof ProductExportInputStatus];
+
+
+export const ProductExportInputStatus = {
+  draft: 'draft',
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export type ProductExportInputFormat = typeof ProductExportInputFormat[keyof typeof ProductExportInputFormat];
+
+
+export const ProductExportInputFormat = {
+  csv: 'csv',
+  xlsx: 'xlsx',
+} as const;
+
+export interface ProductExportInput {
+  search?: string;
+  status?: ProductExportInputStatus;
+  ids?: number[];
+  format?: ProductExportInputFormat;
+  reimportable?: boolean;
+  columns?: string[];
+}
+
+export interface ProductExportResult {
+  filename: string;
+  contentType: string;
+  /** CSV text (also used as payload for xlsx client packaging) */
+  content: string;
+}
+
+export type ProductBulkInputAction = typeof ProductBulkInputAction[keyof typeof ProductBulkInputAction];
+
+
+export const ProductBulkInputAction = {
+  set_status: 'set_status',
+  set_category: 'set_category',
+  add_categories: 'add_categories',
+  remove_categories: 'remove_categories',
+  replace_categories: 'replace_categories',
+  add_tags: 'add_tags',
+  remove_tags: 'remove_tags',
+  replace_tags: 'replace_tags',
+  assign_branch: 'assign_branch',
+  unassign_branch: 'unassign_branch',
+  set_min_stock: 'set_min_stock',
+  set_price: 'set_price',
+  set_featured: 'set_featured',
+  archive: 'archive',
+  create_promotion: 'create_promotion',
+  cancel_promotions: 'cancel_promotions',
+  add_cross_sell: 'add_cross_sell',
+  replace_cross_sell: 'replace_cross_sell',
+} as const;
+
+export type ProductBulkInputStatus = typeof ProductBulkInputStatus[keyof typeof ProductBulkInputStatus];
+
+
+export const ProductBulkInputStatus = {
+  draft: 'draft',
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export interface ProductBulkInput {
+  /** @minItems 1 */
+  ids: number[];
+  action: ProductBulkInputAction;
+  status?: ProductBulkInputStatus;
+  categoryId?: number;
+  categoryIds?: number[];
+  tagNames?: string[];
+  branchId?: number;
+  /** @minimum 0 */
+  minStock?: number;
+  price?: number;
+  featured?: boolean;
+  /** @maxItems 6 */
+  crossSellProductIds?: number[];
+  promotion?: PromotionInput;
+}
+
+export type ProductBulkResultErrorsItem = {
+  id: number;
+  message: string;
+};
+
+export interface ProductBulkResult {
+  updated: number;
+  errors: ProductBulkResultErrorsItem[];
+}
+
+export type ImportJobType = typeof ImportJobType[keyof typeof ImportJobType];
+
+
+export const ImportJobType = {
+  product: 'product',
+  inventory: 'inventory',
+} as const;
+
+export type ImportJobStatus = typeof ImportJobStatus[keyof typeof ImportJobStatus];
+
+
+export const ImportJobStatus = {
+  pending: 'pending',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type ImportJobErrorLogItem = { [key: string]: unknown };
+
+export interface ImportJob {
+  id: string;
+  type: ImportJobType;
+  /** @nullable */
+  filename: string | null;
+  status: ImportJobStatus;
+  createdCount: number;
+  updatedCount: number;
+  errorCount: number;
+  errorLog: ImportJobErrorLogItem[];
+  createdAt: string;
+  /** @nullable */
+  completedAt: string | null;
+  /** @nullable */
+  userId: string | null;
+}
+
 export interface CsvImportInput {
   csv: string;
+  idempotencyKey?: string;
+  filename?: string;
 }
 
 export type ImportPreviewRowsItem = { [key: string]: unknown };
@@ -420,13 +883,7 @@ export type ImportResultErrorsItem = { [key: string]: unknown };
 export interface ImportResult {
   imported: number;
   errors: ImportResultErrorsItem[];
-}
-
-export type ProductImportInputMapping = {[key: string]: string};
-
-export interface ProductImportInput {
-  csv: string;
-  mapping?: ProductImportInputMapping;
+  jobId?: string;
 }
 
 export type ProductImportRowAction = typeof ProductImportRowAction[keyof typeof ProductImportRowAction];
@@ -461,6 +918,7 @@ export interface ProductImportResult {
   created: number;
   updated: number;
   errors: ProductImportError[];
+  jobId?: string;
 }
 
 export type AdminProductStatus = typeof AdminProductStatus[keyof typeof AdminProductStatus];
@@ -475,13 +933,7 @@ export const AdminProductStatus = {
 export type AdminProduct = ProductCard & {
   status: AdminProductStatus;
   updatedAt: string;
-} & Required<Pick<ProductCard & {
-  status: AdminProductStatus;
-  updatedAt: string;
-}, Extract<keyof (ProductCard & {
-  status: AdminProductStatus;
-  updatedAt: string;
-}), 'seasonal - minimumLeadTimeHours'>>>;
+};
 
 export interface BranchSummary {
   branchId: number;
@@ -495,6 +947,13 @@ export interface AdminSummary {
   activeProducts: number;
   totalBranches: number;
   lowStockProducts: number;
+  criticalStockProducts?: number;
+  outOfStockProducts: number;
+  ordersToday: number;
+  ordersPending: number;
+  ordersNextHour: number;
+  alertsCount: number;
+  salesToday: number;
   branchSummaries: BranchSummary[];
 }
 
@@ -529,6 +988,442 @@ export interface CartLineItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+}
+
+export interface OrderLineItem {
+  id: number;
+  /** @nullable */
+  productId: number | null;
+  /** @nullable */
+  variantId: number | null;
+  sku: string;
+  name: string;
+  /** @nullable */
+  variantLabel: string | null;
+  quantity: number;
+  /** @nullable */
+  listUnitPrice?: number | null;
+  unitPrice: number;
+  lineTotal: number;
+  /** @nullable */
+  promotionId?: number | null;
+  manualLineItem?: boolean;
+}
+
+export type OrderSource = typeof OrderSource[keyof typeof OrderSource];
+
+
+export const OrderSource = {
+  STOREFRONT: 'STOREFRONT',
+  PHONE: 'PHONE',
+  WHATSAPP: 'WHATSAPP',
+  POS: 'POS',
+  CORPORATE: 'CORPORATE',
+  ADMIN: 'ADMIN',
+  OTHER: 'OTHER',
+} as const;
+
+export type PaymentMethod = typeof PaymentMethod[keyof typeof PaymentMethod];
+
+
+export const PaymentMethod = {
+  ONLINE: 'ONLINE',
+  CASH: 'CASH',
+  TERMINAL: 'TERMINAL',
+  TRANSFER: 'TRANSFER',
+  PAYMENT_LINK: 'PAYMENT_LINK',
+  PENDING: 'PENDING',
+  COURTESY: 'COURTESY',
+} as const;
+
+export interface AdminOrderLineInput {
+  /** @nullable */
+  productId?: number | null;
+  /** @nullable */
+  variantId?: number | null;
+  /** @minimum 1 */
+  quantity: number;
+  manualLineItem?: boolean;
+  description?: string;
+  unitPrice?: number;
+}
+
+export type AdminOrderManualDiscountType = typeof AdminOrderManualDiscountType[keyof typeof AdminOrderManualDiscountType];
+
+
+export const AdminOrderManualDiscountType = {
+  percent: 'percent',
+  amount: 'amount',
+} as const;
+
+export interface AdminOrderManualDiscount {
+  type: AdminOrderManualDiscountType;
+  /** @minimum 0 */
+  value: number;
+  /** @minLength 1 */
+  reason: string;
+}
+
+export interface AdminOrderOverrides {
+  stock?: boolean;
+  slot?: boolean;
+  delivery?: boolean;
+  /** @minLength 1 */
+  reason: string;
+}
+
+export type AdminOrderInputFulfillmentMethod = typeof AdminOrderInputFulfillmentMethod[keyof typeof AdminOrderInputFulfillmentMethod];
+
+
+export const AdminOrderInputFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface AdminOrderInput {
+  orderSource: OrderSource;
+  branchId: number;
+  /** @nullable */
+  userId?: string | null;
+  fulfillmentMethod: AdminOrderInputFulfillmentMethod;
+  scheduledStart: string;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  /** @nullable */
+  deliveryAddress?: string | null;
+  /** @nullable */
+  deliveryLatitude?: number | null;
+  /** @nullable */
+  deliveryLongitude?: number | null;
+  /** @nullable */
+  customerNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  /** @minItems 1 */
+  lines: AdminOrderLineInput[];
+  manualDiscount?: AdminOrderManualDiscount;
+  /** @nullable */
+  couponCode?: string | null;
+  paymentMethod?: PaymentMethod;
+  markPaid?: boolean;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paymentNote?: string | null;
+  /** @nullable */
+  amountPaid?: number | null;
+  overrides?: AdminOrderOverrides;
+}
+
+export interface AdminOrderPreviewLine {
+  /** @nullable */
+  productId?: number | null;
+  /** @nullable */
+  variantId?: number | null;
+  sku: string;
+  name: string;
+  /** @nullable */
+  variantLabel?: string | null;
+  quantity: number;
+  listUnitPrice: number;
+  unitPrice: number;
+  lineTotal: number;
+  promotionDiscount: number;
+  manualLineItem: boolean;
+  available: boolean;
+  /** @nullable */
+  inventory?: number | null;
+  /** @nullable */
+  reason?: string | null;
+}
+
+export interface AdminOrderPreview {
+  lines: AdminOrderPreviewLine[];
+  subtotal: number;
+  promotionDiscountTotal: number;
+  discountAmount: number;
+  /** @nullable */
+  discountPercent?: number | null;
+  /** @nullable */
+  couponCode?: string | null;
+  couponDiscount: number;
+  deliveryFee: number;
+  total: number;
+  errors: string[];
+}
+
+export interface AdminCustomerSearchHit {
+  /** @nullable */
+  userId?: string | null;
+  name: string;
+  email: string;
+  /** @nullable */
+  phone?: string | null;
+  orderCount: number;
+  /** @nullable */
+  lastOrderAt?: string | null;
+}
+
+export interface AdminOrderPaymentInput {
+  paymentMethod: PaymentMethod;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paymentNote?: string | null;
+  /** @nullable */
+  amountPaid?: number | null;
+  markPaid?: boolean;
+}
+
+export interface PaymentLinkResponse {
+  url: string;
+  orderId: string;
+}
+
+export type AdminOrderDuplicatePrefillFulfillmentMethod = typeof AdminOrderDuplicatePrefillFulfillmentMethod[keyof typeof AdminOrderDuplicatePrefillFulfillmentMethod];
+
+
+export const AdminOrderDuplicatePrefillFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface AdminOrderDuplicatePrefill {
+  branchId: number;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  /** @nullable */
+  userId?: string | null;
+  fulfillmentMethod: AdminOrderDuplicatePrefillFulfillmentMethod;
+  /** @nullable */
+  deliveryAddress?: string | null;
+  /** @nullable */
+  deliveryLatitude?: number | null;
+  /** @nullable */
+  deliveryLongitude?: number | null;
+  /** @nullable */
+  customerNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  lines: AdminOrderLineInput[];
+}
+
+export type CouponType = typeof CouponType[keyof typeof CouponType];
+
+
+export const CouponType = {
+  percentage: 'percentage',
+  amount: 'amount',
+} as const;
+
+export interface Coupon {
+  id: number;
+  code: string;
+  name: string;
+  type: CouponType;
+  value: number;
+  active: boolean;
+  /** @nullable */
+  startsAt?: string | null;
+  /** @nullable */
+  endsAt?: string | null;
+  /** @nullable */
+  maxRedemptions?: number | null;
+  redemptionCount: number;
+  /** @nullable */
+  minSubtotal?: number | null;
+}
+
+export type CouponInputType = typeof CouponInputType[keyof typeof CouponInputType];
+
+
+export const CouponInputType = {
+  percentage: 'percentage',
+  amount: 'amount',
+} as const;
+
+export interface CouponInput {
+  code: string;
+  name: string;
+  type: CouponInputType;
+  value: number;
+  active?: boolean;
+  /** @nullable */
+  startsAt?: string | null;
+  /** @nullable */
+  endsAt?: string | null;
+  /** @nullable */
+  maxRedemptions?: number | null;
+  /** @nullable */
+  minSubtotal?: number | null;
+}
+
+export type AdminOrderUpdateStatus = typeof AdminOrderUpdateStatus[keyof typeof AdminOrderUpdateStatus];
+
+
+export const AdminOrderUpdateStatus = {
+  pending_payment: 'pending_payment',
+  paid: 'paid',
+  preparing: 'preparing',
+  ready: 'ready',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface AdminOrderUpdate {
+  status?: AdminOrderUpdateStatus;
+  /** @nullable */
+  cancelReason?: string | null;
+  customerEmail?: string;
+  customerName?: string;
+  customerPhone?: string;
+  scheduledStart?: string;
+  /** @nullable */
+  customerNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  lines?: AdminOrderLineInput[];
+}
+
+export type OrderInputFulfillmentMethod = typeof OrderInputFulfillmentMethod[keyof typeof OrderInputFulfillmentMethod];
+
+
+export const OrderInputFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface OrderInput {
+  cartId: string;
+  fulfillmentMethod: OrderInputFulfillmentMethod;
+  scheduledStart: string;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  deliveryAddress?: string | null;
+  /** @nullable */
+  deliveryLatitude?: number | null;
+  /** @nullable */
+  deliveryLongitude?: number | null;
+}
+
+export type OrderFulfillmentMethod = typeof OrderFulfillmentMethod[keyof typeof OrderFulfillmentMethod];
+
+
+export const OrderFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  guestAccessToken: string;
+  orderSource?: OrderSource;
+  status: string;
+  paymentStatus: string;
+  /** @nullable */
+  paymentMethod?: string | null;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paymentNote?: string | null;
+  /** @nullable */
+  paymentLinkUrl?: string | null;
+  amountPaid?: number;
+  fulfillmentMethod: OrderFulfillmentMethod;
+  scheduledStart: string;
+  scheduledEnd: string;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  /** @nullable */
+  deliveryAddress: string | null;
+  /** @nullable */
+  customerNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  subtotal: number;
+  promotionDiscountTotal?: number;
+  discountAmount?: number;
+  /** @nullable */
+  discountPercent?: number | null;
+  /** @nullable */
+  discountReason?: string | null;
+  /** @nullable */
+  couponCode?: string | null;
+  couponDiscount?: number;
+  deliveryFee: number;
+  total: number;
+  availabilityOverride?: boolean;
+  /** @nullable */
+  overrideReason?: string | null;
+  branchId?: number;
+  branchName?: string;
+  /** @nullable */
+  createdByUserId?: string | null;
+  items: OrderLineItem[];
+}
+
+export interface OrderSummaryItem {
+  name: string;
+  quantity: number;
+}
+
+export type OrderSummaryFulfillmentMethod = typeof OrderSummaryFulfillmentMethod[keyof typeof OrderSummaryFulfillmentMethod];
+
+
+export const OrderSummaryFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export interface OrderSummary {
+  id: string;
+  orderNumber: string;
+  status: string;
+  orderSource?: OrderSource;
+  total: number;
+  createdAt: string;
+  scheduledStart: string;
+  branchId: number;
+  branchName?: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  fulfillmentMethod: OrderSummaryFulfillmentMethod;
+  paymentStatus?: string;
+  itemCount?: number;
+  items?: OrderSummaryItem[];
+}
+
+export type PaymentStartCode = typeof PaymentStartCode[keyof typeof PaymentStartCode];
+
+
+export const PaymentStartCode = {
+  PAYMENT_PROVIDER_NOT_CONFIGURED: 'PAYMENT_PROVIDER_NOT_CONFIGURED',
+} as const;
+
+export interface PaymentStart {
+  error: string;
+  code: PaymentStartCode;
+}
+
+export interface PaymentStartInput {
+  guestAccessToken?: string;
 }
 
 export interface Cart {
@@ -619,95 +1514,6 @@ export interface FulfillmentPreview {
   unavailableItems: FulfillmentPreviewItem[];
 }
 
-export type OrderInputFulfillmentMethod = typeof OrderInputFulfillmentMethod[keyof typeof OrderInputFulfillmentMethod];
-
-
-export const OrderInputFulfillmentMethod = {
-  pickup: 'pickup',
-  delivery: 'delivery',
-} as const;
-
-export interface OrderInput {
-  cartId: string;
-  fulfillmentMethod: OrderInputFulfillmentMethod;
-  scheduledStart: string;
-  customerEmail: string;
-  customerName: string;
-  customerPhone: string;
-  /** @nullable */
-  notes?: string | null;
-  /** @nullable */
-  deliveryAddress?: string | null;
-  /** @nullable */
-  deliveryLatitude?: number | null;
-  /** @nullable */
-  deliveryLongitude?: number | null;
-}
-
-export type OrderFulfillmentMethod = typeof OrderFulfillmentMethod[keyof typeof OrderFulfillmentMethod];
-
-
-export const OrderFulfillmentMethod = {
-  pickup: 'pickup',
-  delivery: 'delivery',
-} as const;
-
-export interface Order {
-  id: string;
-  orderNumber: string;
-  guestAccessToken: string;
-  status: string;
-  paymentStatus: string;
-  fulfillmentMethod: OrderFulfillmentMethod;
-  scheduledStart: string;
-  scheduledEnd: string;
-  customerEmail: string;
-  customerName: string;
-  customerPhone: string;
-  /** @nullable */
-  deliveryAddress: string | null;
-  subtotal: number;
-  deliveryFee: number;
-  total: number;
-  items: CartLineItem[];
-}
-
-export type OrderSummaryFulfillmentMethod = typeof OrderSummaryFulfillmentMethod[keyof typeof OrderSummaryFulfillmentMethod];
-
-
-export const OrderSummaryFulfillmentMethod = {
-  pickup: 'pickup',
-  delivery: 'delivery',
-} as const;
-
-export interface OrderSummary {
-  id: string;
-  orderNumber: string;
-  status: string;
-  total: number;
-  createdAt: string;
-  branchId: number;
-  customerName: string;
-  customerEmail: string;
-  fulfillmentMethod: OrderSummaryFulfillmentMethod;
-}
-
-export type PaymentStartCode = typeof PaymentStartCode[keyof typeof PaymentStartCode];
-
-
-export const PaymentStartCode = {
-  PAYMENT_PROVIDER_NOT_CONFIGURED: 'PAYMENT_PROVIDER_NOT_CONFIGURED',
-} as const;
-
-export interface PaymentStart {
-  error: string;
-  code: PaymentStartCode;
-}
-
-export interface PaymentStartInput {
-  guestAccessToken?: string;
-}
-
 export type UserProfileRole = typeof UserProfileRole[keyof typeof UserProfileRole];
 
 
@@ -765,8 +1571,35 @@ export interface SafeUser {
   role: string;
 }
 
+export type AssignmentInputRole = typeof AssignmentInputRole[keyof typeof AssignmentInputRole];
+
+
+export const AssignmentInputRole = {
+  branch_manager: 'branch_manager',
+  staff: 'staff',
+  operations: 'operations',
+} as const;
+
 export interface AssignmentInput {
   userId: string;
+  role?: AssignmentInputRole;
+  isPrimary?: boolean;
+}
+
+export type AssignmentUpdateInputRole = typeof AssignmentUpdateInputRole[keyof typeof AssignmentUpdateInputRole];
+
+
+export const AssignmentUpdateInputRole = {
+  branch_manager: 'branch_manager',
+  staff: 'staff',
+  operations: 'operations',
+} as const;
+
+export interface AssignmentUpdateInput {
+  userId: string;
+  role?: AssignmentUpdateInputRole;
+  isPrimary?: boolean;
+  active?: boolean;
 }
 
 export interface CategoryResponsibleInput {
@@ -789,16 +1622,29 @@ export type AdminBranchDetailAlertsItem = { [key: string]: unknown };
 
 export type AdminBranchDetailNotificationSettings = { [key: string]: unknown };
 
+export type AdminBranchDetailSummary = { [key: string]: unknown };
+
+export type AdminBranchDetailTeamItem = { [key: string]: unknown };
+
+export type AdminBranchDetailAuditItem = { [key: string]: unknown };
+
 export interface AdminBranchDetail {
   branch: AdminBranch;
   general: AdminBranchDetailGeneral;
   contact: AdminBranchDetailContact;
   hours: BranchHour[];
+  specialHours?: BranchSpecialHour[];
+  links?: BranchLink[];
+  images?: BranchImage[];
   products: AdminBranchDetailProductsItem[];
   inventory: AdminBranchDetailInventoryItem[];
   orders: AdminBranchDetailOrdersItem[];
   alerts: AdminBranchDetailAlertsItem[];
   notificationSettings: AdminBranchDetailNotificationSettings;
+  summary?: AdminBranchDetailSummary;
+  team?: AdminBranchDetailTeamItem[];
+  audit?: AdminBranchDetailAuditItem[];
+  futureOrdersCount?: number;
 }
 
 export interface BranchReport {
@@ -863,7 +1709,41 @@ export const ListFulfillmentSlotsMethod = {
 export type ListAdminOrdersParams = {
 status?: string;
 branchId?: number;
+/**
+ * Filter by scheduledStart >= from
+ */
+from?: string;
+/**
+ * Filter by scheduledStart < to
+ */
+to?: string;
+fulfillmentMethod?: ListAdminOrdersFulfillmentMethod;
+orderSource?: OrderSource;
 };
+
+export type ListAdminOrdersFulfillmentMethod = typeof ListAdminOrdersFulfillmentMethod[keyof typeof ListAdminOrdersFulfillmentMethod];
+
+
+export const ListAdminOrdersFulfillmentMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export type SearchAdminCustomersParams = {
+/**
+ * @minLength 1
+ */
+q: string;
+limit?: number;
+};
+
+export type DeactivateAdminBranchBody = {
+  confirmFutureOrders?: boolean;
+};
+
+export type DeactivateAdminBranch409 = { [key: string]: unknown };
+
+export type ListBranchAudit200Item = { [key: string]: unknown };
 
 export type ListAdminInventoryParams = {
 search?: string;
@@ -878,6 +1758,7 @@ export type ListAdminInventoryState = typeof ListAdminInventoryState[keyof typeo
 export const ListAdminInventoryState = {
   NORMAL: 'NORMAL',
   LOW_STOCK: 'LOW_STOCK',
+  CRITICAL_STOCK: 'CRITICAL_STOCK',
   OUT_OF_STOCK: 'OUT_OF_STOCK',
 } as const;
 
@@ -887,9 +1768,69 @@ export type UpdateAdminInventory200 = { [key: string]: unknown };
 
 export type ListInventoryMovements200Item = { [key: string]: unknown };
 
+export type ListInventoryAlertsParams = {
+branchId?: number;
+productId?: number;
+type?: string;
+priority?: ListInventoryAlertsPriority;
+status?: ListInventoryAlertsStatus;
+source?: ListInventoryAlertsSource;
+assignedUserId?: string;
+from?: string;
+to?: string;
+};
+
+export type ListInventoryAlertsPriority = typeof ListInventoryAlertsPriority[keyof typeof ListInventoryAlertsPriority];
+
+
+export const ListInventoryAlertsPriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL',
+} as const;
+
+export type ListInventoryAlertsStatus = typeof ListInventoryAlertsStatus[keyof typeof ListInventoryAlertsStatus];
+
+
+export const ListInventoryAlertsStatus = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+  DISMISSED: 'DISMISSED',
+} as const;
+
+export type ListInventoryAlertsSource = typeof ListInventoryAlertsSource[keyof typeof ListInventoryAlertsSource];
+
+
+export const ListInventoryAlertsSource = {
+  AUTOMATIC: 'AUTOMATIC',
+  MANUAL: 'MANUAL',
+} as const;
+
+export type CreateInventoryAlert201 = { [key: string]: unknown };
+
+export type UpdateInventoryAlert200 = { [key: string]: unknown };
+
+export type ListInventoryAlertEvents200 = { [key: string]: unknown };
+
+export type ListImportJobsParams = {
+type?: ListImportJobsType;
+};
+
+export type ListImportJobsType = typeof ListImportJobsType[keyof typeof ListImportJobsType];
+
+
+export const ListImportJobsType = {
+  product: 'product',
+  inventory: 'inventory',
+} as const;
+
 export type ListBranchAssignments200Item = { [key: string]: unknown };
 
 export type CreateBranchAssignment201 = { [key: string]: unknown };
+
+export type UpdateBranchAssignment200 = { [key: string]: unknown };
 
 export type ListCategoryResponsiblesParams = {
 branchId?: number;

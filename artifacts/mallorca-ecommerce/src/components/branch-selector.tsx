@@ -27,7 +27,8 @@ function branchShortName(branch: Branch) {
 export function BranchSelector({ required = false }: BranchSelectorProps) {
   const [location] = useLocation();
   const { branchId, cartId, setBranchId, setCartSession, clearCartSession } = useCart();
-  const { data: branches, isLoading } = useListBranches();
+  const { data: branchesData, isLoading } = useListBranches();
+  const branches = Array.isArray(branchesData) ? branchesData : undefined;
   const { data: cart } = useGetCart(cartId || "", {
     query: { enabled: Boolean(cartId), queryKey: getGetCartQueryKey(cartId || "") },
   });

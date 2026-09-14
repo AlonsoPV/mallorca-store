@@ -7,6 +7,7 @@
  */
 import type { Branch } from './branch';
 import type { InventoryRowBranchProduct } from './inventoryRowBranchProduct';
+import type { InventoryRowInventoryStatus } from './inventoryRowInventoryStatus';
 import type { ProductCard } from './productCard';
 
 export interface InventoryRow {
@@ -14,4 +15,10 @@ export interface InventoryRow {
   branch: Branch;
   product: ProductCard;
   reservedStock: number;
+  availableStock?: number;
+  /** @nullable */
+  criticalStock?: number | null;
+  autoAlertEnabled?: boolean;
+  openAlertCount?: number;
+  inventoryStatus?: InventoryRowInventoryStatus;
 }

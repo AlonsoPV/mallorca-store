@@ -12,5 +12,6 @@ export type ListAdminInventoryState = typeof ListAdminInventoryState[keyof typeo
 export const ListAdminInventoryState = {
   NORMAL: 'NORMAL',
   LOW_STOCK: 'LOW_STOCK',
+  CRITICAL_STOCK: 'CRITICAL_STOCK',
   OUT_OF_STOCK: 'OUT_OF_STOCK',
 } as const;

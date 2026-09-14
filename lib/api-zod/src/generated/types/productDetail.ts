@@ -23,37 +23,7 @@ export type ProductDetail = ProductCard & ({
   /** @nullable */
   portions: string | null;
   minimumLeadTimeHours: number;
+  /** @maxItems 6 */
+  crossSellProductIds?: number[];
   variants: ProductVariant[];
-}) & Required<Pick<ProductCard & ({
-  description: string;
-  tags: string[];
-  gallery: string[];
-  /** @nullable */
-  ingredients: string | null;
-  /** @nullable */
-  allergens: string | null;
-  /** @nullable */
-  conservation: string | null;
-  /** @nullable */
-  weight: string | null;
-  /** @nullable */
-  portions: string | null;
-  minimumLeadTimeHours: number;
-  variants: ProductVariant[];
-}), Extract<keyof (ProductCard & ({
-  description: string;
-  tags: string[];
-  gallery: string[];
-  /** @nullable */
-  ingredients: string | null;
-  /** @nullable */
-  allergens: string | null;
-  /** @nullable */
-  conservation: string | null;
-  /** @nullable */
-  weight: string | null;
-  /** @nullable */
-  portions: string | null;
-  minimumLeadTimeHours: number;
-  variants: ProductVariant[];
-})), 'seasonal - minimumLeadTimeHours'>>>;
+});

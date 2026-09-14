@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BranchAvailability } from './branchAvailability';
+import type { ProductCardCategoriesItem } from './productCardCategoriesItem';
 
 export interface ProductCard {
   id: number;
@@ -18,10 +19,11 @@ export interface ProductCard {
   salePrice: number | null;
   categoryName: string;
   categorySlug: string;
+  categories?: ProductCardCategoriesItem[];
   /** @nullable */
   imageUrl: string | null;
   featured: boolean;
-  seasonal?: boolean;
-  minimumLeadTimeHours?: number;
+  seasonal: boolean;
+  minimumLeadTimeHours: number;
   availability: BranchAvailability[];
 }

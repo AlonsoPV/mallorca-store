@@ -44,8 +44,42 @@ export default function BranchDetail() {
     );
   }
 
+  const reservationUrl = (branch as any).reservationUrl || branch.openTableUrl;
+  const reservationCta = (branch as any).reservationCta || "Reservar mesa";
+  const whatsappHref = branch.whatsapp
+    ? `https://wa.me/${branch.whatsapp.replace(/\D/g, "")}${
+        (branch as any).whatsappDefaultMessage
+          ? `?text=${encodeURIComponent((branch as any).whatsappDefaultMessage)}`
+          : ""
+      }`
+    : null;
+  const gallery = Array.isArray(branch.gallery) ? branch.gallery : [];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Restaurant",
+    name: branch.name,
+    description: (branch as any).metaDescription || branch.description || (branch as any).shortDescription,
+    image: (branch as any).ogImageUrl || branch.imageUrl || undefined,
+    telephone: branch.phone,
+    email: branch.email,
+    url: typeof window !== "undefined" ? window.location.href : undefined,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: (branch as any).street || branch.address,
+      addressLocality: branch.city,
+      addressRegion: branch.state,
+      postalCode: branch.postalCode,
+      addressCountry: branch.country || "MX",
+    },
+    geo:
+      branch.latitude != null && branch.longitude != null
+        ? { "@type": "GeoCoordinates", latitude: branch.latitude, longitude: branch.longitude }
+        : undefined,
+  };
+
   return (
     <StoreLayout>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       {/* Branch Hero */}
       <div className="relative h-[40dvh] min-h-[300px] w-full bg-foreground flex items-end">
         {branch.imageUrl && (
@@ -65,6 +99,29 @@ export default function BranchDetail() {
           <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl text-foreground">
             {branch.name}
           </h1>
+          {(branch as any).shortDescription && (
+            <p className="mt-3 max-w-2xl text-foreground/80">{(branch as any).shortDescription}</p>
+          )}
+          <div className="mt-6 flex flex-wrap gap-3">
+            {reservationUrl && (
+              <Button asChild className="rounded-none">
+                <a href={reservationUrl} target="_blank" rel="noopener noreferrer">{reservationCta}</a>
+              </Button>
+            )}
+            <Button asChild variant="outline" className="rounded-none bg-background/80">
+              <Link href={`/tienda?branch=${branch.slug}`}>Pedir</Link>
+            </Button>
+            {branch.mapsUrl && (
+              <Button asChild variant="outline" className="rounded-none bg-background/80">
+                <a href={branch.mapsUrl} target="_blank" rel="noopener noreferrer">Cómo llegar</a>
+              </Button>
+            )}
+            {whatsappHref && (
+              <Button asChild variant="outline" className="rounded-none bg-background/80">
+                <a href={whatsappHref} target="_blank" rel="noopener noreferrer">WhatsApp</a>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -112,10 +169,10 @@ export default function BranchDetail() {
                   <Phone className="h-4 w-4 shrink-0 text-primary" />
                   <a href={`tel:${branch.phone}`} className="hover:text-primary">{branch.phone}</a>
                 </p>
-                {branch.whatsapp && (
+                {whatsappHref && (
                   <p className="flex items-center gap-3 text-sm text-foreground/90">
                     <span className="w-4 flex justify-center text-primary font-bold text-lg leading-none shrink-0">W</span>
-                    <a href={`https://wa.me/${branch.whatsapp.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
+                    <a href={whatsappHref} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
                       {branch.whatsapp}
                     </a>
                   </p>
@@ -147,14 +204,25 @@ export default function BranchDetail() {
                 </div>
               </div>
 
-              {branch.openTableUrl && (
+              {reservationUrl && (
                 <Button asChild className="w-full rounded-none h-12 bg-foreground text-background hover:bg-foreground/90">
-                  <a href={branch.openTableUrl} target="_blank" rel="noopener noreferrer">
-                    Reservar Mesa
+                  <a href={reservationUrl} target="_blank" rel="noopener noreferrer">
+                    {reservationCta}
                   </a>
                 </Button>
               )}
             </div>
+
+            {gallery.length > 0 && (
+              <div>
+                <h3 className="font-sans text-xs uppercase tracking-widest font-semibold mb-4 text-foreground/70">Galería</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {gallery.map((url, i) => (
+                    <img key={`${url}-${i}`} src={url} alt={`${branch.name} ${i + 1}`} className="aspect-square object-cover w-full" />
+                  ))}
+                </div>
+              </div>
+            )}
           </aside>
 
           {/* Branch Products */}

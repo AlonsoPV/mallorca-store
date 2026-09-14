@@ -5,8 +5,20 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { ListAdminOrdersFulfillmentMethod } from './listAdminOrdersFulfillmentMethod';
+import type { OrderSource } from './orderSource';
 
 export type ListAdminOrdersParams = {
 status?: string;
 branchId?: number;
+/**
+ * Filter by scheduledStart >= from
+ */
+from?: Date;
+/**
+ * Filter by scheduledStart < to
+ */
+to?: Date;
+fulfillmentMethod?: ListAdminOrdersFulfillmentMethod;
+orderSource?: OrderSource;
 };

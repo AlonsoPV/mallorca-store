@@ -6,22 +6,88 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BranchHour } from './branchHour';
-import type { BranchUpdateNotificationPreferences } from './branchUpdateNotificationPreferences';
+import type { BranchImage } from './branchImage';
+import type { BranchLink } from './branchLink';
+import type { BranchNotificationPreferences } from './branchNotificationPreferences';
+import type { BranchSpecialHour } from './branchSpecialHour';
+import type { BranchUpdateReservationProvider } from './branchUpdateReservationProvider';
+import type { BranchUpdateStatus } from './branchUpdateStatus';
 
 export interface BranchUpdate {
   name?: string;
+  shortName?: string;
+  /** @nullable */
+  shortDescription?: string | null;
+  /** @nullable */
+  description?: string | null;
+  slug?: string;
   branchCode?: string;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  externalNumber?: string | null;
+  /** @nullable */
+  internalNumber?: string | null;
+  neighborhood?: string;
+  /** @nullable */
+  borough?: string | null;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  address?: string;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
+  placeId?: string | null;
+  phone?: string;
+  /** @nullable */
+  secondaryPhone?: string | null;
+  /** @nullable */
+  whatsapp?: string | null;
+  /** @nullable */
+  whatsappDefaultMessage?: string | null;
+  email?: string;
+  /** @nullable */
+  ordersEmail?: string | null;
+  /** @nullable */
+  reservationsEmail?: string | null;
+  /** @nullable */
+  adminEmail?: string | null;
   /** @nullable */
   managerName?: string | null;
   /** @nullable */
   managerEmail?: string | null;
   /** @nullable */
   managerPhone?: string | null;
-  notificationPreferences?: BranchUpdateNotificationPreferences;
-  active?: boolean;
+  notificationPreferences?: BranchNotificationPreferences;
+  mapsUrl?: string;
+  /** @nullable */
+  openTableUrl?: string | null;
+  /** @nullable */
+  instagramUrl?: string | null;
+  reservationProvider?: BranchUpdateReservationProvider;
+  /** @nullable */
+  reservationUrl?: string | null;
+  /** @nullable */
+  reservationCta?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  gallery?: string[];
   hours?: BranchHour[];
+  specialHours?: BranchSpecialHour[];
+  links?: BranchLink[];
+  images?: BranchImage[];
   pickupAvailable?: boolean;
   deliveryAvailable?: boolean;
+  /** @nullable */
+  deliveryRadiusKm?: number | null;
+  /** @nullable */
+  minimumOrder?: number | null;
+  /** @nullable */
+  freeDeliveryFrom?: number | null;
   /** @minimum 0 */
   preparationTimeMinutes?: number;
   /** @minimum 0 */
@@ -30,4 +96,14 @@ export interface BranchUpdate {
   pickupSlotIntervalMinutes?: number;
   /** @minimum 1 */
   pickupSlotCapacity?: number;
+  deliveryFee?: number;
+  featured?: boolean;
+  /** @nullable */
+  seoTitle?: string | null;
+  /** @nullable */
+  metaDescription?: string | null;
+  /** @nullable */
+  ogImageUrl?: string | null;
+  status?: BranchUpdateStatus;
+  active?: boolean;
 }

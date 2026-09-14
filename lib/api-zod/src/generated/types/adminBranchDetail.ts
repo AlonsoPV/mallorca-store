@@ -7,22 +7,35 @@
  */
 import type { AdminBranch } from './adminBranch';
 import type { AdminBranchDetailAlertsItem } from './adminBranchDetailAlertsItem';
+import type { AdminBranchDetailAuditItem } from './adminBranchDetailAuditItem';
 import type { AdminBranchDetailContact } from './adminBranchDetailContact';
 import type { AdminBranchDetailGeneral } from './adminBranchDetailGeneral';
 import type { AdminBranchDetailInventoryItem } from './adminBranchDetailInventoryItem';
 import type { AdminBranchDetailNotificationSettings } from './adminBranchDetailNotificationSettings';
 import type { AdminBranchDetailOrdersItem } from './adminBranchDetailOrdersItem';
 import type { AdminBranchDetailProductsItem } from './adminBranchDetailProductsItem';
+import type { AdminBranchDetailSummary } from './adminBranchDetailSummary';
+import type { AdminBranchDetailTeamItem } from './adminBranchDetailTeamItem';
 import type { BranchHour } from './branchHour';
+import type { BranchImage } from './branchImage';
+import type { BranchLink } from './branchLink';
+import type { BranchSpecialHour } from './branchSpecialHour';
 
 export interface AdminBranchDetail {
   branch: AdminBranch;
   general: AdminBranchDetailGeneral;
   contact: AdminBranchDetailContact;
   hours: BranchHour[];
+  specialHours?: BranchSpecialHour[];
+  links?: BranchLink[];
+  images?: BranchImage[];
   products: AdminBranchDetailProductsItem[];
   inventory: AdminBranchDetailInventoryItem[];
   orders: AdminBranchDetailOrdersItem[];
   alerts: AdminBranchDetailAlertsItem[];
   notificationSettings: AdminBranchDetailNotificationSettings;
+  summary?: AdminBranchDetailSummary;
+  team?: AdminBranchDetailTeamItem[];
+  audit?: AdminBranchDetailAuditItem[];
+  futureOrdersCount?: number;
 }

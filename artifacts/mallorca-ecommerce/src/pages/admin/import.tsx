@@ -6,8 +6,13 @@ import {
   getListAdminProductsQueryKey,
   getListProductsQueryKey,
   getGetAdminSummaryQueryKey,
+  getListAdminInventoryQueryKey,
+  getListImportJobsQueryKey,
   useImportProducts,
   usePreviewProductImport,
+  usePreviewInventoryImport,
+  useImportInventory,
+  useListImportJobs,
   type ProductImportPreview,
   type ProductImportResult,
 } from "@workspace/api-client-react";
@@ -21,8 +26,20 @@ import {
   FileUp,
   RefreshCcw,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const MAPPING_STORAGE_KEY = "mallorca_product_import_mapping";
+const UPDATE_FIELDS = [
+  { key: "general", label: "Información general" },
+  { key: "categories", label: "Categorías" },
+  { key: "tags", label: "Etiquetas" },
+  { key: "price", label: "Precio" },
+  { key: "inventory", label: "Inventario" },
+  { key: "branches", label: "Sucursales" },
+  { key: "promotions", label: "Promociones" },
+  { key: "cross-sell", label: "Cross-sell" },
+  { key: "images", label: "Imágenes" },
+] as const;
 
 const IMPORT_FIELDS = [
   { key: "sku", label: "SKU", required: true },
@@ -33,6 +50,9 @@ const IMPORT_FIELDS = [
   { key: "price", label: "Precio", required: false },
   { key: "salePrice", label: "Precio oferta", required: false },
   { key: "categoryId", label: "ID de categoría", required: false },
+  { key: "categories", label: "Categorías (|)", required: false },
+  { key: "primaryCategory", label: "Categoría principal", required: false },
+  { key: "tags", label: "Etiquetas (|)", required: false },
   { key: "imageUrl", label: "URL de imagen", required: false },
   { key: "featured", label: "Destacado", required: false },
   { key: "seasonal", label: "De temporada", required: false },
@@ -47,66 +67,16 @@ const IMPORT_FIELDS = [
   { key: "preparationTimeMinutes", label: "Minutos de preparación", required: false },
   { key: "pickupAvailable", label: "Recogida disponible", required: false },
   { key: "deliveryAvailable", label: "Entrega disponible", required: false },
+  { key: "discountType", label: "Tipo descuento", required: false },
+  { key: "discountValue", label: "Valor descuento", required: false },
+  { key: "discountStart", label: "Inicio promo", required: false },
+  { key: "discountEnd", label: "Fin promo", required: false },
+  { key: "discountBranches", label: "Sucursales promo (|)", required: false },
+  { key: "crossSellSkus", label: "Cross-sell SKUs (|)", required: false },
 ] as const;
 
-const TEMPLATE_HEADERS = IMPORT_FIELDS.map((field) => field.key);
-const TEMPLATE_ROWS = [
-  TEMPLATE_HEADERS,
-  [
-    "PAN-001",
-    "Pan de masa madre",
-    "pan-de-masa-madre",
-    "Pan artesanal",
-    "Pan de masa madre horneado cada mañana",
-    95,
-    "",
-    1,
-    "",
-    false,
-    false,
-    "active",
-    0,
-    "CENTRO",
-    true,
-    20,
-    5,
-    "",
-    "",
-    15,
-    true,
-    true,
-  ],
-  [
-    "PAN-001",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "REFORMA",
-    true,
-    12,
-    3,
-    "",
-    "",
-    "",
-    true,
-    true,
-  ],
-];
-
-const FIELD_ALIASES: Record<string, string[]> = {
-  inventory: ["quantity", "cantidad", "stock"],
-};
-
 type Mapping = Record<string, string>;
-type PreviewRow = ProductImportPreview["rows"][number];
+type Mode = "products" | "inventory";
 
 function normalizeHeader(value: string) {
   return value
@@ -135,29 +105,89 @@ function getInitialMapping(headers: string[]) {
       result[field.key] = savedHeader;
       continue;
     }
-    const expected = [field.key, ...(FIELD_ALIASES[field.key] ?? [])].map(normalizeHeader);
+    const aliases = field.key === "inventory" ? ["quantity", "cantidad", "stock"] : [];
+    const expected = [field.key, ...aliases].map(normalizeHeader);
     const match = headers.find((header) => expected.includes(normalizeHeader(header)));
     if (match) result[field.key] = match;
   }
   return result;
 }
 
+function downloadErrorsCsv(errors: Array<{ row: number; message: string }>) {
+  const lines = ["fila,mensaje", ...errors.map((e) => `${e.row},"${e.message.replace(/"/g, '""')}"`)];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "errores-importacion.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AdminImport() {
+  const [mode, setMode] = useState<Mode>("products");
   const [csv, setCsv] = useState("");
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
   const [preview, setPreview] = useState<ProductImportPreview>();
+  const [inventoryPreview, setInventoryPreview] = useState<{
+    rows: unknown[];
+    errors: Array<{ row?: number; message?: string }>;
+    valid: boolean;
+  }>();
   const [result, setResult] = useState<ProductImportResult>();
+  const [inventoryResult, setInventoryResult] = useState<{ imported: number; errors: Array<{ row?: number; message?: string }> }>();
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [updateExisting, setUpdateExisting] = useState(true);
+  const [updateFields, setUpdateFields] = useState<string[]>(UPDATE_FIELDS.map((f) => f.key));
+  const [relationMode, setRelationMode] = useState<"add" | "replace">("add");
   const fileInput = useRef<HTMLInputElement>(null);
   const previewMutation = usePreviewProductImport();
   const importMutation = useImportProducts();
+  const inventoryPreviewMutation = usePreviewInventoryImport();
+  const inventoryImportMutation = useImportInventory();
+  const jobs = useListImportJobs();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const downloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet(TEMPLATE_ROWS);
+  const downloadTemplate = (kind: "full" | "quick" | "inventory" | "prices") => {
+    if (kind === "inventory") {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["sku", "branch_code", "quantity", "min_stock", "critical_stock", "auto_alert"],
+        ["PAN-001", "REF", 12, 5, 2, true],
+        ["PAN-001", "LOM", 7, 5, 2, true],
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+      XLSX.writeFile(wb, "plantilla_inventario_mallorca.xlsx");
+      return;
+    }
+    if (kind === "prices") {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["sku", "price", "salePrice"],
+        ["PAN-001", 350, 280],
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Precios");
+      XLSX.writeFile(wb, "plantilla_precios_mallorca.xlsx");
+      return;
+    }
+    if (kind === "quick") {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["sku", "name", "categoryId", "price", "branchCode", "inventory", "status"],
+        ["CRO-001", "Croissant", 2, 65, "REF", 20, "active"],
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "AltaRapida");
+      XLSX.writeFile(wb, "plantilla_alta_rapida_mallorca.xlsx");
+      return;
+    }
+    const headersRow = IMPORT_FIELDS.map((f) => f.key);
+    const ws = XLSX.utils.aoa_to_sheet([
+      headersRow,
+      ["PAN-001", "Panettone", "panettone", "Clásico", "Descripción", 350, "", 1, "", false, true, "active", 0, "REF", true, 8, 5, "", "", 60, true, true],
+    ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Productos");
     XLSX.writeFile(wb, "plantilla_productos_mallorca.xlsx");
@@ -167,7 +197,9 @@ export default function AdminImport() {
     try {
       setFileName(file.name);
       setPreview(undefined);
+      setInventoryPreview(undefined);
       setResult(undefined);
+      setInventoryResult(undefined);
       let content: string;
       if (file.name.toLowerCase().endsWith(".xlsx")) {
         const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
@@ -207,47 +239,88 @@ export default function AdminImport() {
   };
 
   const previewImport = () => {
+    if (mode === "inventory") {
+      inventoryPreviewMutation.mutate(
+        { data: { csv } },
+        {
+          onSuccess: (data) => setInventoryPreview(data as any),
+          onError: () => toast({ title: "No se pudo validar inventario", variant: "destructive" }),
+        },
+      );
+      return;
+    }
     if (!mapping.sku) {
       toast({ title: "Selecciona la columna SKU", variant: "destructive" });
       return;
     }
-    localStorage.setItem(MAPPING_STORAGE_KEY, JSON.stringify(mapping));
     previewMutation.mutate(
-      { data: { csv, mapping } },
+      {
+        data: {
+          csv,
+          mapping,
+          updateExisting,
+          updateFields: updateExisting ? updateFields : undefined,
+          relationMode,
+        },
+      },
       {
         onSuccess: (data) => setPreview(data),
-        onError: () =>
-          toast({
-            title: "No se pudo validar el archivo",
-            description: "Revisa el formato y el mapeo de columnas.",
-            variant: "destructive",
-          }),
+        onError: () => toast({ title: "No se pudo validar el archivo", variant: "destructive" }),
       },
     );
   };
 
   const confirmImport = () => {
+    if (mode === "inventory") {
+      inventoryImportMutation.mutate(
+        { data: { csv, filename: fileName, idempotencyKey: `inv-${fileName}-${csv.length}` } },
+        {
+          onSuccess: (data) => {
+            void queryClient.invalidateQueries({ queryKey: getListAdminInventoryQueryKey() });
+            void queryClient.invalidateQueries({ queryKey: getListImportJobsQueryKey() });
+            setInventoryResult(data as any);
+            setStep(3);
+            toast({ title: "Inventario importado", description: `${data.imported} filas.` });
+          },
+          onError: (err: any) => {
+            const payload = err?.data ?? err?.response?.data;
+            if (payload?.errors) {
+              setInventoryResult({ imported: 0, errors: payload.errors });
+              setStep(3);
+            }
+            toast({ title: "Error al importar inventario", variant: "destructive" });
+          },
+        },
+      );
+      return;
+    }
     if (!preview?.rows.length) return;
     importMutation.mutate(
-      { data: { csv, mapping } },
+      {
+        data: {
+          csv,
+          mapping,
+          updateExisting,
+          updateFields: updateExisting ? updateFields : undefined,
+          relationMode,
+          filename: fileName,
+          idempotencyKey: `prod-${fileName}-${csv.length}`,
+        },
+      },
       {
         onSuccess: (data) => {
           void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
           void queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
           void queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getListImportJobsQueryKey() });
           setResult(data);
           setStep(3);
           toast({
-            title: data.errors.length ? "Importación parcial completada" : "Importación completada",
-            description: `${data.created} nuevos y ${data.updated} actualizados.`,
+            title: data.errors.length ? "Importación parcial" : "Importación completada",
+            description: `${data.created} creados · ${data.updated} actualizados`,
           });
         },
-        onError: () =>
-          toast({
-            title: "No se pudo completar la importación",
-            description: "El archivo no pudo procesarse.",
-            variant: "destructive",
-          }),
+        onError: () => toast({ title: "No se pudo completar la importación", variant: "destructive" }),
       },
     );
   };
@@ -258,48 +331,74 @@ export default function AdminImport() {
     setHeaders([]);
     setMapping({});
     setPreview(undefined);
+    setInventoryPreview(undefined);
     setResult(undefined);
+    setInventoryResult(undefined);
     setStep(1);
     if (fileInput.current) fileInput.current.value = "";
   };
 
   return (
     <AdminLayout>
-      <div className="flex-1 flex flex-col h-full overflow-auto bg-[#FBFAF7] dark:bg-background">
+      <div className="flex-1 overflow-auto bg-[#FBFAF7] dark:bg-background">
         <div className="max-w-5xl w-full mx-auto p-8 space-y-8 mt-4">
-          <div className="flex items-start justify-between gap-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-serif text-[#25211E] dark:text-foreground tracking-tight">
-                Importar productos
-              </h1>
-              <p className="mt-2 text-muted-foreground">
-                Crea o actualiza el catálogo por SKU y configura existencias por sucursal.
+              <h1 className="text-3xl font-serif tracking-tight">Importar</h1>
+              <p className="mt-2 text-muted-foreground text-sm">
+                Productos por SKU o inventario por sucursal. Sin duplicados silenciosos.
               </p>
             </div>
-            <Button variant="outline" onClick={downloadTemplate} className="rounded-none shrink-0">
-              <Download className="w-4 h-4 mr-2" />
-              Descargar plantilla
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="rounded-none" onClick={() => downloadTemplate("full")}>
+                Plantilla completa
+              </Button>
+              <Button variant="outline" className="rounded-none" onClick={() => downloadTemplate("quick")}>
+                Alta rápida
+              </Button>
+              <Button variant="outline" className="rounded-none" onClick={() => downloadTemplate("inventory")}>
+                Inventario
+              </Button>
+              <Button variant="outline" className="rounded-none" onClick={() => downloadTemplate("prices")}>
+                Precios
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={cn("px-3 py-1.5 text-sm border", mode === "products" ? "bg-primary text-primary-foreground border-primary" : "bg-background")}
+              onClick={() => { setMode("products"); reset(); }}
+            >
+              Productos
+            </button>
+            <button
+              type="button"
+              className={cn("px-3 py-1.5 text-sm border", mode === "inventory" ? "bg-primary text-primary-foreground border-primary" : "bg-background")}
+              onClick={() => { setMode("inventory"); reset(); }}
+            >
+              Inventario
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <span className={step >= 1 ? "text-[#D43B2B] font-bold" : ""}>1. Archivo</span>
             <ChevronRight className="w-4 h-4" />
-            <span className={step >= 2 ? "text-[#D43B2B] font-bold" : ""}>2. Mapeo y revisión</span>
+            <span className={step >= 2 ? "text-[#D43B2B] font-bold" : ""}>2. Validación</span>
             <ChevronRight className="w-4 h-4" />
             <span className={step >= 3 ? "text-[#D43B2B] font-bold" : ""}>3. Resultado</span>
           </div>
 
-          <div className="bg-white dark:bg-card border border-[#E8DED0] dark:border-border">
+          <div className="bg-white dark:bg-card border border-border">
             {step === 1 && (
               <div className="p-10 text-center">
-                <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-[#F5F0E8] dark:bg-muted flex items-center justify-center text-[#4B3028] dark:text-foreground">
+                <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                   <FileUp className="w-7 h-7" />
                 </div>
-                <h2 className="text-xl font-serif text-[#25211E] dark:text-foreground">Sube tu catálogo</h2>
-                <p className="text-sm text-muted-foreground mt-2 max-w-lg mx-auto">
-                  Acepta CSV y XLSX. Puedes incluir una fila por sucursal para el mismo SKU; el producto se creará una sola vez.
-                </p>
+                <h2 className="text-xl font-serif">
+                  {mode === "products" ? "Sube catálogo CSV/XLSX" : "Sube inventario sku,branch_code,quantity"}
+                </h2>
                 <input
                   ref={fileInput}
                   type="file"
@@ -310,146 +409,299 @@ export default function AdminImport() {
                     if (file) void readFile(file);
                   }}
                 />
-                <Button onClick={() => fileInput.current?.click()} className="mt-7 rounded-none bg-[#D43B2B] hover:bg-[#B83225] text-white h-12 px-8">
-                  Seleccionar CSV o XLSX
+                <Button onClick={() => fileInput.current?.click()} className="mt-7 rounded-none h-12 px-8">
+                  Seleccionar archivo
                 </Button>
-                <p className="text-xs text-muted-foreground mt-4">La plantilla incluye campos de producto y sucursal.</p>
               </div>
             )}
 
             {step === 2 && (
-              <div className="p-8 space-y-7">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E8DED0] dark:border-border pb-5">
+              <div className="p-8 space-y-6">
+                <div className="flex justify-between gap-3">
                   <div>
-                    <h2 className="text-xl font-serif text-[#25211E] dark:text-foreground">Mapea las columnas</h2>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {fileName} · El mapeo se guarda para la próxima importación.
-                    </p>
+                    <h2 className="text-xl font-serif">Validación</h2>
+                    <p className="text-sm text-muted-foreground">{fileName}</p>
                   </div>
-                  <Button variant="outline" onClick={reset} className="rounded-none">Elegir otro archivo</Button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                  {IMPORT_FIELDS.map((field) => (
-                    <label key={field.key} className="flex items-center gap-3 text-sm">
-                      <span className="w-44 shrink-0 text-[#4B3028] dark:text-foreground">
-                        {field.label}
-                        {field.required ? <span className="text-[#D43B2B]"> *</span> : null}
-                      </span>
-                      <select
-                        value={mapping[field.key] ?? ""}
-                        onChange={(event) => updateMapping(field.key, event.target.value)}
-                        className="h-9 min-w-0 flex-1 border border-input bg-background px-2 text-sm rounded-md"
-                      >
-                        <option value="">No importar</option>
-                        {headers.map((header) => (
-                          <option key={header} value={header}>{header}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="flex justify-end border-t border-[#E8DED0] dark:border-border pt-5">
-                  <Button
-                    onClick={previewImport}
-                    disabled={!mapping.sku || previewMutation.isPending}
-                    className="rounded-none bg-[#D43B2B] hover:bg-[#B83225] text-white h-11 px-7"
-                  >
-                    {previewMutation.isPending ? "Validando..." : "Previsualizar importación"}
-                    {!previewMutation.isPending && <ChevronRight className="w-4 h-4 ml-2" />}
+                  <Button variant="outline" className="rounded-none" onClick={reset}>
+                    Otro archivo
                   </Button>
                 </div>
 
-                {preview && (
-                  <div className="space-y-5 border-t border-[#E8DED0] dark:border-border pt-6">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-serif text-[#25211E] dark:text-foreground">Revisión de filas válidas</h3>
-                        <p className="text-sm text-muted-foreground">Las filas con error se omitirán; las demás sí se importarán.</p>
-                      </div>
-                      <div className="flex gap-3 text-sm">
-                        <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200">{preview.rows.filter((row) => row.action === "new").length} nuevos</span>
-                        <span className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200">{preview.rows.filter((row) => row.action === "update").length} actualizaciones</span>
-                      </div>
-                    </div>
-
-                    {preview.rows.length > 0 && (
-                      <div className="border border-[#E8DED0] dark:border-border max-h-64 overflow-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-[#FBFAF7] dark:bg-muted/30 text-left sticky top-0">
-                            <tr><th className="p-3">Fila</th><th className="p-3">SKU</th><th className="p-3">Nombre</th><th className="p-3">Sucursal</th><th className="p-3">Acción</th></tr>
-                          </thead>
-                          <tbody>
-                            {preview.rows.map((row: PreviewRow) => (
-                              <tr key={`${row.row}-${row.sku}-${row.branchCode}`} className="border-t border-[#E8DED0] dark:border-border">
-                                <td className="p-3 font-mono">{row.row}</td>
-                                <td className="p-3 font-medium">{row.sku}</td>
-                                <td className="p-3">{row.name || "—"}</td>
-                                <td className="p-3">{row.branchCode || "Todas / sin configurar"}</td>
-                                <td className="p-3">{row.action === "new" ? "Nuevo" : "Actualizar"}</td>
-                              </tr>
+                {mode === "products" ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {IMPORT_FIELDS.map((field) => (
+                        <label key={field.key} className="flex items-center gap-3 text-sm">
+                          <span className="w-40 shrink-0">
+                            {field.label}
+                            {field.required ? " *" : ""}
+                          </span>
+                          <select
+                            value={mapping[field.key] ?? ""}
+                            onChange={(e) => updateMapping(field.key, e.target.value)}
+                            className="h-9 flex-1 border border-input bg-background px-2 text-sm"
+                          >
+                            <option value="">No importar</option>
+                            {headers.map((header) => (
+                              <option key={header} value={header}>{header}</option>
                             ))}
-                          </tbody>
-                        </table>
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={updateExisting}
+                        onChange={(e) => setUpdateExisting(e.target.checked)}
+                      />
+                      Actualizar productos existentes (clave = SKU)
+                    </label>
+                    {updateExisting ? (
+                      <div className="border border-border p-4 space-y-2">
+                        <p className="text-sm font-medium">Campos a actualizar</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {UPDATE_FIELDS.map((field) => (
+                            <label key={field.key} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={updateFields.includes(field.key)}
+                                onChange={(e) => {
+                                  setUpdateFields((prev) =>
+                                    e.target.checked
+                                      ? [...prev, field.key]
+                                      : prev.filter((k) => k !== field.key),
+                                  );
+                                }}
+                              />
+                              {field.label}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="pt-3 space-y-2">
+                          <p className="text-sm font-medium">Modo de relaciones (categorías / etiquetas / cross-sell)</p>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="relationMode"
+                              checked={relationMode === "add"}
+                              onChange={() => setRelationMode("add")}
+                            />
+                            Añadir a existentes (recomendado)
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="relationMode"
+                              checked={relationMode === "replace"}
+                              onChange={() => setRelationMode("replace")}
+                            />
+                            Reemplazar existentes
+                          </label>
+                        </div>
                       </div>
-                    )}
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Formato esperado: <code>sku,branch_code,quantity[,min_stock]</code>
+                  </p>
+                )}
 
-                    {preview.errors.length > 0 && (
-                      <div className="space-y-2 border border-destructive/20 bg-destructive/5 p-4 max-h-56 overflow-y-auto">
-                        <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4" /> {preview.errors.length} filas con error
-                        </h4>
+                <div className="flex justify-end">
+                  <Button className="rounded-none" onClick={previewImport} disabled={previewMutation.isPending || inventoryPreviewMutation.isPending}>
+                    Previsualizar
+                  </Button>
+                </div>
+
+                {preview && mode === "products" ? (
+                  <div className="space-y-4 border-t pt-6">
+                    <div className="flex flex-wrap gap-3 text-sm">
+                      <span className="px-3 py-1.5 border">{preview.rows.length} filas válidas</span>
+                      <span className="px-3 py-1.5 border border-emerald-200 bg-emerald-50">
+                        {preview.rows.filter((r) => r.action === "new").length} crear
+                      </span>
+                      <span className="px-3 py-1.5 border border-blue-200 bg-blue-50">
+                        {preview.rows.filter((r) => r.action === "update").length} actualizar
+                      </span>
+                      <span className="px-3 py-1.5 border border-red-200 bg-red-50">
+                        {preview.errors.length} errores
+                      </span>
+                    </div>
+                    <div className="max-h-64 overflow-auto border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/40 sticky top-0">
+                          <tr>
+                            <th className="p-2 text-left">Fila</th>
+                            <th className="p-2 text-left">SKU</th>
+                            <th className="p-2 text-left">Producto</th>
+                            <th className="p-2 text-left">Acción</th>
+                            <th className="p-2 text-left">Resultado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.rows.map((row) => (
+                            <tr key={`${row.row}-${row.sku}`} className="border-t">
+                              <td className="p-2 font-mono">{row.row}</td>
+                              <td className="p-2">{row.sku}</td>
+                              <td className="p-2">{row.name || "—"}</td>
+                              <td className="p-2">{row.action === "new" ? "Crear" : "Actualizar"}</td>
+                              <td className="p-2 text-emerald-700">OK</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {preview.errors.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4" /> Errores
+                          </h4>
+                          <Button variant="outline" size="sm" className="rounded-none" onClick={() => downloadErrorsCsv(preview.errors)}>
+                            <Download className="w-4 h-4 mr-1" /> Descargar errores
+                          </Button>
+                        </div>
                         {preview.errors.map((error, index) => (
-                          <div key={`${error.row}-${index}`} className="text-sm text-destructive flex gap-3">
-                            <span className="font-mono bg-destructive/10 px-1.5 py-0.5 rounded text-xs min-w-[52px] text-center">Fila {error.row}</span>
-                            <span>{error.message}</span>
+                          <div key={`${error.row}-${index}`} className="text-sm text-destructive">
+                            Fila {error.row}: {error.message}
                           </div>
                         ))}
                       </div>
-                    )}
-
-                    <div className="flex justify-end pt-2">
-                      <Button
-                        disabled={!preview.rows.length || importMutation.isPending}
-                        onClick={confirmImport}
-                        className="rounded-none bg-[#4B3028] hover:bg-[#25211E] text-white h-11 px-8"
-                      >
-                        {importMutation.isPending ? "Importando..." : "Importar filas válidas"}
+                    ) : null}
+                    <div className="flex justify-end">
+                      <Button className="rounded-none" disabled={!preview.rows.length || importMutation.isPending} onClick={confirmImport}>
+                        Confirmar importación
                       </Button>
                     </div>
                   </div>
-                )}
+                ) : null}
+
+                {inventoryPreview && mode === "inventory" ? (
+                  <div className="space-y-4 border-t pt-6">
+                    <p className="text-sm">
+                      {inventoryPreview.rows.length} filas · {inventoryPreview.errors.length} errores ·{" "}
+                      {inventoryPreview.valid ? "válido" : "con problemas"}
+                    </p>
+                    {(inventoryPreview.rows as any[]).some((row) => row.willTriggerAlert) ? (
+                      <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                        {(inventoryPreview.rows as any[]).filter((row) => row.willTriggerAlert).length} fila(s)
+                        generarán alerta automática al confirmar (p. ej. stock bajo/crítico/agotado).
+                      </div>
+                    ) : null}
+                    {inventoryPreview.errors.length > 0 ? (
+                      <div className="space-y-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-none"
+                          onClick={() =>
+                            downloadErrorsCsv(
+                              inventoryPreview.errors.map((e) => ({
+                                row: Number(e.row ?? 0),
+                                message: String(e.message ?? ""),
+                              })),
+                            )
+                          }
+                        >
+                          Descargar errores
+                        </Button>
+                        {inventoryPreview.errors.map((error, index) => (
+                          <div key={index} className="text-sm text-destructive">
+                            Fila {String(error.row)}: {String(error.message)}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <Button
+                      className="rounded-none"
+                      disabled={!inventoryPreview.valid || inventoryImportMutation.isPending}
+                      onClick={confirmImport}
+                    >
+                      Confirmar inventario
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             )}
 
-            {step === 3 && result && (
-              <div className="p-10">
+            {step === 3 && (result || inventoryResult) ? (
+              <div className="p-10 space-y-6">
                 <div className="text-center">
-                  <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-200">
-                    <CheckCircle2 className="w-10 h-10" />
-                  </div>
-                  <h2 className="text-2xl font-serif text-[#25211E] dark:text-foreground">Importación procesada</h2>
-                  <p className="text-muted-foreground mt-2">Los cambios ya se reflejan en el catálogo y las sucursales.</p>
+                  <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-600 mb-4" />
+                  <h2 className="text-2xl font-serif">Importación completada</h2>
                 </div>
-                <div className="grid grid-cols-3 gap-4 max-w-xl mx-auto mt-8">
-                  <div className="p-4 text-center bg-emerald-50 border border-emerald-200"><div className="text-2xl font-serif text-emerald-700">{result.created}</div><div className="text-xs text-emerald-800">Nuevos</div></div>
-                  <div className="p-4 text-center bg-blue-50 border border-blue-200"><div className="text-2xl font-serif text-blue-700">{result.updated}</div><div className="text-xs text-blue-800">Actualizados</div></div>
-                  <div className="p-4 text-center bg-red-50 border border-red-200"><div className="text-2xl font-serif text-red-700">{result.errors.length}</div><div className="text-xs text-red-800">Con error</div></div>
-                </div>
-                {result.errors.length > 0 && (
-                  <div className="mt-8 space-y-2 border border-destructive/20 bg-destructive/5 p-4 max-h-56 overflow-y-auto">
-                    <h4 className="text-sm font-semibold text-destructive">Filas omitidas</h4>
-                    {result.errors.map((error, index) => (
-                      <div key={`${error.row}-${index}`} className="text-sm text-destructive">Fila {error.row}: {error.message}</div>
-                    ))}
+                {result ? (
+                  <div className="grid grid-cols-3 gap-4 max-w-xl mx-auto">
+                    <div className="p-4 text-center border"><div className="text-2xl">{result.created}</div><div className="text-xs">Creados</div></div>
+                    <div className="p-4 text-center border"><div className="text-2xl">{result.updated}</div><div className="text-xs">Actualizados</div></div>
+                    <div className="p-4 text-center border"><div className="text-2xl">{result.errors.length}</div><div className="text-xs">Errores</div></div>
                   </div>
-                )}
-                <div className="flex justify-center mt-8">
-                  <Button onClick={reset} className="rounded-none bg-[#4B3028] hover:bg-[#25211E] text-white h-11 px-7">
-                    <RefreshCcw className="w-4 h-4 mr-2" /> Realizar otra importación
+                ) : null}
+                {inventoryResult ? (
+                  <p className="text-center">{inventoryResult.imported} filas de inventario actualizadas.</p>
+                ) : null}
+                {(result?.errors.length || inventoryResult?.errors.length) ? (
+                  <div className="flex justify-center">
+                    <Button
+                      variant="outline"
+                      className="rounded-none"
+                      onClick={() =>
+                        downloadErrorsCsv(
+                          (result?.errors ??
+                            inventoryResult?.errors.map((e) => ({
+                              row: Number(e.row ?? 0),
+                              message: String(e.message ?? ""),
+                            })) ??
+                            []) as Array<{ row: number; message: string }>,
+                        )
+                      }
+                    >
+                      Descargar errores
+                    </Button>
+                  </div>
+                ) : null}
+                <div className="flex justify-center">
+                  <Button className="rounded-none" onClick={reset}>
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Otra importación
                   </Button>
                 </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="border border-border bg-background p-5 space-y-3">
+            <h3 className="font-medium">Historial de importaciones</h3>
+            {!jobs.data?.length ? (
+              <p className="text-sm text-muted-foreground">Aún no hay jobs registrados.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="text-left py-2">Fecha</th>
+                      <th className="text-left py-2">Tipo</th>
+                      <th className="text-left py-2">Archivo</th>
+                      <th className="text-left py-2">Estado</th>
+                      <th className="text-left py-2">Creados</th>
+                      <th className="text-left py-2">Actualizados</th>
+                      <th className="text-left py-2">Errores</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {jobs.data.map((job) => (
+                      <tr key={job.id} className="border-t">
+                        <td className="py-2">{new Date(job.createdAt).toLocaleString("es-MX")}</td>
+                        <td className="py-2">{job.type}</td>
+                        <td className="py-2">{job.filename || "—"}</td>
+                        <td className="py-2">{job.status}</td>
+                        <td className="py-2">{job.createdCount}</td>
+                        <td className="py-2">{job.updatedCount}</td>
+                        <td className="py-2">{job.errorCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

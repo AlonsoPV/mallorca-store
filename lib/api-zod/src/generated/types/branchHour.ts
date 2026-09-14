@@ -13,4 +13,5 @@ export interface BranchHour {
   close: string;
   closed: boolean;
   date?: string;
+  slotOrder?: number;
 }

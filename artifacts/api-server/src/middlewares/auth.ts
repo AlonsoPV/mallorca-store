@@ -1,7 +1,7 @@
 import { clerkClient, getAuth } from "@clerk/express";
 import type { NextFunction, Request, Response } from "express";
 import { db, usersTable, branchUserAssignmentsTable, type User } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 declare global {
@@ -13,8 +13,57 @@ declare global {
   }
 }
 
+const LOCAL_DEV_AUTH_TOKEN = "local-dev";
+
+function isLocalDevAuthEnabled(): boolean {
+  const flag = process.env.LOCAL_DEV_AUTH?.trim().toLowerCase();
+  return flag === "1" || flag === "true";
+}
+
 function claimString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readBearerToken(req: Request): string | undefined {
+  const header = req.headers.authorization;
+  if (!header) return undefined;
+  const [scheme, token] = header.split(" ");
+  if (!scheme || !token || scheme.toLowerCase() !== "bearer") return undefined;
+  return token;
+}
+
+async function provisionLocalDevUser(req: Request): Promise<User | undefined> {
+  if (!isLocalDevAuthEnabled()) return undefined;
+  if (readBearerToken(req) !== LOCAL_DEV_AUTH_TOKEN) return undefined;
+
+  const userId = process.env.LOCAL_DEV_USER_ID?.trim() || "user_local_dev_admin";
+  const email = (
+    process.env.LOCAL_DEV_USER_EMAIL?.trim() ||
+    process.env.INITIAL_ADMIN_EMAIL?.trim() ||
+    "local-admin@mallorca.local"
+  ).toLowerCase();
+  const firstName = process.env.LOCAL_DEV_USER_FIRST_NAME?.trim() || "Admin";
+  const lastName = process.env.LOCAL_DEV_USER_LAST_NAME?.trim() || "Local";
+  const role = "admin" as const;
+
+  const [user] = await db
+    .insert(usersTable)
+    .values({ id: userId, email, firstName, lastName, role })
+    .onConflictDoUpdate({
+      target: usersTable.id,
+      set: {
+        email,
+        firstName,
+        lastName,
+        role,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  req.userId = userId;
+  req.localUser = user;
+  return user;
 }
 
 async function resolveClerkProfile(userId: string): Promise<{
@@ -38,6 +87,9 @@ async function resolveClerkProfile(userId: string): Promise<{
 }
 
 export async function provisionUser(req: Request): Promise<User | undefined> {
+  const localDevUser = await provisionLocalDevUser(req);
+  if (localDevUser) return localDevUser;
+
   const auth = getAuth(req);
   const claims = (auth.sessionClaims ?? {}) as unknown as Record<string, unknown>;
   const userId = auth.userId ?? claimString(claims.userId);
@@ -116,7 +168,12 @@ export async function getAccessibleBranchIds(req: Request): Promise<number[] | n
   const rows = await db
     .select({ branchId: branchUserAssignmentsTable.branchId })
     .from(branchUserAssignmentsTable)
-    .where(eq(branchUserAssignmentsTable.userId, user.id));
+    .where(
+      and(
+        eq(branchUserAssignmentsTable.userId, user.id),
+        eq(branchUserAssignmentsTable.active, true),
+      ),
+    );
   return rows.map((row) => row.branchId);
 }
 

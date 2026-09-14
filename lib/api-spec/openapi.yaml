@@ -607,14 +607,83 @@ paths:
       parameters:
         - { name: status, in: query, required: false, schema: { type: string } }
         - { name: branchId, in: query, required: false, schema: { type: integer } }
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time }, description: Filter by scheduledStart >= from }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time }, description: Filter by scheduledStart < to }
+        - { name: fulfillmentMethod, in: query, required: false, schema: { type: string, enum: [pickup, delivery] } }
+        - { name: orderSource, in: query, required: false, schema: { $ref: "#/components/schemas/OrderSource" } }
       responses:
         "200": { description: Orders, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrderSummary" } } } } }
+    post:
+      operationId: createAdminOrder
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminOrderInput" }
+      responses:
+        "201": { description: Order created, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+        "400": { description: Validation error, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "403": { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "409": { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+  /admin/orders/preview:
+    post:
+      operationId: previewAdminOrder
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminOrderInput" }
+      responses:
+        "200": { description: Preview totals, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrderPreview" } } } }
+  /admin/customers/search:
+    get:
+      operationId: searchAdminCustomers
+      tags: [admin]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, default: 20 } }
+      responses:
+        "200": { description: Customer matches, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AdminCustomerSearchHit" } } } } }
+  /admin/coupons:
+    get:
+      operationId: listAdminCoupons
+      tags: [admin]
+      responses:
+        "200": { description: Coupons, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Coupon" } } } } }
+    post:
+      operationId: createAdminCoupon
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CouponInput" }
+      responses:
+        "201": { description: Coupon, content: { application/json: { schema: { $ref: "#/components/schemas/Coupon" } } } }
   /admin/branches:
     get:
       operationId: listAdminBranches
       tags: [admin]
       responses:
         "200": { description: Branches, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AdminBranch" } } } } }
+    post:
+      operationId: createAdminBranch
+      tags: [admin]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/BranchCreate" } } } }
+      responses:
+        "201": { description: Branch created, content: { application/json: { schema: { $ref: "#/components/schemas/AdminBranch" } } } }
+  /admin/branches/export:
+    get:
+      operationId: exportAdminBranches
+      tags: [admin]
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema: { type: string }
   /admin/branches/{id}:
     get:
       operationId: getAdminBranch
@@ -629,6 +698,51 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/BranchUpdate" } } } }
       responses:
         "200": { description: Branch, content: { application/json: { schema: { $ref: "#/components/schemas/AdminBranch" } } } }
+    delete:
+      operationId: deleteAdminBranch
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "204": { description: Deleted }
+        "409": { description: Has operational history, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+  /admin/branches/{id}/deactivate:
+    post:
+      operationId: deactivateAdminBranch
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmFutureOrders: { type: boolean }
+      responses:
+        "200": { description: Branch, content: { application/json: { schema: { $ref: "#/components/schemas/AdminBranch" } } } }
+        "409": { description: Future orders require confirmation, content: { application/json: { schema: { type: object } } } }
+  /admin/branches/{id}/archive:
+    post:
+      operationId: archiveAdminBranch
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: Branch, content: { application/json: { schema: { $ref: "#/components/schemas/AdminBranch" } } } }
+  /admin/branches/{id}/duplicate:
+    post:
+      operationId: duplicateAdminBranch
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/BranchDuplicateInput" } } } }
+      responses:
+        "201": { description: Duplicated branch, content: { application/json: { schema: { $ref: "#/components/schemas/AdminBranch" } } } }
+  /admin/branches/{id}/audit:
+    get:
+      operationId: listBranchAudit
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: Audit log, content: { application/json: { schema: { type: array, items: { type: object } } } } }
   /admin/inventory:
     get:
       operationId: listAdminInventory
@@ -636,7 +750,7 @@ paths:
       parameters:
         - { name: search, in: query, schema: { type: string } }
         - { name: branchId, in: query, schema: { type: integer } }
-        - { name: state, in: query, schema: { type: string, enum: [NORMAL, LOW_STOCK, OUT_OF_STOCK] } }
+        - { name: state, in: query, schema: { type: string, enum: [NORMAL, LOW_STOCK, CRITICAL_STOCK, OUT_OF_STOCK] } }
         - { name: categoryId, in: query, schema: { type: integer } }
       responses:
         "200": { description: Inventory, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/InventoryRow" } } } } }
@@ -663,8 +777,51 @@ paths:
     get:
       operationId: listInventoryAlerts
       tags: [admin]
+      parameters:
+        - { name: branchId, in: query, schema: { type: integer } }
+        - { name: productId, in: query, schema: { type: integer } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: priority, in: query, schema: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] } }
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, IN_PROGRESS, RESOLVED, DISMISSED] } }
+        - { name: source, in: query, schema: { type: string, enum: [AUTOMATIC, MANUAL] } }
+        - { name: assignedUserId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
       responses:
         "200": { description: Alert history, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/InventoryAlertRow" } } } } }
+    post:
+      operationId: createInventoryAlert
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryAlertInput"
+      responses:
+        "201": { description: Created alert(s), content: { application/json: { schema: { type: object } } } }
+  /admin/inventory/alerts/{id}:
+    patch:
+      operationId: updateInventoryAlert
+      tags: [admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInventoryAlertInput"
+      responses:
+        "200": { description: Updated alert, content: { application/json: { schema: { type: object } } } }
+  /admin/inventory/alerts/{id}/events:
+    get:
+      operationId: listInventoryAlertEvents
+      tags: [admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Alert events, content: { application/json: { schema: { type: object } } } }
   /admin/inventory/import/preview:
     post:
       operationId: previewInventoryImport
@@ -713,7 +870,114 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductImportResult"
+  /admin/products/export:
+    post:
+      operationId: exportProducts
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductExportInput"
+      responses:
+        "200":
+          description: Export file payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductExportResult"
+  /admin/products/bulk:
+    post:
+      operationId: bulkUpdateProducts
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductBulkInput"
+      responses:
+        "200":
+          description: Bulk update result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBulkResult"
+  /admin/products/{id}/duplicate:
+    post:
+      operationId: duplicateProduct
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Duplicated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/import-jobs:
+    get:
+      operationId: listImportJobs
+      tags: [admin]
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [product, inventory]
+      responses:
+        "200":
+          description: Import job history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ImportJob"
+  /admin/import-jobs/{id}:
+    get:
+      operationId: getImportJob
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Import job detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportJob"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /admin/orders/{id}:
+    get:
+      operationId: getAdminOrder
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Order detail, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+        "404": { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     patch:
       operationId: updateAdminOrder
       tags: [admin]
@@ -722,9 +986,36 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/OrderStatusUpdate" }
+            schema: { $ref: "#/components/schemas/AdminOrderUpdate" }
       responses:
         "200": { description: Order, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+  /admin/orders/{id}/payment:
+    post:
+      operationId: recordAdminOrderPayment
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminOrderPaymentInput" }
+      responses:
+        "200": { description: Order, content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+  /admin/orders/{id}/payment-link:
+    post:
+      operationId: createAdminOrderPaymentLink
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Payment link, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentLinkResponse" } } } }
+        "503": { description: Provider missing, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentStart" } } } }
+  /admin/orders/{id}/duplicate:
+    post:
+      operationId: duplicateAdminOrder
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Prefill payload for new order, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrderDuplicatePrefill" } } } }
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -745,6 +1036,13 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AssignmentInput" } } } }
       responses:
         "201": { description: Assignment, content: { application/json: { schema: { type: object } } } }
+    patch:
+      operationId: updateBranchAssignment
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AssignmentUpdateInput" } } } }
+      responses:
+        "200": { description: Assignment, content: { application/json: { schema: { type: object } } } }
   /admin/branches/{id}/assignments/{userId}:
     delete:
       operationId: deleteBranchAssignment
@@ -811,7 +1109,39 @@ components:
           type: boolean
         date:
           type: string
+        slotOrder:
+          type: integer
       required: [day, label, open, close, closed]
+    BranchLink:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        label: { type: string }
+        url: { type: string }
+        sortOrder: { type: integer }
+        active: { type: boolean }
+      required: [type, label, url]
+    BranchImage:
+      type: object
+      properties:
+        id: { type: integer }
+        url: { type: string }
+        type: { type: string, enum: [hero, gallery, logo, card] }
+        alt: { type: ["string", "null"] }
+        sortOrder: { type: integer }
+        active: { type: boolean }
+      required: [url, type]
+    BranchSpecialHour:
+      type: object
+      properties:
+        id: { type: integer }
+        date: { type: string }
+        openTime: { type: ["string", "null"] }
+        closeTime: { type: ["string", "null"] }
+        closed: { type: boolean }
+        label: { type: ["string", "null"] }
+      required: [date, closed]
     Branch:
       type: object
       properties:
@@ -823,10 +1153,18 @@ components:
           type: string
         shortName:
           type: string
+        shortDescription:
+          type: ["string", "null"]
         description:
           type: ["string", "null"]
         address:
           type: string
+        street:
+          type: ["string", "null"]
+        externalNumber:
+          type: ["string", "null"]
+        internalNumber:
+          type: ["string", "null"]
         neighborhood:
           type: string
         borough:
@@ -843,17 +1181,34 @@ components:
           type: ["number", "null"]
         longitude:
           type: ["number", "null"]
+        placeId:
+          type: ["string", "null"]
         phone:
           type: string
+        secondaryPhone:
+          type: ["string", "null"]
         whatsapp:
+          type: ["string", "null"]
+        whatsappDefaultMessage:
           type: ["string", "null"]
         email:
           type: string
+        ordersEmail:
+          type: ["string", "null"]
+        reservationsEmail:
+          type: ["string", "null"]
         mapsUrl:
           type: string
         openTableUrl:
           type: ["string", "null"]
         instagramUrl:
+          type: ["string", "null"]
+        reservationProvider:
+          type: string
+          enum: [opentable, external, none]
+        reservationUrl:
+          type: ["string", "null"]
+        reservationCta:
           type: ["string", "null"]
         imageUrl:
           type: ["string", "null"]
@@ -873,10 +1228,23 @@ components:
           type: ["number", "null"]
         minimumOrder:
           type: ["number", "null"]
+        freeDeliveryFrom:
+          type: ["number", "null"]
         preparationTimeMinutes:
           type: integer
         deliveryTimeMinutes:
           type: integer
+        featured:
+          type: boolean
+        seoTitle:
+          type: ["string", "null"]
+        metaDescription:
+          type: ["string", "null"]
+        ogImageUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive, archived]
         active:
           type: boolean
       required:
@@ -949,6 +1317,14 @@ components:
           type: boolean
         inventory:
           type: integer
+        minStock:
+          type: integer
+        criticalStock:
+          type: ["integer", "null"]
+        autoAlertEnabled:
+          type: boolean
+        alertState:
+          type: string
         price:
           type: number
         salePrice:
@@ -1012,6 +1388,16 @@ components:
           type: string
         categorySlug:
           type: string
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              slug: { type: string }
+              isPrimary: { type: boolean }
+            required: [id, name, slug, isPrimary]
         imageUrl:
           type: ["string", "null"]
         featured:
@@ -1037,7 +1423,7 @@ components:
         - imageUrl
         - featured
         - seasonal
-         - minimumLeadTimeHours
+        - minimumLeadTimeHours
         - availability
     Promotion:
       type: object
@@ -1116,6 +1502,10 @@ components:
               type: ["string", "null"]
             minimumLeadTimeHours:
               type: integer
+            crossSellProductIds:
+              type: array
+              items: { type: integer }
+              maxItems: 6
             variants:
               type: array
               items:
@@ -1154,6 +1544,20 @@ components:
           type: ["number", "null"]
         categoryId:
           type: integer
+          description: Primary category (legacy). Prefer categoryIds + primaryCategoryId.
+        categoryIds:
+          type: array
+          items: { type: integer }
+          minItems: 1
+        primaryCategoryId:
+          type: integer
+        tags:
+          type: array
+          items: { type: string }
+        crossSellProductIds:
+          type: array
+          items: { type: integer }
+          maxItems: 6
         imageUrl:
           type: ["string", "null"]
         gallery:
@@ -1209,6 +1613,19 @@ components:
           type: ["number", "null"]
         categoryId:
           type: integer
+        categoryIds:
+          type: array
+          items: { type: integer }
+          minItems: 1
+        primaryCategoryId:
+          type: integer
+        tags:
+          type: array
+          items: { type: string }
+        crossSellProductIds:
+          type: array
+          items: { type: integer }
+          maxItems: 6
         imageUrl:
           type: ["string", "null"]
         gallery:
@@ -1240,6 +1657,8 @@ components:
         available: { type: boolean }
         inventory: { type: integer, minimum: 0 }
         minStock: { type: integer, minimum: 0 }
+        criticalStock: { type: ["integer", "null"], minimum: 0 }
+        autoAlertEnabled: { type: boolean }
         priceOverride: { type: ["number", "null"] }
         salePriceOverride: { type: ["number", "null"] }
         preparationTimeMinutes: { type: ["integer", "null"] }
@@ -1266,27 +1685,112 @@ components:
             contentType: { type: string }
           required: [name, size, contentType]
       required: [uploadURL, objectPath, metadata]
+    BranchNotificationPreferences:
+      type: object
+      properties:
+        email: { type: boolean }
+        inApp: { type: boolean }
+        whatsapp: { type: boolean, description: Queues whatsapp_pending; outbound send not implemented }
+        lowStock: { type: boolean }
+        criticalStock: { type: boolean }
+        outOfStock: { type: boolean }
+        newOrder: { type: boolean }
+        cancelledOrder: { type: boolean }
+        incident: { type: boolean }
     BranchUpdate:
       type: object
       properties:
         name: { type: string }
+        shortName: { type: string }
+        shortDescription: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        slug: { type: string }
         branchCode: { type: string }
+        street: { type: ["string", "null"] }
+        externalNumber: { type: ["string", "null"] }
+        internalNumber: { type: ["string", "null"] }
+        neighborhood: { type: string }
+        borough: { type: ["string", "null"] }
+        city: { type: string }
+        state: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+        address: { type: string }
+        latitude: { type: ["number", "null"] }
+        longitude: { type: ["number", "null"] }
+        placeId: { type: ["string", "null"] }
+        phone: { type: string }
+        secondaryPhone: { type: ["string", "null"] }
+        whatsapp: { type: ["string", "null"] }
+        whatsappDefaultMessage: { type: ["string", "null"] }
+        email: { type: string, format: email }
+        ordersEmail: { type: ["string", "null"], format: email }
+        reservationsEmail: { type: ["string", "null"], format: email }
+        adminEmail: { type: ["string", "null"], format: email }
         managerName: { type: ["string", "null"] }
         managerEmail: { type: ["string", "null"], format: email }
         managerPhone: { type: ["string", "null"] }
-        notificationPreferences: { type: object, additionalProperties: { type: boolean } }
-        active: { type: boolean }
+        notificationPreferences:
+          $ref: "#/components/schemas/BranchNotificationPreferences"
+        mapsUrl: { type: string }
+        openTableUrl: { type: ["string", "null"] }
+        instagramUrl: { type: ["string", "null"] }
+        reservationProvider: { type: string, enum: [opentable, external, none] }
+        reservationUrl: { type: ["string", "null"] }
+        reservationCta: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        gallery: { type: array, items: { type: string } }
         hours: { type: array, items: { $ref: "#/components/schemas/BranchHour" } }
+        specialHours: { type: array, items: { $ref: "#/components/schemas/BranchSpecialHour" } }
+        links: { type: array, items: { $ref: "#/components/schemas/BranchLink" } }
+        images: { type: array, items: { $ref: "#/components/schemas/BranchImage" } }
         pickupAvailable: { type: boolean }
         deliveryAvailable: { type: boolean }
+        deliveryRadiusKm: { type: ["number", "null"] }
+        minimumOrder: { type: ["number", "null"] }
+        freeDeliveryFrom: { type: ["number", "null"] }
         preparationTimeMinutes: { type: integer, minimum: 0 }
         deliveryTimeMinutes: { type: integer, minimum: 0 }
         pickupSlotIntervalMinutes: { type: integer, minimum: 5 }
         pickupSlotCapacity: { type: integer, minimum: 1 }
+        deliveryFee: { type: number }
+        featured: { type: boolean }
+        seoTitle: { type: ["string", "null"] }
+        metaDescription: { type: ["string", "null"] }
+        ogImageUrl: { type: ["string", "null"] }
+        status: { type: string, enum: [active, inactive, archived] }
+        active: { type: boolean }
+    BranchCreate:
+      allOf:
+        - $ref: "#/components/schemas/BranchUpdate"
+        - type: object
+          required: [name, branchCode, phone, email]
+    BranchDuplicateInput:
+      type: object
+      properties:
+        name: { type: string }
+        shortName: { type: string }
+        branchCode: { type: string }
+        slug: { type: string }
+        copyHours: { type: boolean, default: true }
+        copyPickupDelivery: { type: boolean, default: true }
+        copyNotifications: { type: boolean, default: true }
+        copyProductAssignments: { type: boolean, default: false }
+        copyTeamStructure: { type: boolean, default: false }
+      required: [name, branchCode]
     AdminBranch:
       allOf:
         - $ref: "#/components/schemas/Branch"
         - $ref: "#/components/schemas/BranchUpdate"
+        - type: object
+          properties:
+            whatsappUrl: { type: ["string", "null"] }
+            ordersToday: { type: integer }
+            alertsOpen: { type: integer }
+            primaryResponsible: { type: ["object", "null"] }
+            links: { type: array, items: { $ref: "#/components/schemas/BranchLink" } }
+            images: { type: array, items: { $ref: "#/components/schemas/BranchImage" } }
+            specialHours: { type: array, items: { $ref: "#/components/schemas/BranchSpecialHour" } }
     InventoryRow:
       type: object
       properties:
@@ -1294,6 +1798,13 @@ components:
         branch: { $ref: "#/components/schemas/Branch" }
         product: { $ref: "#/components/schemas/ProductCard" }
         reservedStock: { type: integer }
+        availableStock: { type: integer }
+        criticalStock: { type: ["integer", "null"] }
+        autoAlertEnabled: { type: boolean }
+        openAlertCount: { type: integer }
+        inventoryStatus:
+          type: string
+          enum: [NORMAL, LOW_STOCK, CRITICAL_STOCK, OUT_OF_STOCK]
       required: [branchProduct, branch, product, reservedStock]
     InventoryAlertRow:
       type: object
@@ -1302,6 +1813,26 @@ components:
         branch: { $ref: "#/components/schemas/Branch" }
         product: { $ref: "#/components/schemas/ProductCard" }
       required: [alert, branch, product]
+    CreateInventoryAlertInput:
+      type: object
+      properties:
+        productId: { type: integer }
+        productIds: { type: array, items: { type: integer } }
+        branchId: { type: integer }
+        type:
+          type: string
+          enum: [INVENTORY_REVIEW, RESTOCK_REQUEST, INVENTORY_MISMATCH, CUSTOM, LOW_STOCK, CRITICAL_STOCK, OUT_OF_STOCK]
+        priority: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] }
+        message: { type: string }
+        assignedUserId: { type: ["string", "null"] }
+      required: [branchId, type, message]
+    UpdateInventoryAlertInput:
+      type: object
+      properties:
+        status: { type: string, enum: [OPEN, IN_PROGRESS, RESOLVED, DISMISSED] }
+        priority: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] }
+        assignedUserId: { type: ["string", "null"] }
+        resolutionNote: { type: ["string", "null"] }
     InventoryUpdate:
       type: object
       properties:
@@ -1313,9 +1844,134 @@ components:
         reason: { type: string }
         reference: { type: string }
       required: [reason]
+    ProductImportInput:
+      type: object
+      properties:
+        csv: { type: string }
+        mapping:
+          type: object
+          additionalProperties: { type: string }
+        updateExisting:
+          type: boolean
+          description: When false, existing SKUs are skipped (reported as errors) instead of updated
+          default: true
+        updateFields:
+          type: array
+          items: { type: string }
+          description: When updating existing products, only these product-level fields/groups are applied
+        relationMode:
+          type: string
+          enum: [add, replace]
+          default: add
+          description: How to apply categories, tags and cross-sell when updating
+        idempotencyKey:
+          type: string
+          description: Optional key to avoid double-processing the same import job
+        filename:
+          type: string
+      required: [csv]
+    ProductExportInput:
+      type: object
+      properties:
+        search: { type: string }
+        status: { type: string, enum: [draft, active, inactive] }
+        ids:
+          type: array
+          items: { type: integer }
+        format: { type: string, enum: [csv, xlsx], default: csv }
+        reimportable: { type: boolean, default: true }
+        columns:
+          type: array
+          items: { type: string }
+      required: []
+    ProductExportResult:
+      type: object
+      properties:
+        filename: { type: string }
+        contentType: { type: string }
+        content: { type: string, description: CSV text (also used as payload for xlsx client packaging) }
+      required: [filename, contentType, content]
+    ProductBulkInput:
+      type: object
+      properties:
+        ids:
+          type: array
+          items: { type: integer }
+          minItems: 1
+        action:
+          type: string
+          enum:
+            - set_status
+            - set_category
+            - add_categories
+            - remove_categories
+            - replace_categories
+            - add_tags
+            - remove_tags
+            - replace_tags
+            - assign_branch
+            - unassign_branch
+            - set_min_stock
+            - set_price
+            - set_featured
+            - archive
+            - create_promotion
+            - cancel_promotions
+            - add_cross_sell
+            - replace_cross_sell
+        status: { type: string, enum: [draft, active, inactive] }
+        categoryId: { type: integer }
+        categoryIds:
+          type: array
+          items: { type: integer }
+        tagNames:
+          type: array
+          items: { type: string }
+        branchId: { type: integer }
+        minStock: { type: integer, minimum: 0 }
+        price: { type: number }
+        featured: { type: boolean }
+        crossSellProductIds:
+          type: array
+          items: { type: integer }
+          maxItems: 6
+        promotion:
+          $ref: "#/components/schemas/PromotionInput"
+      required: [ids, action]
+    ProductBulkResult:
+      type: object
+      properties:
+        updated: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              message: { type: string }
+            required: [id, message]
+      required: [updated, errors]
+    ImportJob:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [product, inventory] }
+        filename: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, running, completed, failed] }
+        createdCount: { type: integer }
+        updatedCount: { type: integer }
+        errorCount: { type: integer }
+        errorLog: { type: array, items: { type: object } }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        userId: { type: ["string", "null"] }
+      required: [id, type, filename, status, createdCount, updatedCount, errorCount, errorLog, createdAt, completedAt, userId]
     CsvImportInput:
       type: object
-      properties: { csv: { type: string } }
+      properties:
+        csv: { type: string }
+        idempotencyKey: { type: string }
+        filename: { type: string }
       required: [csv]
     ImportPreview:
       type: object
@@ -1329,15 +1985,8 @@ components:
       properties:
         imported: { type: integer }
         errors: { type: array, items: { type: object } }
+        jobId: { type: string }
       required: [imported, errors]
-    ProductImportInput:
-      type: object
-      properties:
-        csv: { type: string }
-        mapping:
-          type: object
-          additionalProperties: { type: string }
-      required: [csv]
     ProductImportRow:
       type: object
       properties:
@@ -1367,6 +2016,7 @@ components:
         created: { type: integer }
         updated: { type: integer }
         errors: { type: array, items: { $ref: "#/components/schemas/ProductImportError" } }
+        jobId: { type: string }
       required: [imported, created, updated, errors]
     AdminProduct:
       allOf:
@@ -1403,6 +2053,20 @@ components:
           type: integer
         lowStockProducts:
           type: integer
+        criticalStockProducts:
+          type: integer
+        outOfStockProducts:
+          type: integer
+        ordersToday:
+          type: integer
+        ordersPending:
+          type: integer
+        ordersNextHour:
+          type: integer
+        alertsCount:
+          type: integer
+        salesToday:
+          type: number
         branchSummaries:
           type: array
           items:
@@ -1412,6 +2076,12 @@ components:
         - activeProducts
         - totalBranches
         - lowStockProducts
+        - outOfStockProducts
+        - ordersToday
+        - ordersPending
+        - ordersNextHour
+        - alertsCount
+        - salesToday
         - branchSummaries
     CartSessionInput:
       type: object
@@ -1443,6 +2113,285 @@ components:
         unitPrice: { type: number }
         lineTotal: { type: number }
       required: [id, productId, variantId, sku, name, variantLabel, quantity, unitPrice, lineTotal]
+    OrderLineItem:
+      type: object
+      properties:
+        id: { type: integer }
+        productId: { type: ["integer", "null"] }
+        variantId: { type: ["integer", "null"] }
+        sku: { type: string }
+        name: { type: string }
+        variantLabel: { type: ["string", "null"] }
+        quantity: { type: integer }
+        listUnitPrice: { type: ["number", "null"] }
+        unitPrice: { type: number }
+        lineTotal: { type: number }
+        promotionId: { type: ["integer", "null"] }
+        manualLineItem: { type: boolean }
+      required: [id, productId, variantId, sku, name, variantLabel, quantity, unitPrice, lineTotal]
+    OrderSource:
+      type: string
+      enum: [STOREFRONT, PHONE, WHATSAPP, POS, CORPORATE, ADMIN, OTHER]
+    PaymentMethod:
+      type: string
+      enum: [ONLINE, CASH, TERMINAL, TRANSFER, PAYMENT_LINK, PENDING, COURTESY]
+    AdminOrderLineInput:
+      type: object
+      properties:
+        productId: { type: ["integer", "null"] }
+        variantId: { type: ["integer", "null"] }
+        quantity: { type: integer, minimum: 1 }
+        manualLineItem: { type: boolean, default: false }
+        description: { type: string }
+        unitPrice: { type: number }
+      required: [quantity]
+    AdminOrderManualDiscount:
+      type: object
+      properties:
+        type: { type: string, enum: [percent, amount] }
+        value: { type: number, minimum: 0 }
+        reason: { type: string, minLength: 1 }
+      required: [type, value, reason]
+    AdminOrderOverrides:
+      type: object
+      properties:
+        stock: { type: boolean }
+        slot: { type: boolean }
+        delivery: { type: boolean }
+        reason: { type: string, minLength: 1 }
+      required: [reason]
+    AdminOrderInput:
+      type: object
+      properties:
+        orderSource: { $ref: "#/components/schemas/OrderSource" }
+        branchId: { type: integer }
+        userId: { type: ["string", "null"] }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+        scheduledStart: { type: string, format: date-time }
+        customerEmail: { type: string }
+        customerName: { type: string }
+        customerPhone: { type: string }
+        deliveryAddress: { type: ["string", "null"] }
+        deliveryLatitude: { type: ["number", "null"] }
+        deliveryLongitude: { type: ["number", "null"] }
+        customerNotes: { type: ["string", "null"] }
+        productionNotes: { type: ["string", "null"] }
+        internalNotes: { type: ["string", "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/AdminOrderLineInput" }, minItems: 1 }
+        manualDiscount: { $ref: "#/components/schemas/AdminOrderManualDiscount" }
+        couponCode: { type: ["string", "null"] }
+        paymentMethod: { $ref: "#/components/schemas/PaymentMethod" }
+        markPaid: { type: boolean }
+        paymentReference: { type: ["string", "null"] }
+        paymentNote: { type: ["string", "null"] }
+        amountPaid: { type: ["number", "null"] }
+        overrides: { $ref: "#/components/schemas/AdminOrderOverrides" }
+      required: [orderSource, branchId, fulfillmentMethod, scheduledStart, customerEmail, customerName, customerPhone, lines]
+    AdminOrderPreviewLine:
+      type: object
+      properties:
+        productId: { type: ["integer", "null"] }
+        variantId: { type: ["integer", "null"] }
+        sku: { type: string }
+        name: { type: string }
+        variantLabel: { type: ["string", "null"] }
+        quantity: { type: integer }
+        listUnitPrice: { type: number }
+        unitPrice: { type: number }
+        lineTotal: { type: number }
+        promotionDiscount: { type: number }
+        manualLineItem: { type: boolean }
+        available: { type: boolean }
+        inventory: { type: ["integer", "null"] }
+        reason: { type: ["string", "null"] }
+      required: [sku, name, quantity, listUnitPrice, unitPrice, lineTotal, promotionDiscount, manualLineItem, available]
+    AdminOrderPreview:
+      type: object
+      properties:
+        lines: { type: array, items: { $ref: "#/components/schemas/AdminOrderPreviewLine" } }
+        subtotal: { type: number }
+        promotionDiscountTotal: { type: number }
+        discountAmount: { type: number }
+        discountPercent: { type: ["number", "null"] }
+        couponCode: { type: ["string", "null"] }
+        couponDiscount: { type: number }
+        deliveryFee: { type: number }
+        total: { type: number }
+        errors: { type: array, items: { type: string } }
+      required: [lines, subtotal, promotionDiscountTotal, discountAmount, couponDiscount, deliveryFee, total, errors]
+    AdminCustomerSearchHit:
+      type: object
+      properties:
+        userId: { type: ["string", "null"] }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: ["string", "null"] }
+        orderCount: { type: integer }
+        lastOrderAt: { type: ["string", "null"], format: date-time }
+      required: [name, email, orderCount]
+    AdminOrderPaymentInput:
+      type: object
+      properties:
+        paymentMethod: { $ref: "#/components/schemas/PaymentMethod" }
+        paymentReference: { type: ["string", "null"] }
+        paymentNote: { type: ["string", "null"] }
+        amountPaid: { type: ["number", "null"] }
+        markPaid: { type: boolean, default: true }
+      required: [paymentMethod]
+    PaymentLinkResponse:
+      type: object
+      properties:
+        url: { type: string }
+        orderId: { type: string }
+      required: [url, orderId]
+    AdminOrderDuplicatePrefill:
+      type: object
+      properties:
+        branchId: { type: integer }
+        customerEmail: { type: string }
+        customerName: { type: string }
+        customerPhone: { type: string }
+        userId: { type: ["string", "null"] }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+        deliveryAddress: { type: ["string", "null"] }
+        deliveryLatitude: { type: ["number", "null"] }
+        deliveryLongitude: { type: ["number", "null"] }
+        customerNotes: { type: ["string", "null"] }
+        productionNotes: { type: ["string", "null"] }
+        internalNotes: { type: ["string", "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/AdminOrderLineInput" } }
+      required: [branchId, customerEmail, customerName, customerPhone, fulfillmentMethod, lines]
+    Coupon:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [percentage, amount] }
+        value: { type: number }
+        active: { type: boolean }
+        startsAt: { type: ["string", "null"], format: date-time }
+        endsAt: { type: ["string", "null"], format: date-time }
+        maxRedemptions: { type: ["integer", "null"] }
+        redemptionCount: { type: integer }
+        minSubtotal: { type: ["number", "null"] }
+      required: [id, code, name, type, value, active, redemptionCount]
+    CouponInput:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [percentage, amount] }
+        value: { type: number }
+        active: { type: boolean, default: true }
+        startsAt: { type: ["string", "null"], format: date-time }
+        endsAt: { type: ["string", "null"], format: date-time }
+        maxRedemptions: { type: ["integer", "null"] }
+        minSubtotal: { type: ["number", "null"] }
+      required: [code, name, type, value]
+    AdminOrderUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [pending_payment, paid, preparing, ready, completed, cancelled] }
+        cancelReason: { type: ["string", "null"] }
+        customerEmail: { type: string }
+        customerName: { type: string }
+        customerPhone: { type: string }
+        scheduledStart: { type: string, format: date-time }
+        customerNotes: { type: ["string", "null"] }
+        productionNotes: { type: ["string", "null"] }
+        internalNotes: { type: ["string", "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/AdminOrderLineInput" } }
+    OrderInput:
+      type: object
+      properties:
+        cartId: { type: string }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+        scheduledStart: { type: string, format: date-time }
+        customerEmail: { type: string, format: email }
+        customerName: { type: string }
+        customerPhone: { type: string }
+        notes: { type: ["string", "null"] }
+        deliveryAddress: { type: ["string", "null"] }
+        deliveryLatitude: { type: ["number", "null"] }
+        deliveryLongitude: { type: ["number", "null"] }
+      required: [cartId, fulfillmentMethod, scheduledStart, customerEmail, customerName, customerPhone]
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        guestAccessToken: { type: string }
+        orderSource: { $ref: "#/components/schemas/OrderSource" }
+        status: { type: string }
+        paymentStatus: { type: string }
+        paymentMethod: { type: ["string", "null"] }
+        paymentReference: { type: ["string", "null"] }
+        paymentNote: { type: ["string", "null"] }
+        paymentLinkUrl: { type: ["string", "null"] }
+        amountPaid: { type: number }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+        scheduledStart: { type: string, format: date-time }
+        scheduledEnd: { type: string, format: date-time }
+        customerEmail: { type: string }
+        customerName: { type: string }
+        customerPhone: { type: string }
+        deliveryAddress: { type: ["string", "null"] }
+        customerNotes: { type: ["string", "null"] }
+        productionNotes: { type: ["string", "null"] }
+        internalNotes: { type: ["string", "null"] }
+        subtotal: { type: number }
+        promotionDiscountTotal: { type: number }
+        discountAmount: { type: number }
+        discountPercent: { type: ["number", "null"] }
+        discountReason: { type: ["string", "null"] }
+        couponCode: { type: ["string", "null"] }
+        couponDiscount: { type: number }
+        deliveryFee: { type: number }
+        total: { type: number }
+        availabilityOverride: { type: boolean }
+        overrideReason: { type: ["string", "null"] }
+        branchId: { type: integer }
+        branchName: { type: string }
+        createdByUserId: { type: ["string", "null"] }
+        items: { type: array, items: { $ref: "#/components/schemas/OrderLineItem" } }
+      required: [id, orderNumber, guestAccessToken, status, paymentStatus, fulfillmentMethod, scheduledStart, scheduledEnd, customerEmail, customerName, customerPhone, deliveryAddress, subtotal, deliveryFee, total, items]
+    OrderSummaryItem:
+      type: object
+      properties:
+        name: { type: string }
+        quantity: { type: integer }
+      required: [name, quantity]
+    OrderSummary:
+      type: object
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        orderSource: { $ref: "#/components/schemas/OrderSource" }
+        total: { type: number }
+        createdAt: { type: string, format: date-time }
+        scheduledStart: { type: string, format: date-time }
+        branchId: { type: integer }
+        branchName: { type: string }
+        customerName: { type: string }
+        customerEmail: { type: string }
+        customerPhone: { type: string }
+        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
+        paymentStatus: { type: string }
+        itemCount: { type: integer }
+        items: { type: array, items: { $ref: "#/components/schemas/OrderSummaryItem" } }
+      required: [id, orderNumber, status, total, createdAt, scheduledStart, branchId, customerName, customerEmail, fulfillmentMethod]
+    PaymentStart:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string, enum: [PAYMENT_PROVIDER_NOT_CONFIGURED] }
+      required: [error, code]
+    PaymentStartInput:
+      type: object
+      properties:
+        guestAccessToken: { type: string }
     Cart:
       type: object
       properties:
@@ -1528,63 +2477,6 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/FulfillmentPreviewItem" } }
         unavailableItems: { type: array, items: { $ref: "#/components/schemas/FulfillmentPreviewItem" } }
       required: [scheduledStart, slotAvailable, slotReason, items, unavailableItems]
-    OrderInput:
-      type: object
-      properties:
-        cartId: { type: string }
-        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
-        scheduledStart: { type: string, format: date-time }
-        customerEmail: { type: string, format: email }
-        customerName: { type: string }
-        customerPhone: { type: string }
-        notes: { type: ["string", "null"] }
-        deliveryAddress: { type: ["string", "null"] }
-        deliveryLatitude: { type: ["number", "null"] }
-        deliveryLongitude: { type: ["number", "null"] }
-      required: [cartId, fulfillmentMethod, scheduledStart, customerEmail, customerName, customerPhone]
-    Order:
-      type: object
-      properties:
-        id: { type: string }
-        orderNumber: { type: string }
-        guestAccessToken: { type: string }
-        status: { type: string }
-        paymentStatus: { type: string }
-        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
-        scheduledStart: { type: string, format: date-time }
-        scheduledEnd: { type: string, format: date-time }
-        customerEmail: { type: string }
-        customerName: { type: string }
-        customerPhone: { type: string }
-        deliveryAddress: { type: ["string", "null"] }
-        subtotal: { type: number }
-        deliveryFee: { type: number }
-        total: { type: number }
-        items: { type: array, items: { $ref: "#/components/schemas/CartLineItem" } }
-      required: [id, orderNumber, guestAccessToken, status, paymentStatus, fulfillmentMethod, scheduledStart, scheduledEnd, customerEmail, customerName, customerPhone, deliveryAddress, subtotal, deliveryFee, total, items]
-    OrderSummary:
-      type: object
-      properties:
-        id: { type: string }
-        orderNumber: { type: string }
-        status: { type: string }
-        total: { type: number }
-        createdAt: { type: string, format: date-time }
-        branchId: { type: integer }
-        customerName: { type: string }
-        customerEmail: { type: string }
-        fulfillmentMethod: { type: string, enum: [pickup, delivery] }
-      required: [id, orderNumber, status, total, createdAt, branchId, customerName, customerEmail, fulfillmentMethod]
-    PaymentStart:
-      type: object
-      properties:
-        error: { type: string }
-        code: { type: string, enum: [PAYMENT_PROVIDER_NOT_CONFIGURED] }
-      required: [error, code]
-    PaymentStartInput:
-      type: object
-      properties:
-        guestAccessToken: { type: string }
     UserProfile:
       type: object
       properties:
@@ -1615,7 +2507,18 @@ components:
       required: [id, name, email, role]
     AssignmentInput:
       type: object
-      properties: { userId: { type: string } }
+      properties:
+        userId: { type: string }
+        role: { type: string, enum: [branch_manager, staff, operations], default: staff }
+        isPrimary: { type: boolean, default: false }
+      required: [userId]
+    AssignmentUpdateInput:
+      type: object
+      properties:
+        userId: { type: string }
+        role: { type: string, enum: [branch_manager, staff, operations] }
+        isPrimary: { type: boolean }
+        active: { type: boolean }
       required: [userId]
     CategoryResponsibleInput:
       type: object
@@ -1631,11 +2534,18 @@ components:
         general: { type: object }
         contact: { type: object }
         hours: { type: array, items: { $ref: "#/components/schemas/BranchHour" } }
+        specialHours: { type: array, items: { $ref: "#/components/schemas/BranchSpecialHour" } }
+        links: { type: array, items: { $ref: "#/components/schemas/BranchLink" } }
+        images: { type: array, items: { $ref: "#/components/schemas/BranchImage" } }
         products: { type: array, items: { type: object } }
         inventory: { type: array, items: { type: object } }
         orders: { type: array, items: { type: object } }
         alerts: { type: array, items: { type: object } }
         notificationSettings: { type: object }
+        summary: { type: object }
+        team: { type: array, items: { type: object } }
+        audit: { type: array, items: { type: object } }
+        futureOrdersCount: { type: integer }
       required: [branch, general, contact, hours, products, inventory, orders, alerts, notificationSettings]
     BranchReport:
       type: object

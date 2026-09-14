@@ -1,12 +1,317 @@
-import { useState } from "react";
-import { AdminLayout } from "@/components/layout/admin-layout";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useListAdminBranches,useUpdateAdminBranch,getListAdminBranchesQueryKey } from "@workspace/api-client-react";
+import { useMemo, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  useListAdminBranches,
+  useDeactivateAdminBranch,
+  useArchiveAdminBranch,
+  useDuplicateAdminBranch,
+  useDeleteAdminBranch,
+  getListAdminBranchesQueryKey,
+  type AdminBranch,
+} from "@workspace/api-client-react";
+import { AdminLayout } from "@/components/layout/admin-layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
-export default function AdminBranches(){const q=useListAdminBranches(); const update=useUpdateAdminBranch(); const qc=useQueryClient(); const {toast}=useToast(); const [editing,setEditing]=useState<number|null>(null);
- return <AdminLayout><div className="p-6 md:p-10 space-y-6 overflow-auto"><h1 className="text-3xl font-bold">Sucursales</h1><p className="text-muted-foreground">Datos operativos y preferencias de notificación.</p><div className="grid gap-4">{q.data?.map(b=><BranchEditor key={b.id} branch={b} editing={editing===b.id} setEditing={setEditing} save={async(data:any)=>{try{await update.mutateAsync({id:b.id,data});await qc.invalidateQueries({queryKey:getListAdminBranchesQueryKey()});toast({title:"Sucursal actualizada"});setEditing(null)}catch{toast({title:"Error al guardar",variant:"destructive"})}}}/>)}</div></div></AdminLayout>}
- function BranchEditor({branch,editing,setEditing,save}:{branch:any;editing:boolean;setEditing:(id:number|null)=>void;save:(d:any)=>Promise<void>}){const [v,setV]=useState<any>({branchCode:branch.branchCode||"",managerName:branch.managerName||"",managerEmail:branch.managerEmail||"",managerPhone:branch.managerPhone||"",notificationPreferences:branch.notificationPreferences||{email:true,whatsapp:false}}); const field=(key:string,label:string)=><label className="text-sm">{label}<Input value={v[key]} onChange={e=>setV({...v,[key]:e.target.value})}/></label>; return <div className="rounded-lg border bg-card p-5 space-y-4"><div className="flex justify-between"><div><Link href={`/admin/sucursales/${branch.id}`}><h2 className="font-semibold hover:text-primary cursor-pointer">{branch.name}</h2></Link><p className="text-xs text-muted-foreground">{branch.address}</p></div>{editing?<Button onClick={()=>save(v)}>Guardar</Button>:<Button variant="outline" onClick={()=>setEditing(branch.id)}>Editar</Button>}</div>{editing&&<><div className="grid gap-3 sm:grid-cols-2">{field("branchCode","Código")}{field("managerName","Responsable")}{field("managerEmail","Email responsable")}{field("managerPhone","Teléfono responsable")}</div><div className="flex gap-6 text-sm"><label className="flex items-center gap-2"><Checkbox checked={!!v.notificationPreferences.email} onCheckedChange={x=>setV({...v,notificationPreferences:{...v.notificationPreferences,email:!!x}})}/> Email</label><label className="flex items-center gap-2"><Checkbox checked={!!v.notificationPreferences.whatsapp} onCheckedChange={x=>setV({...v,notificationPreferences:{...v.notificationPreferences,whatsapp:!!x}})}/> WhatsApp</label></div></>}</div>}
+import { cn } from "@/lib/utils";
+import { Archive, Copy, MoreHorizontal, Plus, Power, Store } from "lucide-react";
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Activa",
+  inactive: "Inactiva",
+  archived: "Archivada",
+};
+
+function statusOf(b: AdminBranch) {
+  return (b.status as string) || (b.active ? "active" : "inactive");
+}
+
+export default function AdminBranches() {
+  const query = useListAdminBranches();
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const deactivate = useDeactivateAdminBranch();
+  const archive = useArchiveAdminBranch();
+  const duplicate = useDuplicateAdminBranch();
+  const remove = useDeleteAdminBranch();
+
+  const [dupOpen, setDupOpen] = useState<AdminBranch | null>(null);
+  const [dupForm, setDupForm] = useState({
+    name: "",
+    branchCode: "",
+    copyHours: true,
+    copyPickupDelivery: true,
+    copyNotifications: true,
+    copyProductAssignments: false,
+    copyTeamStructure: false,
+  });
+  const [menuId, setMenuId] = useState<number | null>(null);
+
+  const branches = useMemo(() => query.data ?? [], [query.data]);
+
+  async function invalidate() {
+    await qc.invalidateQueries({ queryKey: getListAdminBranchesQueryKey() });
+  }
+
+  async function onDeactivate(branch: AdminBranch) {
+    try {
+      await deactivate.mutateAsync({ id: branch.id, data: { confirmFutureOrders: true } });
+      toast({ title: "Sucursal desactivada" });
+      await invalidate();
+    } catch (err: any) {
+      const msg = err?.payload?.error || err?.message || "No se pudo desactivar";
+      const ok = window.confirm(`${msg}\n\n¿Continuar de todos modos?`);
+      if (!ok) return;
+      try {
+        await deactivate.mutateAsync({ id: branch.id, data: { confirmFutureOrders: true } });
+        toast({ title: "Sucursal desactivada" });
+        await invalidate();
+      } catch {
+        toast({ title: "Error al desactivar", variant: "destructive" });
+      }
+    }
+  }
+
+  async function onArchive(branch: AdminBranch) {
+    if (!window.confirm(`¿Archivar ${branch.name}? Se ocultará del storefront.`)) return;
+    try {
+      await archive.mutateAsync({ id: branch.id });
+      toast({ title: "Sucursal archivada" });
+      await invalidate();
+    } catch {
+      toast({ title: "Error al archivar", variant: "destructive" });
+    }
+  }
+
+  async function onDelete(branch: AdminBranch) {
+    if (!window.confirm(`¿Eliminar ${branch.name}? Solo es posible sin historial operativo.`)) return;
+    try {
+      await remove.mutateAsync({ id: branch.id });
+      toast({ title: "Sucursal eliminada" });
+      await invalidate();
+    } catch (err: any) {
+      toast({
+        title: err?.payload?.error || "No se puede eliminar. Usa Archivar.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function onDuplicate() {
+    if (!dupOpen) return;
+    try {
+      const created = await duplicate.mutateAsync({
+        id: dupOpen.id,
+        data: {
+          name: dupForm.name,
+          branchCode: dupForm.branchCode.toUpperCase(),
+          copyHours: dupForm.copyHours,
+          copyPickupDelivery: dupForm.copyPickupDelivery,
+          copyNotifications: dupForm.copyNotifications,
+          copyProductAssignments: dupForm.copyProductAssignments,
+          copyTeamStructure: dupForm.copyTeamStructure,
+        },
+      });
+      toast({ title: "Configuración duplicada" });
+      setDupOpen(null);
+      await invalidate();
+      if (created?.id) setLocation(`/admin/sucursales/${created.id}/editar`);
+    } catch (err: any) {
+      toast({ title: err?.payload?.error || "Error al duplicar", variant: "destructive" });
+    }
+  }
+
+  return (
+    <AdminLayout>
+      <div className="p-6 md:p-10 space-y-6 overflow-auto">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-serif font-bold">Sucursales</h1>
+            <p className="text-muted-foreground">
+              Unidades operativas independientes: identidad, equipo, pedidos e inventario.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <a href="/api/admin/branches/export">Exportar</a>
+            </Button>
+            <Button asChild>
+              <Link href="/admin/sucursales/nueva">
+                <Plus className="w-4 h-4 mr-2" /> Nueva sucursal
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {query.isLoading ? (
+          <p className="text-muted-foreground">Cargando sucursales…</p>
+        ) : query.error ? (
+          <p className="text-destructive">No se pudieron cargar las sucursales.</p>
+        ) : branches.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-12 text-center space-y-4">
+            <Store className="w-10 h-10 mx-auto text-muted-foreground" />
+            <div>
+              <h2 className="font-semibold text-lg">Aún no hay sucursales</h2>
+              <p className="text-muted-foreground text-sm">Crea la primera para operar pedidos e inventario.</p>
+            </div>
+            <Button asChild>
+              <Link href="/admin/sucursales/nueva">Crear sucursal</Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {branches.map((branch) => {
+              const status = statusOf(branch);
+              const responsible =
+                (branch as any).primaryResponsible?.name ||
+                branch.managerName ||
+                "Sin responsable";
+              return (
+                <div key={branch.id} className="rounded-xl border bg-card p-5 space-y-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/admin/sucursales/${branch.id}`} className="text-xl font-semibold hover:text-primary">
+                          {branch.name}
+                        </Link>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                            status === "active" && "bg-emerald-50 text-emerald-700",
+                            status === "inactive" && "bg-amber-50 text-amber-800",
+                            status === "archived" && "bg-slate-100 text-slate-600",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              status === "active" && "bg-emerald-500",
+                              status === "inactive" && "bg-amber-500",
+                              status === "archived" && "bg-slate-400",
+                            )}
+                          />
+                          {STATUS_LABEL[status] || status}
+                        </span>
+                        {branch.branchCode && (
+                          <span className="text-xs text-muted-foreground font-mono">{branch.branchCode}</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate">{branch.address}</p>
+                    </div>
+                    <div className="relative">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setMenuId(menuId === branch.id ? null : branch.id)}
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                      {menuId === branch.id && (
+                        <div className="absolute right-0 z-20 mt-1 w-52 rounded-md border bg-popover shadow-md p-1 text-sm">
+                          <button className="w-full text-left px-3 py-2 hover:bg-muted rounded" onClick={() => setLocation(`/admin/sucursales/${branch.id}/editar`)}>Editar</button>
+                          <button className="w-full text-left px-3 py-2 hover:bg-muted rounded" onClick={() => setLocation(`/admin/sucursales/${branch.id}`)}>Ver operación</button>
+                          <button
+                            className="w-full text-left px-3 py-2 hover:bg-muted rounded flex items-center gap-2"
+                            onClick={() => {
+                              setDupForm({
+                                name: `${branch.name} (copia)`,
+                                branchCode: `${(branch.branchCode || "NEW").slice(0, 2)}X`,
+                                copyHours: true,
+                                copyPickupDelivery: true,
+                                copyNotifications: true,
+                                copyProductAssignments: false,
+                                copyTeamStructure: false,
+                              });
+                              setDupOpen(branch);
+                              setMenuId(null);
+                            }}
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Duplicar configuración
+                          </button>
+                          {status === "active" && (
+                            <button className="w-full text-left px-3 py-2 hover:bg-muted rounded flex items-center gap-2" onClick={() => { setMenuId(null); void onDeactivate(branch); }}>
+                              <Power className="w-3.5 h-3.5" /> Desactivar
+                            </button>
+                          )}
+                          {status !== "archived" && (
+                            <button className="w-full text-left px-3 py-2 hover:bg-muted rounded flex items-center gap-2" onClick={() => { setMenuId(null); void onArchive(branch); }}>
+                              <Archive className="w-3.5 h-3.5" /> Archivar
+                            </button>
+                          )}
+                          <button className="w-full text-left px-3 py-2 hover:bg-muted rounded text-destructive" onClick={() => { setMenuId(null); void onDelete(branch); }}>
+                            Eliminar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div className="rounded-lg bg-muted/40 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">Pedidos hoy</div>
+                      <div className="font-semibold text-lg">{(branch as any).ordersToday ?? 0}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/40 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">Alertas</div>
+                      <div className="font-semibold text-lg">{(branch as any).alertsOpen ?? 0}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/40 px-3 py-2 col-span-2">
+                      <div className="text-xs text-muted-foreground">Responsable</div>
+                      <div className="font-medium truncate">{responsible}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Dialog open={!!dupOpen} onOpenChange={(o) => !o && setDupOpen(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicar configuración</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="text-sm block">Nombre *<Input value={dupForm.name} onChange={(e) => setDupForm({ ...dupForm, name: e.target.value })} /></label>
+            <label className="text-sm block">Código *<Input value={dupForm.branchCode} onChange={(e) => setDupForm({ ...dupForm, branchCode: e.target.value.toUpperCase() })} /></label>
+            <div className="space-y-2 text-sm">
+              {(
+                [
+                  ["copyHours", "Copiar horarios"],
+                  ["copyPickupDelivery", "Copiar pickup / delivery"],
+                  ["copyNotifications", "Copiar alertas / notificaciones"],
+                  ["copyProductAssignments", "Copiar asignaciones de productos (sin stock)"],
+                  ["copyTeamStructure", "Copiar estructura de equipo (sin marcar responsable)"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2">
+                  <Checkbox
+                    checked={dupForm[key]}
+                    onCheckedChange={(v) => setDupForm({ ...dupForm, [key]: !!v })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">No se copian pedidos, ventas ni inventario.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDupOpen(null)}>Cancelar</Button>
+            <Button onClick={() => void onDuplicate()} disabled={!dupForm.name || !dupForm.branchCode}>Duplicar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AdminLayout>
+  );
+}

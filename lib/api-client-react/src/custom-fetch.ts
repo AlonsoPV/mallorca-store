@@ -286,6 +286,8 @@ function inferResponseType(response: Response): "json" | "text" | "blob" {
   const mediaType = getMediaType(response.headers);
 
   if (isJsonMediaType(mediaType)) return "json";
+  // SPA/dev-server HTML fallbacks must not be treated as successful API payloads.
+  if (mediaType?.includes("html")) return "json";
   if (isTextMediaType(mediaType) || mediaType == null) return "text";
   return "blob";
 }

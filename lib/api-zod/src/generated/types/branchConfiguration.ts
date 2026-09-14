@@ -13,6 +13,12 @@ export interface BranchConfiguration {
   inventory?: number;
   /** @minimum 0 */
   minStock?: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  criticalStock?: number | null;
+  autoAlertEnabled?: boolean;
   /** @nullable */
   priceOverride?: number | null;
   /** @nullable */

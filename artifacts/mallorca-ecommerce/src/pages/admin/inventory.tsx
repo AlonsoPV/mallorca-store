@@ -13,29 +13,57 @@ import {
 } from "@workspace/api-client-react";
 import { Grid2X2, List, Minus, Plus } from "lucide-react";
 import { AdminLayout } from "@/components/layout/admin-layout";
+import { GenerateInventoryAlertDialog } from "@/components/generate-inventory-alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useSearch } from "wouter";
 
 type LooseInventoryRow = InventoryRow & {
   branchProduct: {
     id?: number;
     inventory?: number;
     minStock?: number;
+    criticalStock?: number | null;
     alertState?: string;
     available?: boolean;
+    autoAlertEnabled?: boolean;
   };
+  availableStock?: number;
+  openAlertCount?: number;
+  inventoryStatus?: string;
 };
 
+function stateFromSearch(search: string) {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  return params.get("state") || "";
+}
+
+function statusLabel(status?: string) {
+  if (status === "OUT_OF_STOCK") return "Agotado";
+  if (status === "CRITICAL_STOCK") return "Crítico";
+  if (status === "LOW_STOCK") return "Stock bajo";
+  return "Normal";
+}
+
+function statusClass(status?: string) {
+  if (status === "OUT_OF_STOCK") return "bg-destructive/10 text-destructive";
+  if (status === "CRITICAL_STOCK") return "bg-orange-100 text-orange-900";
+  if (status === "LOW_STOCK") return "bg-amber-100 text-amber-800";
+  return "bg-emerald-100 text-emerald-800";
+}
+
 export default function AdminInventory() {
-  const [search, setSearch] = useState("");
+  const search = useSearch();
+  const [searchText, setSearchText] = useState("");
   const [branchId, setBranchId] = useState("");
-  const [state, setState] = useState("");
+  const [state, setState] = useState(() => stateFromSearch(search));
   const [categoryId, setCategoryId] = useState("");
   const [matrix, setMatrix] = useState(false);
+  const [alertTarget, setAlertTarget] = useState<LooseInventoryRow | null>(null);
 
   const params: ListAdminInventoryParams = {
-    search: search || undefined,
+    search: searchText || undefined,
     branchId: branchId ? Number(branchId) : undefined,
     state: (state || undefined) as ListAdminInventoryParams["state"],
     categoryId: categoryId ? Number(categoryId) : undefined,
@@ -92,7 +120,7 @@ export default function AdminInventory() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Input className="w-64" placeholder="Buscar producto o SKU" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input className="w-64" placeholder="Buscar producto o SKU" value={searchText} onChange={(event) => setSearchText(event.target.value)} />
           <FilterSelect value={branchId} onChange={setBranchId}>
             <option value="">Todas las sucursales</option>
             {branches.data?.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
@@ -101,6 +129,7 @@ export default function AdminInventory() {
             <option value="">Todos los estados</option>
             <option value="NORMAL">Normal</option>
             <option value="LOW_STOCK">Stock bajo</option>
+            <option value="CRITICAL_STOCK">Crítico</option>
             <option value="OUT_OF_STOCK">Agotado</option>
           </FilterSelect>
           <FilterSelect value={categoryId} onChange={setCategoryId}>
@@ -116,7 +145,7 @@ export default function AdminInventory() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  {["Producto", "SKU", "Sucursal", "Stock", "Mínimo", "Estado", "Ajuste rápido"].map((heading) => (
+                  {["Producto", "SKU", "Sucursal", "Stock", "Reservado", "Disponible", "Mínimo", "Estado", "Alertas", "Acciones"].map((heading) => (
                     <th className="p-3 text-left" key={heading}>{heading}</th>
                   ))}
                 </tr>
@@ -125,6 +154,9 @@ export default function AdminInventory() {
                 {(rows.data as LooseInventoryRow[] | undefined)?.map((row) => {
                   const stock = row.branchProduct.inventory ?? 0;
                   const minStock = row.branchProduct.minStock ?? 0;
+                  const reserved = row.reservedStock ?? 0;
+                  const available = row.availableStock ?? Math.max(0, stock - reserved);
+                  const status = row.inventoryStatus ?? row.branchProduct.alertState;
                   return (
                     <tr className="border-t" key={`${row.product.id}-${row.branch.id}`}>
                       <td className="p-3 font-medium">{row.product.name}</td>
@@ -133,14 +165,24 @@ export default function AdminInventory() {
                       <td className="p-3">
                         <Input className="w-20" type="number" min="0" defaultValue={stock} onBlur={(event) => change(row, Number(event.target.value))} />
                       </td>
+                      <td className="p-3">{reserved}</td>
+                      <td className="p-3">{available}</td>
                       <td className="p-3">{minStock}</td>
-                      <td className="p-3"><StockBadge stock={stock} minStock={minStock} /></td>
+                      <td className="p-3">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(status)}`}>
+                          {statusLabel(status)}
+                        </span>
+                      </td>
+                      <td className="p-3">{row.openAlertCount ?? 0}</td>
                       <td className="p-3">
                         <Button aria-label="Disminuir stock" size="icon" variant="outline" disabled={stock === 0 || update.isPending} onClick={() => change(row, 0, -1)}>
                           <Minus className="h-4 w-4" />
                         </Button>
                         <Button aria-label="Aumentar stock" size="icon" variant="outline" className="ml-2" disabled={update.isPending} onClick={() => change(row, 0, 1)}>
                           <Plus className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="ml-2" onClick={() => setAlertTarget(row)}>
+                          Alerta
                         </Button>
                       </td>
                     </tr>
@@ -152,6 +194,16 @@ export default function AdminInventory() {
           </div>
         )}
       </div>
+
+      {alertTarget ? (
+        <GenerateInventoryAlertDialog
+          open={Boolean(alertTarget)}
+          onOpenChange={(open) => !open && setAlertTarget(null)}
+          productId={alertTarget.product.id}
+          branchId={alertTarget.branch.id}
+          productLabel={`${alertTarget.product.name} · ${alertTarget.branch.name}`}
+        />
+      ) : null}
     </AdminLayout>
   );
 }
@@ -162,12 +214,6 @@ function FilterSelect({ value, onChange, children }: { value: string; onChange: 
       {children}
     </select>
   );
-}
-
-function StockBadge({ stock, minStock }: { stock: number; minStock: number }) {
-  const label = stock <= 0 ? "Agotado" : stock <= minStock ? "Stock bajo" : "Normal";
-  const className = stock <= 0 ? "bg-destructive/10 text-destructive" : stock <= minStock ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800";
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{label}</span>;
 }
 
 function InventoryMatrix({ data, onChange }: { data: LooseInventoryRow[]; onChange: (row: LooseInventoryRow, value: number) => void }) {

@@ -12,5 +12,12 @@ export interface AdminSummary {
   activeProducts: number;
   totalBranches: number;
   lowStockProducts: number;
+  criticalStockProducts?: number;
+  outOfStockProducts: number;
+  ordersToday: number;
+  ordersPending: number;
+  ordersNextHour: number;
+  alertsCount: number;
+  salesToday: number;
   branchSummaries: BranchSummary[];
 }

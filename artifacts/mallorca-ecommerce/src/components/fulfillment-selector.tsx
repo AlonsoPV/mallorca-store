@@ -57,7 +57,8 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
   });
   const deleteCartItem = useDeleteCartItem();
   const previewFulfillment = usePreviewFulfillment();
-  const { data: branches } = useListBranches();
+  const { data: branchesData } = useListBranches();
+  const branches = Array.isArray(branchesData) ? branchesData : undefined;
   const branch = branches?.find((item) => item.id === branchId);
 
   const draftDateObject = draftDate ? parseISO(draftDate) : null;

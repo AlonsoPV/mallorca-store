@@ -5,7 +5,21 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminBranchPrimaryResponsible } from './adminBranchPrimaryResponsible';
 import type { Branch } from './branch';
+import type { BranchImage } from './branchImage';
+import type { BranchLink } from './branchLink';
+import type { BranchSpecialHour } from './branchSpecialHour';
 import type { BranchUpdate } from './branchUpdate';
 
-export type AdminBranch = Branch & BranchUpdate;
+export type AdminBranch = Branch & BranchUpdate & ({
+  /** @nullable */
+  whatsappUrl?: string | null;
+  ordersToday?: number;
+  alertsOpen?: number;
+  /** @nullable */
+  primaryResponsible?: AdminBranchPrimaryResponsible;
+  links?: BranchLink[];
+  images?: BranchImage[];
+  specialHours?: BranchSpecialHour[];
+});

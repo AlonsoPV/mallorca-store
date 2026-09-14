@@ -23,7 +23,7 @@ export * from "./generated/types/branchPreviewItem";
 export * from "./generated/types/branchReport";
 export * from "./generated/types/branchSummary";
 export * from "./generated/types/branchUpdate";
-export * from "./generated/types/branchUpdateNotificationPreferences";
+export * from "./generated/types/branchNotificationPreferences";
 export * from "./generated/types/cart";
 export * from "./generated/types/cartItemInput";
 export * from "./generated/types/cartItemUpdate";

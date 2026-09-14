@@ -1,12 +1,19 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gt, lt, sql, inArray, desc, isNull } from "drizzle-orm";
+import { and, eq, gt, gte, lt, sql, inArray, desc, isNull, or, ilike } from "drizzle-orm";
 import {
   branchProductsTable,
   branchesTable,
   db,
+  importJobsTable,
   productsTable,
   promotionBranchesTable,
   promotionsTable,
+  branchAuditLogsTable,
+  branchHoursTable,
+  branchImagesTable,
+  branchLinksTable,
+  branchSpecialHoursTable,
+  couponsTable,
 } from "@workspace/db";
 import {
   CreateProductBody,
@@ -28,8 +35,42 @@ import {
   CancelProductPromotionParams,
   CancelProductPromotionResponse,
 } from "@workspace/api-zod";
-import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, usersTable, branchUserAssignmentsTable, categoryResponsibleAssignmentsTable, categoriesTable } from "@workspace/db";
-import { ListAdminOrdersQueryParams, ListAdminOrdersResponse, UpdateAdminOrderParams, UpdateAdminOrderBody, UpdateAdminOrderResponse } from "@workspace/api-zod";
+import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, inventoryAlertEventsTable, usersTable, branchUserAssignmentsTable, categoryResponsibleAssignmentsTable, categoriesTable } from "@workspace/db";
+import {
+  ListAdminOrdersQueryParams,
+  ListAdminOrdersResponse,
+  GetAdminOrderParams,
+  GetAdminOrderResponse,
+  UpdateAdminOrderParams,
+  UpdateAdminOrderBody,
+  UpdateAdminOrderResponse,
+  CreateAdminOrderBody,
+  CreateAdminOrderResponse,
+  PreviewAdminOrderBody,
+  PreviewAdminOrderResponse,
+  SearchAdminCustomersQueryParams,
+  SearchAdminCustomersResponse,
+  RecordAdminOrderPaymentParams,
+  RecordAdminOrderPaymentBody,
+  RecordAdminOrderPaymentResponse,
+  CreateAdminOrderPaymentLinkParams,
+  CreateAdminOrderPaymentLinkResponse,
+  DuplicateAdminOrderParams,
+  DuplicateAdminOrderResponse,
+  ListAdminCouponsResponse,
+  CreateAdminCouponBody,
+  CreateAdminCouponResponse,
+} from "@workspace/api-zod";
+import {
+  applyInventoryAlert,
+  createManualAlert,
+  createManualAlertsBulk,
+  updateAlertStatus,
+} from "../lib/inventory-alerts";
+import { createOrder, OrderCreateError } from "../lib/order-create";
+import { writeOrderAudit } from "../lib/order-audit";
+import { loadAdminOrder } from "../lib/admin-order-serialize";
+import { fulfillmentSchedule, isValidSlotTime, mexicoDate } from "../lib/fulfillment-schedule";
 import {
   calculatePromotionPrice,
   getProductDetailBySlug,
@@ -37,11 +78,16 @@ import {
   promotionStatus,
 } from "../lib/catalog";
 import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
+import { DEFAULT_NOTIFICATION_PREFERENCES, normalizeNotificationPreferences } from "../lib/notification-prefs";
 import {
   stockState,
   enteredAlertState,
+  availableStock,
+  deriveInventoryStatus,
+  predictAlertOnStockChange,
   validateInventoryCsv,
   parseProductImportCsv,
+  mapImportDiscountType,
   type ProductImportMapping,
   type ProductImportRecord,
 } from "../lib/inventory";
@@ -52,8 +98,43 @@ import {
   type PromotionInputData,
 } from "../lib/promotion-validation";
 import { z } from "zod/v4";
-import { applyInventoryAlert } from "./commerce";
 import { publishCatalogChange } from "../lib/catalog-events";
+import {
+  buildProductExportCsv,
+  bulkUpdateProducts,
+  completeImportJob,
+  createImportJob,
+  duplicateProductById,
+  translateImportMessage,
+} from "../lib/catalog-admin";
+import { upsertProductAggregate } from "../lib/product-aggregate";
+import {
+  ExportProductsBody,
+  BulkUpdateProductsBody,
+  DuplicateProductParams,
+  ListImportJobsQueryParams,
+  GetImportJobParams,
+  GetImportJobResponse,
+  ListImportJobsResponse,
+  ExportProductsResponse,
+  BulkUpdateProductsResponse,
+  DuplicateProductResponse,
+} from "@workspace/api-zod";
+import {
+  branchDependencyCounts,
+  buildFormattedAddress,
+  countFutureOrders,
+  enrichBranchesList,
+  loadBranchSatellite,
+  normalizeWhatsapp,
+  replaceBranchHours,
+  serializeAdminBranch,
+  slugifyBranch,
+  syncLegacyProjections,
+  syncStatusFields,
+  whatsappUrl,
+  writeBranchAudit,
+} from "../lib/branch-ops";
 
 const router: IRouter = Router();
 
@@ -104,7 +185,7 @@ async function makeProductImportPlan(
   const [products, branches, categories] = await Promise.all([
     db.select({ id: productsTable.id, sku: productsTable.sku }).from(productsTable),
     db.select({ id: branchesTable.id, code: branchesTable.branchCode }).from(branchesTable),
-    db.select({ id: categoriesTable.id }).from(categoriesTable),
+    db.select({ id: categoriesTable.id, name: categoriesTable.name }).from(categoriesTable),
   ]);
   const existing = new Map(products.map((product) => [product.sku, product]));
   const branchMap = new Map(
@@ -113,6 +194,9 @@ async function makeProductImportPlan(
       .map((branch) => [branch.code.toLowerCase(), branch.id]),
   );
   const categoryIds = new Set(categories.map((category) => category.id));
+  const categoryByName = new Map(
+    categories.map((category) => [category.name.trim().toLowerCase(), category.id]),
+  );
   const accessibleBranchIds = await getAccessibleBranchIds(req);
   const errors = [...parsed.errors];
   const errorsByRow = new Set(errors.map((error) => error.row));
@@ -126,13 +210,48 @@ async function makeProductImportPlan(
   for (const record of parsed.rows) {
     const isNew = !existing.has(record.sku);
     const group = recordsBySku.get(record.sku) ?? [record];
-    if (isNew && (!group.some((item) => item.name) || !group.some((item) => item.price != null) || !group.some((item) => item.categoryId != null))) {
-      errors.push({ row: record.row, message: "New SKU requires name, price and categoryId" });
+    const hasCategory =
+      group.some((item) => item.categoryId != null) ||
+      group.some((item) => item.categories?.length);
+    if (
+      isNew &&
+      (!group.some((item) => item.name) ||
+        !group.some((item) => item.price != null) ||
+        !hasCategory)
+    ) {
+      errors.push({
+        row: record.row,
+        message: "New SKU requires name, price and categoryId",
+      });
       errorsByRow.add(record.row);
     }
-    if (record.categoryId != null && (!Number.isInteger(record.categoryId) || !categoryIds.has(record.categoryId))) {
+    if (
+      record.categoryId != null &&
+      (!Number.isInteger(record.categoryId) || !categoryIds.has(record.categoryId))
+    ) {
       errors.push({ row: record.row, message: "Unknown categoryId" });
       errorsByRow.add(record.row);
+    }
+    if (record.categories?.length) {
+      for (const name of record.categories) {
+        if (!categoryByName.has(name.trim().toLowerCase())) {
+          errors.push({ row: record.row, message: "Unknown category name" });
+          errorsByRow.add(record.row);
+        }
+      }
+      if (record.primaryCategory) {
+        const primaryOk = record.categories.some(
+          (name) =>
+            name.trim().toLowerCase() === record.primaryCategory!.trim().toLowerCase(),
+        );
+        if (!primaryOk) {
+          errors.push({
+            row: record.row,
+            message: "primary_category must be included in categories",
+          });
+          errorsByRow.add(record.row);
+        }
+      }
     }
     for (const field of ["inventory", "minStock", "preparationTimeMinutes"] as const) {
       const value = record[field];
@@ -151,12 +270,23 @@ async function makeProductImportPlan(
         errorsByRow.add(record.row);
       }
     }
+    if (record.discountBranches?.length) {
+      for (const code of record.discountBranches) {
+        if (!branchMap.has(code.toLowerCase())) {
+          errors.push({ row: record.row, message: "Unknown branchCode" });
+          errorsByRow.add(record.row);
+        }
+      }
+    }
   }
 
   return {
     rows: parsed.rows
       .filter((record) => !errorsByRow.has(record.row))
-      .map((record) => ({ record, action: existing.has(record.sku) ? "update" : "new" })),
+      .map((record) => ({
+        record,
+        action: existing.has(record.sku) ? "update" : "new",
+      })),
     errors,
     existing,
     branches,
@@ -189,26 +319,100 @@ router.get("/admin/users", async (req, res): Promise<void> => {
 router.get("/admin/branches/:id/assignments", async (req, res): Promise<void> => {
   const branchId = Number(req.params.id);
   if (!Number.isInteger(branchId) || !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
-  const rows = await db.select({ id: branchUserAssignmentsTable.id, branchId: branchUserAssignmentsTable.branchId, user: { id: usersTable.id, name: sql<string>`trim(concat(${usersTable.firstName}, ' ', ${usersTable.lastName}))`, email: usersTable.email, role: usersTable.role } })
+  const rows = await db.select({
+    id: branchUserAssignmentsTable.id,
+    branchId: branchUserAssignmentsTable.branchId,
+    role: branchUserAssignmentsTable.role,
+    isPrimary: branchUserAssignmentsTable.isPrimary,
+    active: branchUserAssignmentsTable.active,
+    user: {
+      id: usersTable.id,
+      name: sql<string>`trim(concat(${usersTable.firstName}, ' ', ${usersTable.lastName}))`,
+      email: usersTable.email,
+      role: usersTable.role,
+    },
+  })
     .from(branchUserAssignmentsTable).innerJoin(usersTable, eq(branchUserAssignmentsTable.userId, usersTable.id))
     .where(eq(branchUserAssignmentsTable.branchId, branchId));
   res.json(rows);
 });
 
-const assignmentBody = z.object({ userId: z.string().min(1) });
+const assignmentBody = z.object({
+  userId: z.string().min(1),
+  role: z.enum(["branch_manager", "staff", "operations"]).default("staff"),
+  isPrimary: z.boolean().default(false),
+});
+const assignmentUpdateBody = z.object({
+  userId: z.string().min(1),
+  role: z.enum(["branch_manager", "staff", "operations"]).optional(),
+  isPrimary: z.boolean().optional(),
+  active: z.boolean().optional(),
+});
+
 router.put("/admin/branches/:id/assignments", async (req, res): Promise<void> => {
   const branchId = Number(req.params.id), body = assignmentBody.safeParse(req.body);
   if (!Number.isInteger(branchId) || !body.success) { res.status(400).json({ error: "Invalid assignment" }); return; }
   if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
-  const [row] = await db.insert(branchUserAssignmentsTable).values({ branchId, userId: body.data.userId }).onConflictDoNothing().returning();
+  const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, body.data.userId)).limit(1);
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  if (body.data.isPrimary) {
+    await db.update(branchUserAssignmentsTable).set({ isPrimary: false }).where(eq(branchUserAssignmentsTable.branchId, branchId));
+  }
+  const [row] = await db.insert(branchUserAssignmentsTable).values({
+    branchId,
+    userId: body.data.userId,
+    role: body.data.role,
+    isPrimary: body.data.isPrimary,
+    active: true,
+  }).onConflictDoNothing().returning();
   if (!row) { res.status(409).json({ error: "Assignment already exists" }); return; }
+  const actor = await getRequestUser(req);
+  await writeBranchAudit({
+    branchId,
+    actorUserId: actor?.id,
+    action: "user_assigned",
+    after: { userId: body.data.userId, role: body.data.role, isPrimary: body.data.isPrimary },
+  });
   res.status(201).json(row);
+});
+
+router.patch("/admin/branches/:id/assignments", async (req, res): Promise<void> => {
+  const branchId = Number(req.params.id);
+  const body = assignmentUpdateBody.safeParse(req.body);
+  if (!Number.isInteger(branchId) || !body.success) { res.status(400).json({ error: "Invalid assignment update" }); return; }
+  if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
+  if (body.data.isPrimary) {
+    await db.update(branchUserAssignmentsTable).set({ isPrimary: false }).where(eq(branchUserAssignmentsTable.branchId, branchId));
+  }
+  const patch: Record<string, unknown> = {};
+  if (body.data.role != null) patch.role = body.data.role;
+  if (body.data.isPrimary != null) patch.isPrimary = body.data.isPrimary;
+  if (body.data.active != null) patch.active = body.data.active;
+  const [row] = await db.update(branchUserAssignmentsTable).set(patch)
+    .where(and(eq(branchUserAssignmentsTable.branchId, branchId), eq(branchUserAssignmentsTable.userId, body.data.userId)))
+    .returning();
+  if (!row) { res.status(404).json({ error: "Assignment not found" }); return; }
+  const actor = await getRequestUser(req);
+  await writeBranchAudit({
+    branchId,
+    actorUserId: actor?.id,
+    action: body.data.isPrimary ? "primary_changed" : "assignment_updated",
+    after: patch,
+  });
+  res.json(row);
 });
 
 router.delete("/admin/branches/:id/assignments/:userId", async (req, res): Promise<void> => {
   const branchId = Number(req.params.id);
   if (!Number.isInteger(branchId) || !(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
   await db.delete(branchUserAssignmentsTable).where(and(eq(branchUserAssignmentsTable.branchId, branchId), eq(branchUserAssignmentsTable.userId, req.params.userId)));
+  const actor = await getRequestUser(req);
+  await writeBranchAudit({
+    branchId,
+    actorUserId: actor?.id,
+    action: "user_removed",
+    before: { userId: req.params.userId },
+  });
   res.status(204).end();
 });
 
@@ -347,45 +551,560 @@ async function validatePromotionScope(
 }
 
 router.get("/admin/orders", async (req, res): Promise<void> => {
-  const q = ListAdminOrdersQueryParams.safeParse(req.query);
+  const q = ListAdminOrdersQueryParams.safeParse({
+    ...req.query,
+    from: req.query.from ? new Date(String(req.query.from)) : undefined,
+    to: req.query.to ? new Date(String(req.query.to)) : undefined,
+  });
   if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
   const branchIds = await getAccessibleBranchIds(req);
   const filters = [];
   if (q.data.status) filters.push(eq(ordersTable.status, q.data.status as any));
   if (q.data.branchId != null && !(await canAccessBranch(req, q.data.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
   if (q.data.branchId != null) filters.push(eq(ordersTable.branchId, q.data.branchId));
+  if (q.data.fulfillmentMethod) filters.push(eq(ordersTable.fulfillmentMethod, q.data.fulfillmentMethod));
+  if (q.data.orderSource) filters.push(eq(ordersTable.orderSource, q.data.orderSource));
+  if (q.data.from) filters.push(gte(ordersTable.scheduledStart, q.data.from));
+  if (q.data.to) filters.push(lt(ordersTable.scheduledStart, q.data.to));
   if (branchIds) filters.push(branchIds.length ? sql`${ordersTable.branchId} = ANY(${branchIds})` : sql`false`);
-  const rows = await db.select({ id: ordersTable.id, orderNumber: ordersTable.orderNumber, status: ordersTable.status, total: ordersTable.total, createdAt: ordersTable.createdAt, branchId: ordersTable.branchId, customerName: ordersTable.customerName, customerEmail: ordersTable.customerEmail, fulfillmentMethod: ordersTable.fulfillmentMethod })
-    .from(ordersTable).where(filters.length ? and(...filters) : undefined).orderBy(desc(ordersTable.createdAt));
-  res.json(ListAdminOrdersResponse.parse(rows));
+  const rows = await db.select({
+    id: ordersTable.id,
+    orderNumber: ordersTable.orderNumber,
+    status: ordersTable.status,
+    orderSource: ordersTable.orderSource,
+    paymentStatus: ordersTable.paymentStatus,
+    total: ordersTable.total,
+    createdAt: ordersTable.createdAt,
+    scheduledStart: ordersTable.scheduledStart,
+    branchId: ordersTable.branchId,
+    branchName: branchesTable.name,
+    customerName: ordersTable.customerName,
+    customerEmail: ordersTable.customerEmail,
+    customerPhone: ordersTable.customerPhone,
+    fulfillmentMethod: ordersTable.fulfillmentMethod,
+  })
+    .from(ordersTable)
+    .innerJoin(branchesTable, eq(ordersTable.branchId, branchesTable.id))
+    .where(filters.length ? and(...filters) : undefined)
+    .orderBy(ordersTable.scheduledStart);
+
+  const orderIds = rows.map((r) => r.id);
+  const itemRows = orderIds.length
+    ? await db.select({
+      orderId: orderItemsTable.orderId,
+      name: orderItemsTable.name,
+      quantity: orderItemsTable.quantity,
+    }).from(orderItemsTable).where(inArray(orderItemsTable.orderId, orderIds))
+    : [];
+  const itemsByOrder = new Map<string, { name: string; quantity: number }[]>();
+  for (const item of itemRows) {
+    const list = itemsByOrder.get(item.orderId) ?? [];
+    list.push({ name: item.name, quantity: item.quantity });
+    itemsByOrder.set(item.orderId, list);
+  }
+
+  res.json(ListAdminOrdersResponse.parse(rows.map((row) => {
+    const items = itemsByOrder.get(row.id) ?? [];
+    return { ...row, items, itemCount: items.reduce((sum, i) => sum + i.quantity, 0) };
+  })));
+});
+
+router.post("/admin/orders/preview", async (req, res): Promise<void> => {
+  const b = PreviewAdminOrderBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: b.error.message }); return; }
+  if (!(await canAccessBranch(req, b.data.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const user = await getRequestUser(req);
+  try {
+    const result = await createOrder({
+      ...b.data,
+      orderSource: b.data.orderSource,
+      createdByUserId: user?.id,
+      actorRole: user?.role,
+      previewOnly: true,
+      markPaid: false,
+    });
+    res.json(PreviewAdminOrderResponse.parse({
+      lines: result.lines,
+      subtotal: result.subtotal,
+      promotionDiscountTotal: result.promotionDiscountTotal,
+      discountAmount: result.discountAmount,
+      discountPercent: result.discountPercent,
+      couponCode: result.couponCode,
+      couponDiscount: result.couponDiscount,
+      deliveryFee: result.deliveryFee,
+      total: result.total,
+      errors: result.errors,
+    }));
+  } catch (error) {
+    if (error instanceof OrderCreateError) {
+      res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.post("/admin/orders", async (req, res): Promise<void> => {
+  const b = CreateAdminOrderBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: b.error.message }); return; }
+  if (!(await canAccessBranch(req, b.data.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const user = await getRequestUser(req);
+  try {
+    const result = await createOrder({
+      ...b.data,
+      userId: b.data.userId ?? null,
+      createdByUserId: user?.id,
+      actorRole: user?.role,
+      reservationTtlMinutes: b.data.paymentMethod === "TRANSFER" && !b.data.markPaid ? 24 * 60 : 15,
+    });
+    if (!result.order) { res.status(500).json({ error: "Order create failed" }); return; }
+    const full = await loadAdminOrder(result.order.id);
+    res.status(201).json(CreateAdminOrderResponse.parse(full));
+  } catch (error) {
+    if (error instanceof OrderCreateError) {
+      res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.get("/admin/customers/search", async (req, res): Promise<void> => {
+  const q = SearchAdminCustomersQueryParams.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
+  const term = `%${q.data.q.trim()}%`;
+  const limit = q.data.limit ?? 20;
+
+  const users = await db
+    .select()
+    .from(usersTable)
+    .where(
+      or(
+        ilike(usersTable.email, term),
+        ilike(usersTable.phone, term),
+        ilike(usersTable.firstName, term),
+        ilike(usersTable.lastName, term),
+        sql`concat(coalesce(${usersTable.firstName},''),' ',coalesce(${usersTable.lastName},'')) ilike ${term}`,
+      ),
+    )
+    .limit(limit);
+
+  const orderHits = await db
+    .select({
+      customerName: ordersTable.customerName,
+      customerEmail: ordersTable.customerEmail,
+      customerPhone: ordersTable.customerPhone,
+      userId: ordersTable.userId,
+      lastOrderAt: sql<Date>`max(${ordersTable.createdAt})`,
+      orderCount: sql<number>`count(*)::int`,
+    })
+    .from(ordersTable)
+    .where(
+      or(
+        ilike(ordersTable.customerName, term),
+        ilike(ordersTable.customerEmail, term),
+        ilike(ordersTable.customerPhone, term),
+      ),
+    )
+    .groupBy(
+      ordersTable.customerName,
+      ordersTable.customerEmail,
+      ordersTable.customerPhone,
+      ordersTable.userId,
+    )
+    .limit(limit);
+
+  const byKey = new Map<string, {
+    userId: string | null;
+    name: string;
+    email: string;
+    phone: string | null;
+    orderCount: number;
+    lastOrderAt: Date | null;
+  }>();
+
+  for (const u of users) {
+    const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email;
+    byKey.set(u.email.toLowerCase(), {
+      userId: u.id,
+      name,
+      email: u.email,
+      phone: u.phone,
+      orderCount: 0,
+      lastOrderAt: null,
+    });
+  }
+  for (const hit of orderHits) {
+    const key = hit.customerEmail.toLowerCase();
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.orderCount = hit.orderCount;
+      existing.lastOrderAt = hit.lastOrderAt;
+      if (!existing.phone) existing.phone = hit.customerPhone;
+    } else {
+      byKey.set(key, {
+        userId: hit.userId,
+        name: hit.customerName,
+        email: hit.customerEmail,
+        phone: hit.customerPhone,
+        orderCount: hit.orderCount,
+        lastOrderAt: hit.lastOrderAt,
+      });
+    }
+  }
+
+  res.json(SearchAdminCustomersResponse.parse([...byKey.values()].slice(0, limit)));
+});
+
+router.get("/admin/coupons", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(couponsTable).orderBy(desc(couponsTable.createdAt));
+  res.json(ListAdminCouponsResponse.parse(rows.map((row) => ({
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    type: row.type as "percentage" | "amount",
+    value: row.value,
+    active: row.active,
+    startsAt: row.startsAt,
+    endsAt: row.endsAt,
+    maxRedemptions: row.maxRedemptions,
+    redemptionCount: row.redemptionCount,
+    minSubtotal: row.minSubtotal,
+  }))));
+});
+
+router.post("/admin/coupons", async (req, res): Promise<void> => {
+  const user = await getRequestUser(req);
+  if (!user || !hasGlobalBranchAccess(user)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const b = CreateAdminCouponBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: b.error.message }); return; }
+  const [row] = await db.insert(couponsTable).values({
+    code: b.data.code.trim().toUpperCase(),
+    name: b.data.name,
+    type: b.data.type,
+    value: b.data.value,
+    active: b.data.active ?? true,
+    startsAt: b.data.startsAt ?? null,
+    endsAt: b.data.endsAt ?? null,
+    maxRedemptions: b.data.maxRedemptions ?? null,
+    minSubtotal: b.data.minSubtotal ?? null,
+  }).returning();
+  res.status(201).json(CreateAdminCouponResponse.parse({
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    type: row.type as "percentage" | "amount",
+    value: row.value,
+    active: row.active,
+    startsAt: row.startsAt,
+    endsAt: row.endsAt,
+    maxRedemptions: row.maxRedemptions,
+    redemptionCount: row.redemptionCount,
+    minSubtotal: row.minSubtotal,
+  }));
+});
+
+router.get("/admin/orders/:id", async (req, res): Promise<void> => {
+  const p = GetAdminOrderParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: "Invalid order id" }); return; }
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, p.data.id));
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (!(await canAccessBranch(req, order.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const full = await loadAdminOrder(order.id);
+  res.json(GetAdminOrderResponse.parse(full));
+});
+
+router.post("/admin/orders/:id/payment", async (req, res): Promise<void> => {
+  const p = RecordAdminOrderPaymentParams.safeParse(req.params);
+  const b = RecordAdminOrderPaymentBody.safeParse(req.body);
+  if (!p.success || !b.success) { res.status(400).json({ error: "Invalid payment" }); return; }
+  const user = await getRequestUser(req);
+  let updated;
+  try {
+    updated = await db.transaction(async (tx) => {
+      const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, p.data.id)).for("update");
+      if (!order) throw new Error("ORDER_NOT_FOUND");
+      if (!(await canAccessBranch(req, order.branchId))) throw new Error("FORBIDDEN_BRANCH");
+      const markPaid = b.data.markPaid !== false;
+      const amountPaid = b.data.amountPaid ?? (markPaid ? order.total : order.amountPaid);
+      const paymentStatus = markPaid
+        ? (amountPaid < order.total ? "partially_paid" : "paid")
+        : order.paymentStatus;
+      const status = markPaid && order.status === "pending_payment" && paymentStatus === "paid"
+        ? "paid"
+        : order.status;
+      if (status === "paid" && order.status !== "paid") {
+        await tx.update(inventoryReservationsTable)
+          .set({ status: "committed" })
+          .where(and(eq(inventoryReservationsTable.orderId, order.id), eq(inventoryReservationsTable.status, "active")));
+      }
+      const [o] = await tx.update(ordersTable).set({
+        paymentMethod: b.data.paymentMethod,
+        paymentReference: b.data.paymentReference ?? null,
+        paymentNote: b.data.paymentNote ?? null,
+        amountPaid,
+        paymentStatus,
+        status,
+        inventoryCommittedAt: status === "paid" ? new Date() : order.inventoryCommittedAt,
+      }).where(eq(ordersTable.id, order.id)).returning();
+      await writeOrderAudit({
+        tx,
+        orderId: order.id,
+        actorUserId: user?.id,
+        action: "PAYMENT_RECORDED",
+        reason: b.data.paymentNote,
+        payload: b.data,
+      });
+      return o;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "ORDER_NOT_FOUND") { res.status(404).json({ error: "Order not found" }); return; }
+    if (error instanceof Error && error.message === "FORBIDDEN_BRANCH") { res.status(403).json({ error: "Branch access denied" }); return; }
+    throw error;
+  }
+  res.json(RecordAdminOrderPaymentResponse.parse(await loadAdminOrder(updated.id)));
+});
+
+router.post("/admin/orders/:id/payment-link", async (req, res): Promise<void> => {
+  const p = CreateAdminOrderPaymentLinkParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: "Invalid order id" }); return; }
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, p.data.id));
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (!(await canAccessBranch(req, order.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+
+  const base = process.env.STOREFRONT_PUBLIC_URL?.replace(/\/$/, "") || "http://localhost:5173";
+  const url = `${base}/pedido/${order.id}/${order.guestAccessToken}?pay=1`;
+  const [updated] = await db.update(ordersTable).set({
+    paymentMethod: "PAYMENT_LINK",
+    paymentLinkUrl: url,
+  }).where(eq(ordersTable.id, order.id)).returning();
+  const user = await getRequestUser(req);
+  await writeOrderAudit({
+    orderId: order.id,
+    actorUserId: user?.id,
+    action: "PAYMENT_LINK_CREATED",
+    payload: { url },
+  });
+  res.json(CreateAdminOrderPaymentLinkResponse.parse({ url: updated.paymentLinkUrl!, orderId: order.id }));
+});
+
+router.post("/admin/orders/:id/duplicate", async (req, res): Promise<void> => {
+  const p = DuplicateAdminOrderParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: "Invalid order id" }); return; }
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, p.data.id));
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (!(await canAccessBranch(req, order.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+  res.json(DuplicateAdminOrderResponse.parse({
+    branchId: order.branchId,
+    customerEmail: order.customerEmail,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    userId: order.userId,
+    fulfillmentMethod: order.fulfillmentMethod,
+    deliveryAddress: order.deliveryAddress,
+    deliveryLatitude: order.deliveryLatitude,
+    deliveryLongitude: order.deliveryLongitude,
+    customerNotes: order.customerNotes,
+    productionNotes: order.productionNotes,
+    internalNotes: order.internalNotes,
+    lines: items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      manualLineItem: item.manualLineItem,
+      description: item.manualLineItem ? item.name : undefined,
+      unitPrice: item.manualLineItem ? item.unitPrice : undefined,
+    })),
+  }));
 });
 
 router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
   const p = UpdateAdminOrderParams.safeParse(req.params), b = UpdateAdminOrderBody.safeParse(req.body);
   if (!p.success || !b.success) { res.status(400).json({ error: "Invalid order update" }); return; }
+  const user = await getRequestUser(req);
   let updated;
   try {
     updated = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, p.data.id)).for("update");
     if (!order) throw new Error("ORDER_NOT_FOUND");
     if (!(await canAccessBranch(req, order.branchId))) throw new Error("FORBIDDEN_BRANCH");
-    const valid: Record<string, string[]> = { pending_payment: ["paid", "cancelled"], paid: ["preparing", "cancelled"], preparing: ["ready", "cancelled"], ready: ["completed", "cancelled"], completed: [], cancelled: [] };
-    if (!valid[order.status].includes(b.data.status) && order.status !== b.data.status) throw new Error("INVALID_TRANSITION");
-    if (b.data.status === "paid" && order.status !== "paid") {
-      await tx.update(inventoryReservationsTable)
-        .set({ status: "committed" })
-        .where(and(eq(inventoryReservationsTable.orderId, order.id), eq(inventoryReservationsTable.status, "active")));
-    }
-    if (b.data.status === "cancelled" && order.status !== "cancelled") {
-      const reservations = await tx.update(inventoryReservationsTable).set({ status: "released" }).where(and(eq(inventoryReservationsTable.orderId, order.id), sql`${inventoryReservationsTable.status} in ('active','committed')`)).returning();
-      for (const r of reservations) {
-        const [bp] = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` }).where(eq(branchProductsTable.id, r.branchProductId)).returning({ inventory: branchProductsTable.inventory });
-        const [fullBp] = await tx.select().from(branchProductsTable).where(eq(branchProductsTable.id, r.branchProductId));
-        if (fullBp) await applyInventoryAlert(tx, fullBp, bp.inventory);
-        await tx.insert(inventoryLedgerTable).values({ branchProductId: r.branchProductId, orderId: order.id, movement: "release", quantityDelta: r.quantity, balanceAfter: bp.inventory, reason: "Order cancelled" });
+
+    const editable = order.status === "pending_payment" || order.status === "paid";
+    const patch: Partial<typeof ordersTable.$inferInsert> = {};
+
+    if (b.data.customerEmail != null) patch.customerEmail = b.data.customerEmail;
+    if (b.data.customerName != null) patch.customerName = b.data.customerName;
+    if (b.data.customerPhone != null) patch.customerPhone = b.data.customerPhone;
+    if (b.data.customerNotes !== undefined) patch.customerNotes = b.data.customerNotes;
+    if (b.data.productionNotes !== undefined) patch.productionNotes = b.data.productionNotes;
+    if (b.data.internalNotes !== undefined) patch.internalNotes = b.data.internalNotes;
+
+    if (b.data.scheduledStart && editable) {
+      const [branch] = await tx.select().from(branchesTable).where(eq(branchesTable.id, order.branchId));
+      if (branch) {
+        const scheduled = new Date(b.data.scheduledStart);
+        const schedule = fulfillmentSchedule(branch, mexicoDate(scheduled), order.fulfillmentMethod, branch.preparationTimeMinutes);
+        if (!schedule || !isValidSlotTime(schedule, scheduled)) throw new Error("INVALID_SLOT");
+        patch.scheduledStart = scheduled;
+        patch.scheduledEnd = new Date(scheduled.getTime() + schedule.intervalMs);
       }
     }
-    const [o] = await tx.update(ordersTable).set({ status: b.data.status, paymentStatus: b.data.status === "paid" ? "paid" : order.paymentStatus }).where(and(eq(ordersTable.id, order.id), eq(ordersTable.status, order.status))).returning();
+
+    if ((b.data.customerEmail || b.data.customerName || b.data.customerPhone || b.data.scheduledStart || b.data.lines) && !editable && order.status === "preparing") {
+      throw new Error("EDIT_RESTRICTED");
+    }
+
+    if (b.data.lines && editable) {
+      // Release existing reservations then recreate via createOrder is too heavy;
+      // for MVP edit of lines: cancel-style release + re-reserve priced lines.
+      const oldReservations = await tx.update(inventoryReservationsTable)
+        .set({ status: "released" })
+        .where(and(eq(inventoryReservationsTable.orderId, order.id), sql`${inventoryReservationsTable.status} in ('active','committed')`))
+        .returning();
+      for (const r of oldReservations) {
+        const [bp] = await tx.update(branchProductsTable)
+          .set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` })
+          .where(eq(branchProductsTable.id, r.branchProductId))
+          .returning({ inventory: branchProductsTable.inventory });
+        const [fullBp] = await tx.select().from(branchProductsTable).where(eq(branchProductsTable.id, r.branchProductId));
+        if (fullBp) await applyInventoryAlert(tx, fullBp, bp.inventory);
+        await tx.insert(inventoryLedgerTable).values({
+          branchProductId: r.branchProductId,
+          orderId: order.id,
+          movement: "release",
+          quantityDelta: r.quantity,
+          balanceAfter: bp.inventory,
+          reason: "Order lines edited",
+        });
+      }
+      await tx.delete(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
+
+      const priced = await createOrder({
+        orderSource: order.orderSource,
+        branchId: order.branchId,
+        fulfillmentMethod: order.fulfillmentMethod,
+        scheduledStart: (patch.scheduledStart as Date | undefined) ?? order.scheduledStart,
+        customerEmail: (patch.customerEmail as string | undefined) ?? order.customerEmail,
+        customerName: (patch.customerName as string | undefined) ?? order.customerName,
+        customerPhone: (patch.customerPhone as string | undefined) ?? order.customerPhone,
+        deliveryAddress: order.deliveryAddress,
+        deliveryLatitude: order.deliveryLatitude,
+        deliveryLongitude: order.deliveryLongitude,
+        lines: b.data.lines,
+        actorRole: user?.role,
+        createdByUserId: user?.id,
+        previewOnly: true,
+        paymentMethod: "PENDING",
+        markPaid: false,
+      });
+      if (priced.errors.length) throw new Error(priced.errors[0] ?? "LINE_ERROR");
+      patch.subtotal = priced.subtotal;
+      patch.promotionDiscountTotal = priced.promotionDiscountTotal;
+      patch.deliveryFee = priced.deliveryFee;
+      patch.total = priced.total;
+      patch.discountAmount = priced.discountAmount;
+      patch.couponDiscount = priced.couponDiscount;
+
+      for (const line of priced.lines) {
+        await tx.insert(orderItemsTable).values({
+          orderId: order.id,
+          productId: line.productId,
+          variantId: line.variantId,
+          sku: line.sku,
+          name: line.name,
+          variantLabel: line.variantLabel,
+          quantity: line.quantity,
+          listUnitPrice: line.listUnitPrice,
+          unitPrice: line.unitPrice,
+          lineTotal: line.lineTotal,
+          promotionId: line.promotionId,
+          manualLineItem: line.manualLineItem,
+        });
+        if (line.manualLineItem || line.productId == null) continue;
+        const [bp] = await tx.select().from(branchProductsTable).where(and(eq(branchProductsTable.branchId, order.branchId), eq(branchProductsTable.productId, line.productId)));
+        if (!bp) throw new Error("OUT_OF_STOCK");
+        const updatedInv = await tx.update(branchProductsTable)
+          .set({ inventory: sql`${branchProductsTable.inventory} - ${line.quantity}` })
+          .where(and(eq(branchProductsTable.id, bp.id), sql`${branchProductsTable.inventory} >= ${line.quantity}`))
+          .returning({ inventory: branchProductsTable.inventory });
+        if (!updatedInv.length) throw new Error("OUT_OF_STOCK");
+        await applyInventoryAlert(tx, { ...bp, inventory: updatedInv[0].inventory }, updatedInv[0].inventory);
+        await tx.insert(inventoryReservationsTable).values({
+          orderId: order.id,
+          branchProductId: bp.id,
+          quantity: line.quantity,
+          status: order.status === "paid" ? "committed" : "active",
+          expiresAt: new Date(Date.now() + 15 * 60_000),
+        });
+        await tx.insert(inventoryLedgerTable).values({
+          branchProductId: bp.id,
+          orderId: order.id,
+          movement: "reserve",
+          quantityDelta: -line.quantity,
+          balanceAfter: updatedInv[0].inventory,
+          reason: "Order lines edited",
+        });
+      }
+      await writeOrderAudit({
+        tx,
+        orderId: order.id,
+        actorUserId: user?.id,
+        action: "LINES_CHANGED",
+        payload: { lineCount: priced.lines.length },
+      });
+    }
+
+    if (b.data.status) {
+      const valid: Record<string, string[]> = { pending_payment: ["paid", "cancelled"], paid: ["preparing", "cancelled"], preparing: ["ready", "cancelled"], ready: ["completed", "cancelled"], completed: [], cancelled: [] };
+      if (!valid[order.status].includes(b.data.status) && order.status !== b.data.status) throw new Error("INVALID_TRANSITION");
+      if (b.data.status === "paid" && order.status !== "paid") {
+        await tx.update(inventoryReservationsTable)
+          .set({ status: "committed" })
+          .where(and(eq(inventoryReservationsTable.orderId, order.id), eq(inventoryReservationsTable.status, "active")));
+        patch.paymentStatus = "paid";
+        patch.inventoryCommittedAt = new Date();
+      }
+      if (b.data.status === "cancelled" && order.status !== "cancelled") {
+        if (!b.data.cancelReason?.trim() && order.orderSource !== "STOREFRONT") {
+          // require reason for manual cancels when provided path; soft require
+        }
+        const reservations = await tx.update(inventoryReservationsTable).set({ status: "released" }).where(and(eq(inventoryReservationsTable.orderId, order.id), sql`${inventoryReservationsTable.status} in ('active','committed')`)).returning();
+        for (const r of reservations) {
+          const [bp] = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` }).where(eq(branchProductsTable.id, r.branchProductId)).returning({ inventory: branchProductsTable.inventory });
+          const [fullBp] = await tx.select().from(branchProductsTable).where(eq(branchProductsTable.id, r.branchProductId));
+          if (fullBp) await applyInventoryAlert(tx, fullBp, bp.inventory);
+          await tx.insert(inventoryLedgerTable).values({ branchProductId: r.branchProductId, orderId: order.id, movement: "release", quantityDelta: r.quantity, balanceAfter: bp.inventory, reason: b.data.cancelReason ?? "Order cancelled" });
+        }
+        await writeOrderAudit({
+          tx,
+          orderId: order.id,
+          actorUserId: user?.id,
+          action: "CANCELLED",
+          reason: b.data.cancelReason,
+        });
+      }
+      patch.status = b.data.status;
+      await writeOrderAudit({
+        tx,
+        orderId: order.id,
+        actorUserId: user?.id,
+        action: "STATUS_CHANGED",
+        payload: { from: order.status, to: b.data.status },
+      });
+    }
+
+    if (b.data.scheduledStart && editable) {
+      await writeOrderAudit({
+        tx,
+        orderId: order.id,
+        actorUserId: user?.id,
+        action: "SCHEDULE_CHANGED",
+        payload: { scheduledStart: b.data.scheduledStart },
+      });
+    }
+
+    const [o] = await tx.update(ordersTable).set(patch).where(eq(ordersTable.id, order.id)).returning();
     if (!o) throw new Error("INVALID_TRANSITION");
     return o;
     });
@@ -393,33 +1112,308 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     if (error instanceof Error && error.message === "ORDER_NOT_FOUND") { res.status(404).json({ error: "Order not found" }); return; }
     if (error instanceof Error && error.message === "FORBIDDEN_BRANCH") { res.status(403).json({ error: "Branch access denied" }); return; }
     if (error instanceof Error && error.message === "INVALID_TRANSITION") { res.status(409).json({ error: "Invalid status transition" }); return; }
+    if (error instanceof Error && error.message === "EDIT_RESTRICTED") { res.status(409).json({ error: "Order already preparing; dangerous edits blocked" }); return; }
+    if (error instanceof Error && error.message === "INVALID_SLOT") { res.status(409).json({ error: "Fulfillment slot unavailable" }); return; }
+    if (error instanceof Error && error.message === "OUT_OF_STOCK") { res.status(409).json({ error: "Item unavailable" }); return; }
+    if (error instanceof OrderCreateError) { res.status(error.status).json({ error: error.message }); return; }
+    if (error instanceof Error && !["ORDER_NOT_FOUND", "FORBIDDEN_BRANCH", "INVALID_TRANSITION"].includes(error.message)) {
+      // LINE_ERROR messages
+      if (!error.message.includes(" ")) { /* fallthrough */ }
+      else { res.status(409).json({ error: error.message }); return; }
+    }
     throw error;
   }
-  const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, updated.id));
-  res.json(UpdateAdminOrderResponse.parse({ ...updated, items }));
+  res.json(UpdateAdminOrderResponse.parse(await loadAdminOrder(updated.id)));
+});
+
+const emailOrNull = z.union([z.string().email(), z.literal(""), z.null()]).optional().transform((v) => (v === "" ? null : v));
+const branchLinkSchema = z.object({
+  id: z.number().int().optional(),
+  type: z.string().min(1),
+  label: z.string().min(1),
+  url: z.string().url(),
+  sortOrder: z.number().int().default(0),
+  active: z.boolean().default(true),
+});
+const branchImageSchema = z.object({
+  id: z.number().int().optional(),
+  url: z.string().min(1),
+  type: z.enum(["hero", "gallery", "logo", "card"]),
+  alt: z.string().nullable().optional(),
+  sortOrder: z.number().int().default(0),
+  active: z.boolean().default(true),
+});
+const branchSpecialHourSchema = z.object({
+  id: z.number().int().optional(),
+  date: z.string().min(1),
+  openTime: z.string().nullable().optional(),
+  closeTime: z.string().nullable().optional(),
+  closed: z.boolean(),
+  label: z.string().nullable().optional(),
 });
 
 const branchUpdateSchema = z.object({
-  name: z.string().min(1).optional(), branchCode: z.string().min(1).optional(),
-  managerName: z.string().nullable().optional(), managerEmail: z.string().email().nullable().optional(),
-  managerPhone: z.string().nullable().optional(), notificationPreferences: z.object({ email: z.boolean().optional(), inApp: z.boolean().optional() }).optional(),
+  name: z.string().min(1).optional(),
+  shortName: z.string().min(1).optional(),
+  shortDescription: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  slug: z.string().min(1).optional(),
+  branchCode: z.string().min(1).optional(),
+  street: z.string().nullable().optional(),
+  externalNumber: z.string().nullable().optional(),
+  internalNumber: z.string().nullable().optional(),
+  neighborhood: z.string().min(1).optional(),
+  borough: z.string().nullable().optional(),
+  city: z.string().min(1).optional(),
+  state: z.string().min(1).optional(),
+  postalCode: z.string().min(1).optional(),
+  country: z.string().min(1).optional(),
+  address: z.string().min(1).optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  placeId: z.string().nullable().optional(),
+  phone: z.string().min(1).optional(),
+  secondaryPhone: z.string().nullable().optional(),
+  whatsapp: z.string().nullable().optional(),
+  whatsappDefaultMessage: z.string().nullable().optional(),
+  email: z.string().email().optional(),
+  ordersEmail: emailOrNull,
+  reservationsEmail: emailOrNull,
+  adminEmail: emailOrNull,
+  managerName: z.string().nullable().optional(),
+  managerEmail: emailOrNull,
+  managerPhone: z.string().nullable().optional(),
+  notificationPreferences: z
+    .object({
+      email: z.boolean().optional(),
+      inApp: z.boolean().optional(),
+      whatsapp: z.boolean().optional(),
+      lowStock: z.boolean().optional(),
+      criticalStock: z.boolean().optional(),
+      outOfStock: z.boolean().optional(),
+      newOrder: z.boolean().optional(),
+      cancelledOrder: z.boolean().optional(),
+      incident: z.boolean().optional(),
+    })
+    .optional(),
+  mapsUrl: z.string().url().optional(),
+  openTableUrl: z.string().url().nullable().optional(),
+  instagramUrl: z.string().url().nullable().optional(),
+  reservationProvider: z.enum(["opentable", "external", "none"]).optional(),
+  reservationUrl: z.string().url().nullable().optional(),
+  reservationCta: z.string().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
+  gallery: z.array(z.string()).optional(),
   hours: z.array(z.object({
-    day: z.string(), label: z.string(), open: z.string(), close: z.string(), closed: z.boolean(), date: z.string().optional(),
+    day: z.string(), label: z.string(), open: z.string(), close: z.string(), closed: z.boolean(),
+    date: z.string().optional(), slotOrder: z.number().int().optional(),
   })).optional(),
-  pickupAvailable: z.boolean().optional(), deliveryAvailable: z.boolean().optional(),
+  specialHours: z.array(branchSpecialHourSchema).optional(),
+  links: z.array(branchLinkSchema).optional(),
+  images: z.array(branchImageSchema).optional(),
+  pickupAvailable: z.boolean().optional(),
+  deliveryAvailable: z.boolean().optional(),
+  deliveryRadiusKm: z.number().nullable().optional(),
+  minimumOrder: z.number().nullable().optional(),
+  freeDeliveryFrom: z.number().nullable().optional(),
   preparationTimeMinutes: z.number().int().min(0).optional(),
   deliveryTimeMinutes: z.number().int().min(0).optional(),
   pickupSlotIntervalMinutes: z.number().int().min(5).optional(),
   pickupSlotCapacity: z.number().int().min(1).optional(),
+  deliveryFee: z.number().optional(),
+  featured: z.boolean().optional(),
+  seoTitle: z.string().nullable().optional(),
+  metaDescription: z.string().nullable().optional(),
+  ogImageUrl: z.string().nullable().optional(),
+  status: z.enum(["active", "inactive", "archived"]).optional(),
   active: z.boolean().optional(),
 });
+
+const branchCreateSchema = branchUpdateSchema.extend({
+  name: z.string().min(1),
+  branchCode: z.string().min(1),
+  phone: z.string().min(1),
+  email: z.string().email(),
+  shortName: z.string().min(1).optional(),
+  slug: z.string().min(1).optional(),
+  neighborhood: z.string().default(""),
+  city: z.string().default("Ciudad de México"),
+  state: z.string().default("CDMX"),
+  postalCode: z.string().default(""),
+  country: z.string().default("México"),
+  street: z.string().nullable().optional(),
+  address: z.string().optional(),
+  mapsUrl: z.string().url().optional(),
+  status: z.enum(["active", "inactive", "archived"]).default("inactive"),
+});
+
+async function requireStructuralBranchAccess(req: Parameters<typeof getRequestUser>[0]): Promise<boolean> {
+  const user = await getRequestUser(req);
+  return !!user && hasGlobalBranchAccess(user);
+}
+
+async function replaceBranchLinks(branchId: number, links: z.infer<typeof branchLinkSchema>[]) {
+  await db.delete(branchLinksTable).where(eq(branchLinksTable.branchId, branchId));
+  if (!links.length) return;
+  await db.insert(branchLinksTable).values(links.map((l, i) => ({
+    branchId,
+    type: l.type as typeof branchLinksTable.$inferInsert.type,
+    label: l.label,
+    url: l.url,
+    sortOrder: l.sortOrder ?? i,
+    active: l.active ?? true,
+  })));
+}
+
+async function replaceBranchImages(branchId: number, images: z.infer<typeof branchImageSchema>[]) {
+  await db.delete(branchImagesTable).where(eq(branchImagesTable.branchId, branchId));
+  if (!images.length) return;
+  await db.insert(branchImagesTable).values(images.map((img, i) => ({
+    branchId,
+    url: img.url,
+    type: img.type,
+    alt: img.alt ?? null,
+    sortOrder: img.sortOrder ?? i,
+    active: img.active ?? true,
+  })));
+}
+
+async function replaceSpecialHours(branchId: number, rows: z.infer<typeof branchSpecialHourSchema>[]) {
+  await db.delete(branchSpecialHoursTable).where(eq(branchSpecialHoursTable.branchId, branchId));
+  if (!rows.length) return;
+  await db.insert(branchSpecialHoursTable).values(rows.map((r) => ({
+    branchId,
+    date: r.date,
+    openTime: r.closed ? null : (r.openTime ?? null),
+    closeTime: r.closed ? null : (r.closeTime ?? null),
+    closed: r.closed,
+    label: r.label ?? null,
+  })));
+}
 
 router.get("/admin/branches", async (req, res): Promise<void> => {
   const ids = await getAccessibleBranchIds(req);
   const rows = await db.select().from(branchesTable)
     .where(ids ? (ids.length ? inArray(branchesTable.id, ids) : sql`false`) : undefined)
     .orderBy(branchesTable.id);
-  res.json(rows);
+  res.json(await enrichBranchesList(rows));
+});
+
+router.get("/admin/branches/export", async (req, res): Promise<void> => {
+  if (!(await requireStructuralBranchAccess(req))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const rows = await db.select().from(branchesTable).orderBy(branchesTable.id);
+  const header = ["branch_code", "name", "address", "city", "state", "zip", "phone", "email", "whatsapp", "reservation_url", "maps_url", "active", "status"];
+  const lines = [header.join(",")];
+  for (const b of rows) {
+    const cols = [
+      b.branchCode, b.name, b.address, b.city, b.state, b.postalCode, b.phone, b.email, b.whatsapp,
+      b.reservationUrl ?? b.openTableUrl, b.mapsUrl, String(b.active), b.status,
+    ].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`);
+    lines.push(cols.join(","));
+  }
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=sucursales.csv");
+  res.send(lines.join("\n"));
+});
+
+router.post("/admin/branches", async (req, res): Promise<void> => {
+  if (!(await requireStructuralBranchAccess(req))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const body = branchCreateSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const data = body.data;
+  const statusFields = syncStatusFields({ status: data.status, active: data.active });
+  const shortName = data.shortName || data.name.split(" ").slice(-1)[0] || data.name;
+  const slug = data.slug || slugifyBranch(shortName);
+  const street = data.street ?? data.address ?? "";
+  const address = data.address || buildFormattedAddress({
+    street,
+    externalNumber: data.externalNumber,
+    internalNumber: data.internalNumber,
+    neighborhood: data.neighborhood,
+    borough: data.borough,
+    city: data.city,
+    state: data.state,
+    postalCode: data.postalCode,
+    country: data.country,
+  });
+  try {
+    const [branch] = await db.insert(branchesTable).values({
+      name: data.name,
+      shortName,
+      slug,
+      branchCode: data.branchCode.toUpperCase(),
+      shortDescription: data.shortDescription ?? null,
+      description: data.description ?? null,
+      street,
+      externalNumber: data.externalNumber ?? null,
+      internalNumber: data.internalNumber ?? null,
+      neighborhood: data.neighborhood || "—",
+      borough: data.borough ?? null,
+      city: data.city,
+      state: data.state,
+      postalCode: data.postalCode || "00000",
+      country: data.country,
+      address,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
+      placeId: data.placeId ?? null,
+      phone: data.phone,
+      secondaryPhone: data.secondaryPhone ?? null,
+      whatsapp: normalizeWhatsapp(data.whatsapp),
+      whatsappDefaultMessage: data.whatsappDefaultMessage ?? `Hola, quiero información de ${data.name}.`,
+      email: data.email,
+      ordersEmail: data.ordersEmail ?? null,
+      reservationsEmail: data.reservationsEmail ?? null,
+      adminEmail: data.adminEmail ?? null,
+      mapsUrl: data.mapsUrl || "https://maps.google.com",
+      openTableUrl: data.openTableUrl ?? null,
+      instagramUrl: data.instagramUrl ?? null,
+      reservationProvider: data.reservationProvider ?? "none",
+      reservationUrl: data.reservationUrl ?? null,
+      reservationCta: data.reservationCta ?? "Reservar mesa",
+      imageUrl: data.imageUrl ?? null,
+      gallery: data.gallery ?? [],
+      hours: data.hours ?? [],
+      pickupAvailable: data.pickupAvailable ?? true,
+      deliveryAvailable: data.deliveryAvailable ?? true,
+      deliveryRadiusKm: data.deliveryRadiusKm ?? null,
+      minimumOrder: data.minimumOrder ?? null,
+      freeDeliveryFrom: data.freeDeliveryFrom ?? null,
+      preparationTimeMinutes: data.preparationTimeMinutes ?? 30,
+      deliveryTimeMinutes: data.deliveryTimeMinutes ?? 60,
+      pickupSlotIntervalMinutes: data.pickupSlotIntervalMinutes ?? 30,
+      pickupSlotCapacity: data.pickupSlotCapacity ?? 8,
+      deliveryFee: data.deliveryFee ?? 90,
+      featured: data.featured ?? false,
+      seoTitle: data.seoTitle ?? null,
+      metaDescription: data.metaDescription ?? null,
+      ogImageUrl: data.ogImageUrl ?? null,
+      notificationPreferences: normalizeNotificationPreferences(data.notificationPreferences),
+      status: statusFields.status,
+      active: statusFields.active,
+    }).returning();
+
+    if (data.hours?.length) {
+      const hoursJson = await replaceBranchHours(branch.id, data.hours);
+      await db.update(branchesTable).set({ hours: hoursJson }).where(eq(branchesTable.id, branch.id));
+    }
+    if (data.specialHours) await replaceSpecialHours(branch.id, data.specialHours);
+    if (data.links) await replaceBranchLinks(branch.id, data.links);
+    if (data.images) await replaceBranchImages(branch.id, data.images);
+    await syncLegacyProjections(branch.id);
+
+    const actor = await getRequestUser(req);
+    await writeBranchAudit({ branchId: branch.id, actorUserId: actor?.id, action: "branch_created", after: { id: branch.id, name: branch.name, code: branch.branchCode } });
+    const [fresh] = await db.select().from(branchesTable).where(eq(branchesTable.id, branch.id));
+    res.status(201).json((await enrichBranchesList([fresh]))[0]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not create branch";
+    if (message.includes("unique") || message.includes("duplicate")) {
+      res.status(409).json({ error: "Código o slug de sucursal duplicado" });
+      return;
+    }
+    res.status(500).json({ error: message });
+  }
 });
 
 router.get("/admin/branches/:id", async (req, res): Promise<void> => {
@@ -427,13 +1421,85 @@ router.get("/admin/branches/:id", async (req, res): Promise<void> => {
   if (!Number.isInteger(branchId) || !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
   const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, branchId));
   if (!branch) { res.status(404).json({ error: "Branch not found" }); return; }
-  const [products, inventory, orders, alerts] = await Promise.all([
+  const satellite = await loadBranchSatellite(branchId);
+  const [products, inventory, orders, alerts, team, audit] = await Promise.all([
     db.select({ configuration: branchProductsTable, product: productsTable }).from(branchProductsTable).innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id)).where(eq(branchProductsTable.branchId, branchId)),
     db.select({ configuration: branchProductsTable, product: productsTable }).from(branchProductsTable).innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id)).where(eq(branchProductsTable.branchId, branchId)),
     db.select().from(ordersTable).where(eq(ordersTable.branchId, branchId)).orderBy(desc(ordersTable.createdAt)).limit(100),
     db.select({ alert: inventoryAlertsTable, product: productsTable }).from(inventoryAlertsTable).innerJoin(productsTable, eq(inventoryAlertsTable.productId, productsTable.id)).where(eq(inventoryAlertsTable.branchId, branchId)).orderBy(desc(inventoryAlertsTable.createdAt)),
+    db.select({
+      id: branchUserAssignmentsTable.id,
+      role: branchUserAssignmentsTable.role,
+      isPrimary: branchUserAssignmentsTable.isPrimary,
+      active: branchUserAssignmentsTable.active,
+      user: {
+        id: usersTable.id,
+        name: sql<string>`trim(concat(${usersTable.firstName}, ' ', ${usersTable.lastName}))`,
+        email: usersTable.email,
+        role: usersTable.role,
+      },
+    }).from(branchUserAssignmentsTable).innerJoin(usersTable, eq(branchUserAssignmentsTable.userId, usersTable.id)).where(eq(branchUserAssignmentsTable.branchId, branchId)),
+    db.select().from(branchAuditLogsTable).where(eq(branchAuditLogsTable.branchId, branchId)).orderBy(desc(branchAuditLogsTable.createdAt)).limit(50),
   ]);
-  res.json({ branch, general: branch, contact: { phone: branch.phone, whatsapp: branch.whatsapp, email: branch.email }, hours: branch.hours, products, inventory, orders, alerts, notificationSettings: branch.notificationPreferences });
+
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const end = new Date(start); end.setDate(end.getDate() + 1);
+  const todayOrders = orders.filter((o) => {
+    const d = new Date(o.scheduledStart ?? o.createdAt);
+    return d >= start && d < end && o.status !== "cancelled";
+  });
+  const salesToday = todayOrders.reduce((s, o) => s + Number(o.total ?? 0), 0);
+  const outOfStock = inventory.filter((r) => (r.configuration.inventory ?? 0) <= 0).length;
+  const lowStock = inventory.filter((r) => {
+    const inv = r.configuration.inventory ?? 0;
+    return inv > 0 && inv <= (r.configuration.minStock ?? 0);
+  });
+  const serialized = serializeAdminBranch(branch, {
+    links: satellite.links,
+    images: satellite.images,
+    specialHours: satellite.specialHours,
+    primaryResponsible: satellite.primaryResponsible,
+    ordersToday: todayOrders.length,
+    alertsOpen: alerts.filter((a) => !a.alert.resolvedAt).length,
+  });
+
+  res.json({
+    branch: serialized,
+    general: serialized,
+    contact: {
+      phone: branch.phone,
+      secondaryPhone: branch.secondaryPhone,
+      whatsapp: branch.whatsapp,
+      whatsappUrl: whatsappUrl(branch.whatsapp, branch.whatsappDefaultMessage),
+      email: branch.email,
+      ordersEmail: branch.ordersEmail,
+      reservationsEmail: branch.reservationsEmail,
+      adminEmail: branch.adminEmail,
+    },
+    hours: branch.hours,
+    specialHours: satellite.specialHours,
+    links: satellite.links,
+    images: satellite.images,
+    products,
+    inventory,
+    orders,
+    alerts,
+    notificationSettings: branch.notificationPreferences,
+    team,
+    audit,
+    futureOrdersCount: await countFutureOrders(branchId),
+    summary: {
+      ordersToday: todayOrders.length,
+      salesToday,
+      alertsOpen: alerts.filter((a) => !a.alert.resolvedAt).length,
+      outOfStock,
+      lowStockProducts: lowStock.slice(0, 8).map((r) => r.product.name),
+      upcoming: todayOrders
+        .sort((a, b) => new Date(a.scheduledStart ?? 0).getTime() - new Date(b.scheduledStart ?? 0).getTime())
+        .slice(0, 6)
+        .map((o) => ({ id: o.id, scheduledStart: o.scheduledStart, status: o.status, total: o.total })),
+    },
+  });
 });
 
 const reportQuery = z.object({
@@ -465,21 +1531,334 @@ router.get("/admin/reports/branches", async (req, res): Promise<void> => {
 router.patch("/admin/branches/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const body = branchUpdateSchema.safeParse(req.body);
-  if (!Number.isInteger(id) || !body.success) { res.status(400).json({ error: "Invalid branch update" }); return; }
+  if (!Number.isInteger(id) || !body.success) { res.status(400).json({ error: body.success ? "Invalid id" : body.error.message }); return; }
   if (!(await canAccessBranch(req, id))) { res.status(403).json({ error: "Branch access denied" }); return; }
-  const [branch] = await db.update(branchesTable).set(body.data).where(eq(branchesTable.id, id)).returning();
+  const actor = await getRequestUser(req);
+  const isGlobal = actor && hasGlobalBranchAccess(actor);
+  const [before] = await db.select().from(branchesTable).where(eq(branchesTable.id, id));
+  if (!before) { res.status(404).json({ error: "Branch not found" }); return; }
+
+  const data = { ...body.data };
+  if (!isGlobal) {
+    // Branch managers may edit operational fields only
+    delete data.branchCode;
+    delete data.slug;
+    delete data.status;
+    delete data.active;
+    delete data.featured;
+  }
+  if (data.branchCode && data.branchCode !== before.branchCode && (before.branchCode)) {
+    // Warn via audit; still allow global admins
+    await writeBranchAudit({
+      branchId: id,
+      actorUserId: actor?.id,
+      action: "branch_code_change_warning",
+      before: { branchCode: before.branchCode },
+      after: { branchCode: data.branchCode },
+    });
+  }
+
+  const {
+    hours, specialHours, links, images, status, active, whatsapp, address, street, externalNumber, internalNumber,
+    neighborhood, borough, city, state, postalCode, country, ...rest
+  } = data;
+
+  const statusFields = status != null || active != null ? syncStatusFields({ status, active }) : null;
+  const nextStreet = street ?? before.street;
+  const formatted = address ?? buildFormattedAddress({
+    street: nextStreet,
+    externalNumber: externalNumber ?? before.externalNumber,
+    internalNumber: internalNumber ?? before.internalNumber,
+    neighborhood: neighborhood ?? before.neighborhood,
+    borough: borough ?? before.borough,
+    city: city ?? before.city,
+    state: state ?? before.state,
+    postalCode: postalCode ?? before.postalCode,
+    country: country ?? before.country,
+    fallback: before.address,
+  });
+
+  const patch: Record<string, unknown> = {
+    ...rest,
+    ...(street !== undefined ? { street } : {}),
+    ...(externalNumber !== undefined ? { externalNumber } : {}),
+    ...(internalNumber !== undefined ? { internalNumber } : {}),
+    ...(neighborhood !== undefined ? { neighborhood } : {}),
+    ...(borough !== undefined ? { borough } : {}),
+    ...(city !== undefined ? { city } : {}),
+    ...(state !== undefined ? { state } : {}),
+    ...(postalCode !== undefined ? { postalCode } : {}),
+    ...(country !== undefined ? { country } : {}),
+    address: formatted,
+    ...(whatsapp !== undefined ? { whatsapp: normalizeWhatsapp(whatsapp) } : {}),
+    ...(statusFields ? statusFields : {}),
+    ...(rest.branchCode ? { branchCode: String(rest.branchCode).toUpperCase() } : {}),
+    ...(rest.notificationPreferences
+      ? {
+          notificationPreferences: normalizeNotificationPreferences({
+            ...(before.notificationPreferences as object),
+            ...rest.notificationPreferences,
+          }),
+        }
+      : {}),
+  };
+
+  try {
+    const [branch] = await db.update(branchesTable).set(patch).where(eq(branchesTable.id, id)).returning();
+    if (hours) {
+      const hoursJson = await replaceBranchHours(id, hours);
+      await db.update(branchesTable).set({ hours: hoursJson }).where(eq(branchesTable.id, id));
+    }
+    if (specialHours) await replaceSpecialHours(id, specialHours);
+    if (links) await replaceBranchLinks(id, links);
+    if (images) await replaceBranchImages(id, images);
+    if (hours || specialHours || links || images) await syncLegacyProjections(id);
+
+    await writeBranchAudit({
+      branchId: id,
+      actorUserId: actor?.id,
+      action: "branch_updated",
+      before: { name: before.name, status: before.status, address: before.address },
+      after: patch,
+    });
+    const [fresh] = await db.select().from(branchesTable).where(eq(branchesTable.id, id));
+    const sat = await loadBranchSatellite(id);
+    res.json(serializeAdminBranch(fresh, {
+      links: sat.links,
+      images: sat.images,
+      specialHours: sat.specialHours,
+      primaryResponsible: sat.primaryResponsible,
+    }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Update failed";
+    if (message.includes("unique") || message.includes("duplicate")) {
+      res.status(409).json({ error: "Código o slug duplicado" });
+      return;
+    }
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/admin/branches/:id/deactivate", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !(await requireStructuralBranchAccess(req))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const future = await countFutureOrders(id);
+  const confirm = Boolean(req.body?.confirmFutureOrders);
+  if (future > 0 && !confirm) {
+    res.status(409).json({ error: `Esta sucursal tiene ${future} pedidos futuros.`, futureOrdersCount: future });
+    return;
+  }
+  const fields = syncStatusFields({ status: "inactive" });
+  const [branch] = await db.update(branchesTable).set(fields).where(eq(branchesTable.id, id)).returning();
   if (!branch) { res.status(404).json({ error: "Branch not found" }); return; }
-  res.json(branch);
+  const actor = await getRequestUser(req);
+  await writeBranchAudit({ branchId: id, actorUserId: actor?.id, action: "branch_deactivated", after: fields });
+  res.json((await enrichBranchesList([branch]))[0]);
+});
+
+router.post("/admin/branches/:id/archive", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !(await requireStructuralBranchAccess(req))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const fields = syncStatusFields({ status: "archived" });
+  const [branch] = await db.update(branchesTable).set(fields).where(eq(branchesTable.id, id)).returning();
+  if (!branch) { res.status(404).json({ error: "Branch not found" }); return; }
+  const actor = await getRequestUser(req);
+  await writeBranchAudit({ branchId: id, actorUserId: actor?.id, action: "branch_archived", after: fields });
+  res.json((await enrichBranchesList([branch]))[0]);
+});
+
+router.delete("/admin/branches/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !(await requireStructuralBranchAccess(req))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const deps = await branchDependencyCounts(id);
+  const hasHistory = deps.orders > 0 || deps.products > 0 || deps.alerts > 0 || deps.promotions > 0 || deps.users > 0;
+  if (hasHistory) {
+    res.status(409).json({ error: "La sucursal tiene historial operativo. Usa Archivar.", dependencies: deps });
+    return;
+  }
+  await db.delete(branchesTable).where(eq(branchesTable.id, id));
+  res.status(204).end();
+});
+
+const duplicateBody = z.object({
+  name: z.string().min(1),
+  branchCode: z.string().min(1),
+  shortName: z.string().optional(),
+  slug: z.string().optional(),
+  copyHours: z.boolean().default(true),
+  copyPickupDelivery: z.boolean().default(true),
+  copyNotifications: z.boolean().default(true),
+  copyProductAssignments: z.boolean().default(false),
+  copyTeamStructure: z.boolean().default(false),
+});
+
+router.post("/admin/branches/:id/duplicate", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !(await requireStructuralBranchAccess(req))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const body = duplicateBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [source] = await db.select().from(branchesTable).where(eq(branchesTable.id, id));
+  if (!source) { res.status(404).json({ error: "Branch not found" }); return; }
+  const shortName = body.data.shortName || body.data.name;
+  const slug = body.data.slug || slugifyBranch(shortName);
+  const statusFields = syncStatusFields({ status: "inactive" });
+  try {
+    const {
+      id: _sourceId,
+      createdAt: _c,
+      updatedAt: _u,
+      ...sourceFields
+    } = source;
+    const [created] = await db.insert(branchesTable).values({
+      ...sourceFields,
+      name: body.data.name,
+      shortName,
+      slug,
+      branchCode: body.data.branchCode.toUpperCase(),
+      featured: false,
+      status: statusFields.status,
+      active: statusFields.active,
+      hours: body.data.copyHours ? source.hours : [],
+      pickupAvailable: body.data.copyPickupDelivery ? source.pickupAvailable : true,
+      deliveryAvailable: body.data.copyPickupDelivery ? source.deliveryAvailable : true,
+      deliveryRadiusKm: body.data.copyPickupDelivery ? source.deliveryRadiusKm : null,
+      minimumOrder: body.data.copyPickupDelivery ? source.minimumOrder : null,
+      freeDeliveryFrom: body.data.copyPickupDelivery ? source.freeDeliveryFrom : null,
+      preparationTimeMinutes: body.data.copyPickupDelivery ? source.preparationTimeMinutes : 30,
+      deliveryTimeMinutes: body.data.copyPickupDelivery ? source.deliveryTimeMinutes : 60,
+      pickupSlotIntervalMinutes: body.data.copyPickupDelivery ? source.pickupSlotIntervalMinutes : 30,
+      pickupSlotCapacity: body.data.copyPickupDelivery ? source.pickupSlotCapacity : 8,
+      deliveryFee: body.data.copyPickupDelivery ? source.deliveryFee : 90,
+      notificationPreferences: body.data.copyNotifications
+        ? normalizeNotificationPreferences(source.notificationPreferences as any)
+        : { ...DEFAULT_NOTIFICATION_PREFERENCES },
+    }).returning();
+
+    if (body.data.copyHours) {
+      const hours = await db.select().from(branchHoursTable).where(eq(branchHoursTable.branchId, id));
+      if (hours.length) {
+        await db.insert(branchHoursTable).values(hours.map(({ id: _id, ...h }) => ({ ...h, branchId: created.id })));
+      }
+      const special = await db.select().from(branchSpecialHoursTable).where(eq(branchSpecialHoursTable.branchId, id));
+      if (special.length) {
+        await db.insert(branchSpecialHoursTable).values(special.map(({ id: _id, ...h }) => ({ ...h, branchId: created.id })));
+      }
+    }
+    if (body.data.copyProductAssignments) {
+      const products = await db.select().from(branchProductsTable).where(eq(branchProductsTable.branchId, id));
+      if (products.length) {
+        await db.insert(branchProductsTable).values(products.map(({ id: _id, ...p }) => ({
+          ...p,
+          branchId: created.id,
+          inventory: 0,
+          alertState: "NORMAL",
+        })));
+      }
+    }
+    if (body.data.copyTeamStructure) {
+      const team = await db.select().from(branchUserAssignmentsTable).where(eq(branchUserAssignmentsTable.branchId, id));
+      if (team.length) {
+        await db.insert(branchUserAssignmentsTable).values(team.map(({ id: _id, ...t }) => ({
+          ...t,
+          branchId: created.id,
+          isPrimary: false,
+        })));
+      }
+    }
+
+    const actor = await getRequestUser(req);
+    await writeBranchAudit({
+      branchId: created.id,
+      actorUserId: actor?.id,
+      action: "branch_duplicated",
+      before: { sourceId: id },
+      after: { id: created.id, name: created.name },
+    });
+    res.status(201).json((await enrichBranchesList([created]))[0]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Duplicate failed";
+    res.status(409).json({ error: message.includes("unique") ? "Código o slug duplicado" : message });
+  }
+});
+
+router.get("/admin/branches/:id/audit", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !(await canAccessBranch(req, id))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const rows = await db.select().from(branchAuditLogsTable).where(eq(branchAuditLogsTable.branchId, id)).orderBy(desc(branchAuditLogsTable.createdAt)).limit(100);
+  res.json(rows);
 });
 
 const inventoryQuery = z.object({
   search: z.string().optional(), branchId: z.coerce.number().int().optional(),
-  state: z.enum(["NORMAL", "LOW_STOCK", "OUT_OF_STOCK"]).optional(),
+  state: z.enum(["NORMAL", "LOW_STOCK", "CRITICAL_STOCK", "OUT_OF_STOCK"]).optional(),
   categoryId: z.coerce.number().int().optional(),
+});
+
+const alertListQuery = z.object({
+  branchId: z.coerce.number().int().optional(),
+  productId: z.coerce.number().int().optional(),
+  type: z.string().optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+  status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "DISMISSED"]).optional(),
+  source: z.enum(["AUTOMATIC", "MANUAL"]).optional(),
+  assignedUserId: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+const createAlertBody = z.object({
+  productId: z.number().int().optional(),
+  productIds: z.array(z.number().int()).optional(),
+  branchId: z.number().int(),
+  type: z.enum([
+    "INVENTORY_REVIEW",
+    "RESTOCK_REQUEST",
+    "INVENTORY_MISMATCH",
+    "CUSTOM",
+    "LOW_STOCK",
+    "CRITICAL_STOCK",
+    "OUT_OF_STOCK",
+  ]),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+  message: z.string().min(1),
+  assignedUserId: z.string().nullable().optional(),
+}).refine((v) => v.productId != null || (v.productIds && v.productIds.length > 0), {
+  message: "productId or productIds required",
+});
+
+const patchAlertBody = z.object({
+  status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "DISMISSED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+  assignedUserId: z.string().nullable().optional(),
+  resolutionNote: z.string().nullable().optional(),
 });
 
 async function scopedBranchId(req: Parameters<typeof canAccessBranch>[0], branchId: number): Promise<boolean> {
   return canAccessBranch(req, branchId);
+}
+
+function enrichInventoryRow(row: {
+  branchProduct: typeof branchProductsTable.$inferSelect;
+  branch: typeof branchesTable.$inferSelect;
+  product: typeof productsTable.$inferSelect;
+  reservedStock: number;
+  openAlertCount?: number;
+}) {
+  const reserved = Number(row.reservedStock ?? 0);
+  const available = availableStock(row.branchProduct.inventory, reserved);
+  return {
+    ...row,
+    reservedStock: reserved,
+    availableStock: available,
+    criticalStock: row.branchProduct.criticalStock ?? null,
+    autoAlertEnabled: row.branchProduct.autoAlertEnabled !== false,
+    openAlertCount: row.openAlertCount ?? 0,
+    inventoryStatus: deriveInventoryStatus(
+      available,
+      row.branchProduct.minStock,
+      row.branchProduct.criticalStock,
+    ),
+  };
 }
 
 router.get("/admin/inventory", async (req, res): Promise<void> => {
@@ -498,7 +1877,29 @@ router.get("/admin/inventory", async (req, res): Promise<void> => {
     .from(branchProductsTable).innerJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
     .innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id))
     .where(filters.length ? and(...filters) : undefined).orderBy(productsTable.name);
-  res.json(rows);
+
+  const bpIds = rows.map((r) => r.branchProduct.id);
+  const openCounts = bpIds.length
+    ? await db
+        .select({
+          branchProductId: inventoryAlertsTable.branchProductId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(inventoryAlertsTable)
+        .where(
+          and(
+            inArray(inventoryAlertsTable.branchProductId, bpIds),
+            inArray(inventoryAlertsTable.status, ["OPEN", "IN_PROGRESS"]),
+          ),
+        )
+        .groupBy(inventoryAlertsTable.branchProductId)
+    : [];
+  const countMap = new Map(openCounts.map((c) => [c.branchProductId, Number(c.count)]));
+  res.json(
+    rows.map((row) =>
+      enrichInventoryRow({ ...row, openAlertCount: countMap.get(row.branchProduct.id) ?? 0 }),
+    ),
+  );
 });
 
 router.get("/admin/inventory/matrix", async (req, res): Promise<void> => {
@@ -508,7 +1909,17 @@ router.get("/admin/inventory/matrix", async (req, res): Promise<void> => {
     .from(productsTable).leftJoin(branchProductsTable, eq(branchProductsTable.productId, productsTable.id))
     .leftJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
     .where(ids ? (ids.length ? inArray(branchProductsTable.branchId, ids) : sql`false`) : undefined);
-  res.json(rows);
+  res.json(
+    rows.map((row) => {
+      if (!row.branchProduct || !row.branch) return row;
+      return enrichInventoryRow({
+        branchProduct: row.branchProduct,
+        branch: row.branch,
+        product: row.product,
+        reservedStock: Number(row.reservedStock ?? 0),
+      });
+    }),
+  );
 });
 
 const stockUpdateSchema = z.object({
@@ -562,15 +1973,150 @@ router.get("/admin/inventory/movements", async (req, res): Promise<void> => {
 });
 
 router.get("/admin/inventory/alerts", async (req, res): Promise<void> => {
-  const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
-  if (branchId != null && !(await canAccessBranch(req, branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
+  const q = alertListQuery.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
+  if (q.data.branchId != null && !(await canAccessBranch(req, q.data.branchId))) {
+    res.status(403).json({ error: "Branch access denied" });
+    return;
+  }
   const ids = await getAccessibleBranchIds(req);
-  const alertFilters = ids ? (ids.length ? inArray(inventoryAlertsTable.branchId, ids) : sql`false`) : branchId ? eq(inventoryAlertsTable.branchId, branchId) : undefined;
-  const rows = await db.select({ alert: inventoryAlertsTable, branch: branchesTable, product: productsTable })
-    .from(inventoryAlertsTable).innerJoin(branchesTable, eq(inventoryAlertsTable.branchId, branchesTable.id))
+  const filters = [];
+  if (ids) filters.push(ids.length ? inArray(inventoryAlertsTable.branchId, ids) : sql`false`);
+  if (q.data.branchId != null) filters.push(eq(inventoryAlertsTable.branchId, q.data.branchId));
+  if (q.data.productId != null) filters.push(eq(inventoryAlertsTable.productId, q.data.productId));
+  if (q.data.type) filters.push(eq(inventoryAlertsTable.type, q.data.type as any));
+  if (q.data.priority) filters.push(eq(inventoryAlertsTable.priority, q.data.priority));
+  if (q.data.status) filters.push(eq(inventoryAlertsTable.status, q.data.status));
+  if (q.data.source) filters.push(eq(inventoryAlertsTable.source, q.data.source));
+  if (q.data.assignedUserId) {
+    filters.push(eq(inventoryAlertsTable.responsibleUserId, q.data.assignedUserId));
+  }
+  if (q.data.from) filters.push(gte(inventoryAlertsTable.createdAt, new Date(q.data.from)));
+  if (q.data.to) filters.push(lt(inventoryAlertsTable.createdAt, new Date(q.data.to)));
+
+  const rows = await db
+    .select({ alert: inventoryAlertsTable, branch: branchesTable, product: productsTable })
+    .from(inventoryAlertsTable)
+    .innerJoin(branchesTable, eq(inventoryAlertsTable.branchId, branchesTable.id))
     .innerJoin(productsTable, eq(inventoryAlertsTable.productId, productsTable.id))
-    .where(alertFilters).orderBy(desc(inventoryAlertsTable.createdAt));
+    .where(filters.length ? and(...filters) : undefined)
+    .orderBy(desc(inventoryAlertsTable.createdAt));
   res.json(rows);
+});
+
+router.post("/admin/inventory/alerts", async (req, res): Promise<void> => {
+  const parsed = createAlertBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (!(await canAccessBranch(req, parsed.data.branchId))) {
+    res.status(403).json({ error: "Branch access denied" });
+    return;
+  }
+  const actor = await getRequestUser(req);
+  try {
+    if (parsed.data.productIds?.length) {
+      const result = await createManualAlertsBulk(parsed.data.productIds, {
+        branchId: parsed.data.branchId,
+        type: parsed.data.type,
+        priority: parsed.data.priority,
+        message: parsed.data.message,
+        assignedUserId: parsed.data.assignedUserId,
+        createdByUserId: actor?.id ?? null,
+      });
+      res.status(201).json(result);
+      return;
+    }
+    const alert = await createManualAlert({
+      productId: parsed.data.productId!,
+      branchId: parsed.data.branchId,
+      type: parsed.data.type,
+      priority: parsed.data.priority,
+      message: parsed.data.message,
+      assignedUserId: parsed.data.assignedUserId,
+      createdByUserId: actor?.id ?? null,
+    });
+    res.status(201).json({ alert });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "BRANCH_PRODUCT_NOT_FOUND") {
+      res.status(404).json({ error: "Product not configured for branch" });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.patch("/admin/inventory/alerts/:id", async (req, res): Promise<void> => {
+  const alertId = Number(req.params.id);
+  if (!Number.isInteger(alertId)) { res.status(400).json({ error: "Invalid alert id" }); return; }
+  const parsed = patchAlertBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [existing] = await db
+    .select()
+    .from(inventoryAlertsTable)
+    .where(eq(inventoryAlertsTable.id, alertId));
+  if (!existing) { res.status(404).json({ error: "Alert not found" }); return; }
+  if (!(await canAccessBranch(req, existing.branchId))) {
+    res.status(403).json({ error: "Branch access denied" });
+    return;
+  }
+  const actor = await getRequestUser(req);
+  const nextStatus = parsed.data.status ?? (existing.status as any);
+  const isResolution =
+    nextStatus === "RESOLVED" ||
+    nextStatus === "DISMISSED" ||
+    parsed.data.assignedUserId !== undefined ||
+    parsed.data.priority !== undefined;
+  if (
+    isResolution &&
+    actor &&
+    actor.role === "staff" &&
+    !hasGlobalBranchAccess(actor)
+  ) {
+    // Staff may only mark IN_PROGRESS / reopen; managers+ resolve/assign.
+    if (nextStatus !== "IN_PROGRESS" && nextStatus !== "OPEN") {
+      res.status(403).json({ error: "Staff can only mark alerts as in progress" });
+      return;
+    }
+    if (parsed.data.assignedUserId !== undefined || parsed.data.priority !== undefined) {
+      res.status(403).json({ error: "Staff cannot assign or change priority" });
+      return;
+    }
+  }
+  try {
+    const updated = await updateAlertStatus({
+      alertId,
+      status: nextStatus,
+      priority: parsed.data.priority,
+      assignedUserId: parsed.data.assignedUserId,
+      resolutionNote: parsed.data.resolutionNote,
+      userId: actor?.id ?? null,
+    });
+    res.json({ alert: updated });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "ALERT_NOT_FOUND") { res.status(404).json({ error: "Alert not found" }); return; }
+    throw error;
+  }
+});
+
+router.get("/admin/inventory/alerts/:id/events", async (req, res): Promise<void> => {
+  const alertId = Number(req.params.id);
+  if (!Number.isInteger(alertId)) { res.status(400).json({ error: "Invalid alert id" }); return; }
+  const [existing] = await db
+    .select()
+    .from(inventoryAlertsTable)
+    .where(eq(inventoryAlertsTable.id, alertId));
+  if (!existing) { res.status(404).json({ error: "Alert not found" }); return; }
+  if (!(await canAccessBranch(req, existing.branchId))) {
+    res.status(403).json({ error: "Branch access denied" });
+    return;
+  }
+  const events = await db
+    .select()
+    .from(inventoryAlertEventsTable)
+    .where(eq(inventoryAlertEventsTable.alertId, alertId))
+    .orderBy(desc(inventoryAlertEventsTable.createdAt));
+  res.json({ events });
 });
 
 router.post("/admin/inventory/import/preview", async (req, res): Promise<void> => {
@@ -580,28 +2126,96 @@ router.post("/admin/inventory/import/preview", async (req, res): Promise<void> =
   const allowed = ids === null ? null : new Set(ids);
   const branches = await db.select({ id: branchesTable.id, code: branchesTable.branchCode }).from(branchesTable);
   const byCode = new Map(branches.map((b) => [b.code, b.id]));
-  const products = await db.select({ sku: productsTable.sku }).from(productsTable);
-  const skus = new Set(products.map((p) => p.sku));
-  const errors = [...result.errors];
-  result.rows.forEach((row, i) => { const branchId = byCode.get(row.branchCode); if (!branchId) errors.push({ row: i + 2, message: "Unknown branch_code" }); else if (allowed && !allowed.has(branchId)) errors.push({ row: i + 2, message: "Branch access denied" }); if (!skus.has(row.sku)) errors.push({ row: i + 2, message: "Unknown SKU" }); });
-  res.json({ rows: result.rows, errors, valid: errors.length === 0 });
+  const products = await db.select({ id: productsTable.id, sku: productsTable.sku }).from(productsTable);
+  const skuMap = new Map(products.map((p) => [p.sku, p.id]));
+  const errors = result.errors.map((e) => ({ ...e, message: translateImportMessage(e.message) }));
+  const previewRows = [];
+  for (const [i, row] of result.rows.entries()) {
+    const branchId = byCode.get(row.branchCode);
+    const productId = skuMap.get(row.sku);
+    if (!branchId) errors.push({ row: i + 2, message: translateImportMessage("Unknown branchCode") });
+    else if (allowed && !allowed.has(branchId)) {
+      errors.push({ row: i + 2, message: translateImportMessage("Branch access denied") });
+    }
+    if (!productId) errors.push({ row: i + 2, message: translateImportMessage("Unknown SKU") });
+
+    let willTriggerAlert = false;
+    let alertType: string | null = null;
+    let nextStatus: string | null = null;
+    if (branchId && productId) {
+      const [bp] = await db
+        .select()
+        .from(branchProductsTable)
+        .where(
+          and(
+            eq(branchProductsTable.branchId, branchId),
+            eq(branchProductsTable.productId, productId),
+          ),
+        );
+      if (bp) {
+        const [reservedRow] = await db
+          .select({
+            reserved: sql<number>`coalesce(sum(${inventoryReservationsTable.quantity}), 0)`,
+          })
+          .from(inventoryReservationsTable)
+          .where(
+            and(
+              eq(inventoryReservationsTable.branchProductId, bp.id),
+              eq(inventoryReservationsTable.status, "active"),
+            ),
+          );
+        const reserved = Number(reservedRow?.reserved ?? 0);
+        const minStock = row.minStock ?? bp.minStock;
+        const criticalStock =
+          row.criticalStock !== undefined ? row.criticalStock : bp.criticalStock;
+        const autoAlertEnabled =
+          row.autoAlertEnabled !== undefined ? row.autoAlertEnabled : bp.autoAlertEnabled;
+        const prediction = predictAlertOnStockChange({
+          previousAvailable: availableStock(bp.inventory, reserved),
+          nextAvailable: availableStock(row.quantity, reserved),
+          minStock,
+          criticalStock,
+          autoAlertEnabled,
+        });
+        willTriggerAlert = prediction.willTriggerAlert;
+        alertType = prediction.type;
+        nextStatus = prediction.nextStatus;
+      }
+    }
+    previewRows.push({ ...row, willTriggerAlert, alertType, nextStatus });
+  }
+  res.json({ rows: previewRows, errors, valid: errors.length === 0 });
 });
 
 router.post("/admin/inventory/import", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
   const parsed = validateInventoryCsv(typeof req.body?.csv === "string" ? req.body.csv : "");
   const branches = await db.select({ id: branchesTable.id, code: branchesTable.branchCode }).from(branchesTable);
   const products = await db.select({ id: productsTable.id, sku: productsTable.sku }).from(productsTable);
   const branchMap = new Map(branches.map((b) => [b.code, b.id])), productMap = new Map(products.map((p) => [p.sku, p.id]));
-  const ids = await getAccessibleBranchIds(req), errors = [...parsed.errors];
+  const ids = await getAccessibleBranchIds(req);
+  const errors = parsed.errors.map((e) => ({ ...e, message: translateImportMessage(e.message) }));
   const existing = await db.select({ branchId: branchProductsTable.branchId, productId: branchProductsTable.productId }).from(branchProductsTable);
   const existingPairs = new Set(existing.map((row) => `${row.branchId}:${row.productId}`));
   for (const [i, row] of parsed.rows.entries()) {
     const branchId = branchMap.get(row.branchCode), productId = productMap.get(row.sku);
-    if (!branchId || (ids && !ids.includes(branchId))) errors.push({ row: i + 2, message: "Invalid branch_code or access" });
-    if (!productId) errors.push({ row: i + 2, message: "Unknown SKU" });
-    else if (branchId && !existingPairs.has(`${branchId}:${productId}`)) errors.push({ row: i + 2, message: "SKU is not configured for branch" });
+    if (!branchId || (ids && !ids.includes(branchId))) errors.push({ row: i + 2, message: translateImportMessage("Invalid branch_code or access") });
+    if (!productId) errors.push({ row: i + 2, message: translateImportMessage("Unknown SKU") });
+    else if (branchId && !existingPairs.has(`${branchId}:${productId}`)) errors.push({ row: i + 2, message: translateImportMessage("SKU is not configured for branch") });
   }
   if (errors.length) { res.status(400).json({ imported: 0, errors }); return; }
+
+  const { job, reused } = await createImportJob({
+    userId: actor?.id,
+    type: "inventory",
+    filename: typeof req.body?.filename === "string" ? req.body.filename : null,
+    idempotencyKey: typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey : null,
+  });
+  if (reused && job.status === "completed") {
+    res.json({ imported: job.updatedCount, errors: [], jobId: job.id });
+    return;
+  }
+
   const importedProductIds = new Set<number>();
   const imported = await db.transaction(async (tx) => {
     for (const row of parsed.rows) {
@@ -609,21 +2223,57 @@ router.post("/admin/inventory/import", async (req, res): Promise<void> => {
       importedProductIds.add(productId);
       const [bp] = await tx.select().from(branchProductsTable).where(and(eq(branchProductsTable.branchId, branchId), eq(branchProductsTable.productId, productId))).for("update");
       if (!bp) throw new Error(`Missing branch product for ${row.sku}/${row.branchCode}`);
-      const state = stockState(row.quantity, bp.minStock);
-      await tx.update(branchProductsTable).set({ inventory: row.quantity, alertState: state }).where(eq(branchProductsTable.id, bp.id));
+      const minStock = row.minStock ?? bp.minStock;
+      const criticalStock =
+        row.criticalStock !== undefined ? row.criticalStock : bp.criticalStock;
+      const autoAlertEnabled =
+        row.autoAlertEnabled !== undefined ? row.autoAlertEnabled : bp.autoAlertEnabled;
+      const state = deriveInventoryStatus(row.quantity, minStock, criticalStock);
+      await tx.update(branchProductsTable).set({
+        inventory: row.quantity,
+        minStock,
+        criticalStock,
+        autoAlertEnabled,
+        alertState: state,
+      }).where(eq(branchProductsTable.id, bp.id));
       await tx.insert(inventoryLedgerTable).values({ branchProductId: bp.id, movement: "adjustment", category: "import", quantityDelta: row.quantity - bp.inventory, balanceAfter: row.quantity, previousBalance: bp.inventory, newBalance: row.quantity, actorUserId: req.localUser?.id, reason: "Inventory CSV import" });
-      await applyInventoryAlert(tx, bp, row.quantity);
+      await applyInventoryAlert(
+        tx,
+        { ...bp, minStock, criticalStock, autoAlertEnabled },
+        row.quantity,
+      );
     }
     return parsed.rows.length;
   });
   for (const productId of importedProductIds) {
     publishCatalogChange(productId, "inventory");
   }
-  res.json({ imported, errors: [] });
+  await completeImportJob(job.id, {
+    status: "completed",
+    updatedCount: imported,
+    createdCount: 0,
+    errorCount: 0,
+    errorLog: [],
+  });
+  res.json({ imported, errors: [], jobId: job.id });
 });
 
 router.get("/admin/summary", async (_req, res): Promise<void> => {
   const branchIds = await getAccessibleBranchIds(_req);
+  const branchScope = branchIds
+    ? (branchIds.length ? inArray(branchProductsTable.branchId, branchIds) : sql`false`)
+    : undefined;
+  const orderBranchScope = branchIds
+    ? (branchIds.length ? sql`${ordersTable.branchId} = ANY(${branchIds})` : sql`false`)
+    : undefined;
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const now = new Date();
+  const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+
   const [productCounts] = await db
     .select({
       totalProducts: branchIds
@@ -646,13 +2296,31 @@ router.get("/admin/summary", async (_req, res): Promise<void> => {
       branchIds ? (branchIds.length ? inArray(branchesTable.id, branchIds) : sql`false`) : undefined,
     ));
 
-  const [lowStock] = await db
-    .select({ lowStockProducts: sql<number>`count(*)::int` })
+  const [stockCounts] = await db
+    .select({
+      lowStockProducts: sql<number>`count(*) filter (where ${branchProductsTable.alertState} = 'LOW_STOCK')::int`,
+      criticalStockProducts: sql<number>`count(*) filter (where ${branchProductsTable.alertState} = 'CRITICAL_STOCK')::int`,
+      outOfStockProducts: sql<number>`count(*) filter (where ${branchProductsTable.alertState} = 'OUT_OF_STOCK')::int`,
+    })
     .from(branchProductsTable)
+    .where(and(eq(branchProductsTable.available, true), branchScope));
+
+  const [orderCounts] = await db
+    .select({
+      ordersToday: sql<number>`count(*) filter (where ${ordersTable.scheduledStart} >= ${startOfToday} and ${ordersTable.scheduledStart} < ${startOfTomorrow} and ${ordersTable.status} <> 'cancelled')::int`,
+      ordersPending: sql<number>`count(*) filter (where ${ordersTable.status} in ('pending_payment','paid','preparing','ready'))::int`,
+      ordersNextHour: sql<number>`count(*) filter (where ${ordersTable.scheduledStart} >= ${now} and ${ordersTable.scheduledStart} < ${inOneHour} and ${ordersTable.status} <> 'cancelled' and ${ordersTable.status} <> 'completed')::int`,
+      salesToday: sql<string>`coalesce(sum(${ordersTable.total}) filter (where ${ordersTable.scheduledStart} >= ${startOfToday} and ${ordersTable.scheduledStart} < ${startOfTomorrow} and ${ordersTable.status} <> 'cancelled'), 0)::numeric`,
+    })
+    .from(ordersTable)
+    .where(orderBranchScope);
+
+  const [alertCount] = await db
+    .select({ alertsCount: sql<number>`count(*)::int` })
+    .from(inventoryAlertsTable)
     .where(and(
-      eq(branchProductsTable.available, true),
-      lt(branchProductsTable.inventory, 6),
-      branchIds ? (branchIds.length ? inArray(branchProductsTable.branchId, branchIds) : sql`false`) : undefined,
+      inArray(inventoryAlertsTable.status, ["OPEN", "IN_PROGRESS"]),
+      branchIds ? (branchIds.length ? inArray(inventoryAlertsTable.branchId, branchIds) : sql`false`) : undefined,
     ));
 
   const branchSummaries = await db
@@ -662,7 +2330,7 @@ router.get("/admin/summary", async (_req, res): Promise<void> => {
       activeProducts:
         sql<number>`count(${branchProductsTable.id}) filter (where ${branchProductsTable.available} = true)::int`,
       lowStockProducts:
-        sql<number>`count(${branchProductsTable.id}) filter (where ${branchProductsTable.available} = true and ${branchProductsTable.inventory} < 6)::int`,
+        sql<number>`count(${branchProductsTable.id}) filter (where ${branchProductsTable.available} = true and ${branchProductsTable.inventory} > 0 and ${branchProductsTable.inventory} <= ${branchProductsTable.minStock})::int`,
     })
     .from(branchesTable)
     .leftJoin(
@@ -681,7 +2349,14 @@ router.get("/admin/summary", async (_req, res): Promise<void> => {
       totalProducts: productCounts?.totalProducts ?? 0,
       activeProducts: productCounts?.activeProducts ?? 0,
       totalBranches: branchCount?.totalBranches ?? 0,
-      lowStockProducts: lowStock?.lowStockProducts ?? 0,
+      lowStockProducts: stockCounts?.lowStockProducts ?? 0,
+      criticalStockProducts: stockCounts?.criticalStockProducts ?? 0,
+      outOfStockProducts: stockCounts?.outOfStockProducts ?? 0,
+      ordersToday: orderCounts?.ordersToday ?? 0,
+      ordersPending: orderCounts?.ordersPending ?? 0,
+      ordersNextHour: orderCounts?.ordersNextHour ?? 0,
+      alertsCount: alertCount?.alertsCount ?? 0,
+      salesToday: Number(orderCounts?.salesToday ?? 0),
       branchSummaries,
     }),
   );
@@ -706,7 +2381,22 @@ router.get("/admin/products", async (req, res): Promise<void> => {
 const productImportInput = z.object({
   csv: z.string(),
   mapping: z.record(z.string(), z.string()).optional(),
+  updateExisting: z.boolean().optional().default(true),
+  updateFields: z.array(z.string()).optional(),
+  relationMode: z.enum(["add", "replace"]).optional().default("add"),
+  idempotencyKey: z.string().optional(),
+  filename: z.string().optional(),
 });
+
+function importFieldAllowed(
+  updateFields: Set<string> | null,
+  field: string,
+  groups: string[],
+): boolean {
+  if (!updateFields) return true;
+  if (updateFields.has(field)) return true;
+  return groups.some((group) => updateFields.has(group));
+}
 
 router.post("/admin/products/import/preview", async (req, res): Promise<void> => {
   const actor = await getRequestUser(req);
@@ -720,16 +2410,32 @@ router.post("/admin/products/import/preview", async (req, res): Promise<void> =>
     return;
   }
   const plan = await makeProductImportPlan(req, body.data.csv, body.data.mapping as ProductImportMapping | undefined ?? {});
-  res.json({
-    rows: plan.rows.map(({ record, action }) => ({
+  const updateExisting = body.data.updateExisting !== false;
+  const rows = [];
+  const errors = plan.errors.map((error) => ({
+    row: error.row,
+    message: translateImportMessage(error.message),
+  }));
+  for (const { record, action } of plan.rows) {
+    if (action === "update" && !updateExisting) {
+      errors.push({
+        row: record.row,
+        message: translateImportMessage("Existing SKU skipped (updateExisting=false)"),
+      });
+      continue;
+    }
+    rows.push({
       row: record.row,
       sku: record.sku,
       name: record.name ?? "",
       branchCode: record.branchCode ?? "",
       action,
-    })),
-    errors: plan.errors,
-    valid: plan.rows.length > 0,
+    });
+  }
+  res.json({
+    rows,
+    errors,
+    valid: rows.length > 0,
   });
 });
 
@@ -745,10 +2451,40 @@ router.post("/admin/products/import", async (req, res): Promise<void> => {
     return;
   }
 
+  const { job, reused } = await createImportJob({
+    userId: actor.id,
+    type: "product",
+    filename: body.data.filename ?? null,
+    idempotencyKey: body.data.idempotencyKey ?? null,
+  });
+  if (reused && job.status === "completed") {
+    res.json({
+      imported: job.createdCount + job.updatedCount,
+      created: job.createdCount,
+      updated: job.updatedCount,
+      errors: (job.errorLog as Array<{ row: number; message: string }>) ?? [],
+      jobId: job.id,
+    });
+    return;
+  }
+
   const plan = await makeProductImportPlan(req, body.data.csv, body.data.mapping as ProductImportMapping | undefined ?? {});
-  const errors = [...plan.errors];
+  const updateExisting = body.data.updateExisting !== false;
+  const updateFields = body.data.updateFields?.length ? new Set(body.data.updateFields) : null;
+  const relationMode = body.data.relationMode === "replace" ? "replace" : "add";
+  const errors = plan.errors.map((error) => ({
+    row: error.row,
+    message: translateImportMessage(error.message),
+  }));
   const validGroups = new Map<string, ProductImportRecord[]>();
-  for (const { record } of plan.rows) {
+  for (const { record, action } of plan.rows) {
+    if (action === "update" && !updateExisting) {
+      errors.push({
+        row: record.row,
+        message: translateImportMessage("Existing SKU skipped (updateExisting=false)"),
+      });
+      continue;
+    }
     const records = validGroups.get(record.sku) ?? [];
     records.push(record);
     validGroups.set(record.sku, records);
@@ -764,123 +2500,341 @@ router.post("/admin/products/import", async (req, res): Promise<void> => {
       .filter((branch): branch is { id: number; code: string } => !!branch.code)
       .map((branch) => [branch.code.toLowerCase(), branch.id]),
   );
+  const allCategories = await db
+    .select({ id: categoriesTable.id, name: categoriesTable.name })
+    .from(categoriesTable);
+  const categoryByName = new Map(
+    allCategories.map((category) => [category.name.trim().toLowerCase(), category.id]),
+  );
+  const allSkus = await db.select({ id: productsTable.id, sku: productsTable.sku }).from(productsTable);
+  const idBySku = new Map(allSkus.map((row) => [row.sku, row.id]));
   let created = 0;
   let updated = 0;
 
   for (const [sku, records] of validGroups) {
     try {
       const allProductRecords = allGroups.get(sku) ?? records;
-      const merged = mergeProductImportFields(allProductRecords);
       const existing = plan.existing.get(sku);
-      let productId = existing?.id;
-      const productUpdate = Object.fromEntries(
-        Object.entries(merged).filter(([, value]) => value !== undefined),
+      const first = allProductRecords.find((item) => item.name) ?? allProductRecords[0];
+      const categoriesNames =
+        allProductRecords.find((item) => item.categories?.length)?.categories;
+      const primaryName =
+        allProductRecords.find((item) => item.primaryCategory)?.primaryCategory;
+      let categoryIds: number[] | undefined;
+      let primaryCategoryId: number | undefined;
+      if (categoriesNames?.length) {
+        categoryIds = categoriesNames
+          .map((name) => categoryByName.get(name.trim().toLowerCase()))
+          .filter((id): id is number => id != null);
+        primaryCategoryId = primaryName
+          ? categoryByName.get(primaryName.trim().toLowerCase())
+          : categoryIds[0];
+      }
+      const categoryId =
+        allProductRecords.find((item) => item.categoryId != null)?.categoryId ??
+        primaryCategoryId;
+
+      const tags = allProductRecords.find((item) => item.tags)?.tags;
+      const crossSellSkus = allProductRecords.find((item) => item.crossSellSkus)?.crossSellSkus;
+      const crossSellProductIds = crossSellSkus
+        ?.map((crossSku) => idBySku.get(crossSku))
+        .filter((id): id is number => id != null);
+      for (const crossSku of crossSellSkus ?? []) {
+        if (!idBySku.has(crossSku)) {
+          errors.push({
+            row: first.row,
+            message: translateImportMessage("Unknown cross-sell SKU") + `: ${crossSku}`,
+          });
+        }
+      }
+
+      const allowGeneral = !existing || importFieldAllowed(updateFields, "name", ["general"]);
+      const allowPrice = !existing || importFieldAllowed(updateFields, "price", ["price", "general"]);
+      const allowImage =
+        !existing || importFieldAllowed(updateFields, "imageUrl", ["images", "general"]);
+      const allowCategories =
+        !existing ||
+        importFieldAllowed(updateFields, "categoryId", ["categories"]) ||
+        importFieldAllowed(updateFields, "categories", ["categories"]);
+      const allowTags = !existing || importFieldAllowed(updateFields, "tags", ["tags"]);
+      const allowInventory =
+        !existing ||
+        importFieldAllowed(updateFields, "inventory", ["inventory", "branches"]);
+      const allowPromo =
+        !existing ||
+        importFieldAllowed(updateFields, "discountType", ["promotions"]);
+      const allowCross =
+        !existing ||
+        importFieldAllowed(updateFields, "crossSellSkus", ["cross-sell", "cross_sell"]);
+
+      const fields: Record<string, unknown> = {};
+      if (!existing || allowGeneral) {
+        if (first.name != null) fields.name = first.name;
+        if (first.slug != null) fields.slug = first.slug;
+        if (first.shortDescription != null) fields.shortDescription = first.shortDescription;
+        if (first.description != null) fields.description = first.description;
+        if (first.featured != null) fields.featured = first.featured;
+        if (first.seasonal != null) fields.seasonal = first.seasonal;
+        if (first.status != null) fields.status = first.status;
+        if (first.minimumLeadTimeHours != null) {
+          fields.minimumLeadTimeHours = first.minimumLeadTimeHours;
+        }
+      }
+      if (allowPrice) {
+        if (first.price != null) fields.price = first.price;
+        if (first.salePrice !== undefined) fields.salePrice = first.salePrice;
+      }
+      if (allowImage && first.imageUrl !== undefined) fields.imageUrl = first.imageUrl;
+
+      if (!existing) {
+        fields.sku = sku;
+        fields.name = fields.name ?? first.name ?? sku;
+        fields.slug = fields.slug ?? importSlug(String(fields.name));
+        fields.shortDescription =
+          fields.shortDescription ?? String(fields.name);
+        fields.description = fields.description ?? fields.shortDescription;
+        fields.price = fields.price ?? first.price ?? 0;
+        fields.status = fields.status ?? "draft";
+        fields.featured = fields.featured ?? false;
+        fields.seasonal = fields.seasonal ?? false;
+        fields.minimumLeadTimeHours = fields.minimumLeadTimeHours ?? 0;
+        fields.salePrice = fields.salePrice ?? null;
+        fields.imageUrl = fields.imageUrl ?? null;
+      }
+
+      const branchConfigurations = allowInventory
+        ? records
+            .filter((record) => record.branchCode)
+            .map((record) => ({
+              branchId: branchMap.get(record.branchCode!.toLowerCase())!,
+              available: record.available,
+              inventory: record.inventory,
+              minStock: record.minStock,
+              priceOverride: record.priceOverride,
+              salePriceOverride: record.salePriceOverride,
+              preparationTimeMinutes: record.preparationTimeMinutes,
+              pickupAvailable: record.pickupAvailable,
+              deliveryAvailable: record.deliveryAvailable,
+            }))
+        : undefined;
+
+      const promoRecord = allProductRecords.find(
+        (item) => item.discountType && item.discountValue != null,
       );
-      let groupCreated = false;
-      let groupUpdated = false;
+      const promotions =
+        allowPromo && promoRecord
+          ? [
+              {
+                name: `Import ${sku}`,
+                type: mapImportDiscountType(promoRecord.discountType)!,
+                value: promoRecord.discountValue!,
+                startsAt: new Date(promoRecord.discountStart ?? Date.now()),
+                endsAt: new Date(
+                  promoRecord.discountEnd ?? Date.now() + 7 * 24 * 60 * 60 * 1000,
+                ),
+                branchIds: (promoRecord.discountBranches ?? [])
+                  .map((code) => branchMap.get(code.toLowerCase()))
+                  .filter((id): id is number => id != null),
+              },
+            ]
+          : undefined;
 
-      await db.transaction(async (tx) => {
-        if (existing) {
-          if (Object.keys(productUpdate).length) {
-            const [product] = await tx
-              .update(productsTable)
-              .set(productUpdate as any)
-              .where(eq(productsTable.id, existing.id))
-              .returning({ id: productsTable.id });
-            productId = product?.id ?? existing.id;
-          }
-          groupUpdated = true;
-        } else {
-          const name = String(merged.name ?? "");
-          const shortDescription = String(merged.shortDescription ?? name);
-          const description = String(merged.description ?? shortDescription);
-          const price = Number(merged.price);
-          const categoryId = Number(merged.categoryId);
-          const [product] = await tx
-            .insert(productsTable)
-            .values({
-              sku,
-              name,
-              slug: String(merged.slug ?? importSlug(name || sku)),
-              shortDescription,
-              description,
-              price,
-              salePrice: (merged.salePrice as number | undefined) ?? null,
-              categoryId,
-              imageUrl: (merged.imageUrl as string | undefined) ?? null,
-              featured: (merged.featured as boolean | undefined) ?? false,
-              seasonal: (merged.seasonal as boolean | undefined) ?? false,
-              status: (merged.status as "draft" | "active" | "inactive" | undefined) ?? "draft",
-              minimumLeadTimeHours: (merged.minimumLeadTimeHours as number | undefined) ?? 0,
-              gallery: [],
-              tags: [],
-            })
-            .onConflictDoUpdate({
-              target: productsTable.sku,
-              set: productUpdate as any,
-            })
-            .returning({ id: productsTable.id });
-          productId = product?.id;
-          groupCreated = true;
-        }
-
-        if (!productId) throw new Error("Product upsert did not return an id");
-        for (const record of records) {
-          if (!record.branchCode) continue;
-          const branchId = branchMap.get(record.branchCode.toLowerCase());
-          if (!branchId) throw new Error(`Unknown branchCode ${record.branchCode}`);
-          const branchValues = {
-            branchId,
-            productId,
-            available: record.available ?? true,
-            inventory: record.inventory ?? 0,
-            minStock: record.minStock ?? 0,
-            priceOverride: record.priceOverride ?? null,
-            salePriceOverride: record.salePriceOverride ?? null,
-            preparationTimeMinutes: record.preparationTimeMinutes ?? null,
-            pickupAvailable: record.pickupAvailable ?? true,
-            deliveryAvailable: record.deliveryAvailable ?? true,
-          };
-          const branchUpdate = Object.fromEntries([
-            ["updatedAt", new Date()],
-            ...([
-              ["available", record.available],
-              ["inventory", record.inventory],
-              ["minStock", record.minStock],
-              ["priceOverride", record.priceOverride],
-              ["salePriceOverride", record.salePriceOverride],
-              ["preparationTimeMinutes", record.preparationTimeMinutes],
-              ["pickupAvailable", record.pickupAvailable],
-              ["deliveryAvailable", record.deliveryAvailable],
-            ] as const).filter(([, value]) => value !== undefined),
-          ]);
-          await tx
-            .insert(branchProductsTable)
-            .values(branchValues)
-            .onConflictDoUpdate({
-              target: [branchProductsTable.branchId, branchProductsTable.productId],
-              set: branchUpdate as any,
-            });
-        }
+      const product = await upsertProductAggregate({
+        productId: existing?.id,
+        fields: fields as any,
+        categoryId: allowCategories ? categoryId : undefined,
+        categoryIds: allowCategories ? categoryIds : undefined,
+        primaryCategoryId: allowCategories ? primaryCategoryId : undefined,
+        categoryMode: existing ? relationMode : "replace",
+        tags: allowTags ? tags : undefined,
+        tagMode: existing ? relationMode : "replace",
+        crossSellProductIds: allowCross ? crossSellProductIds : undefined,
+        crossSellMode: existing ? relationMode : "replace",
+        branchConfigurations,
+        promotions,
+        seedAllBranches: !existing,
+        actorUserId: actor.id,
+        inventoryReason: "Importación de productos",
       });
-      if (groupCreated) created += 1;
-      if (groupUpdated) updated += 1;
-      if (productId) publishCatalogChange(productId, "product");
+      if (existing) updated += 1;
+      else {
+        created += 1;
+        idBySku.set(sku, product.id);
+      }
+      publishCatalogChange(product.id, "product");
     } catch (error) {
       const row = records[0]?.row ?? 0;
       errors.push({
         row,
-        message: error instanceof Error ? error.message : "Could not import SKU",
+        message: translateImportMessage(
+          error instanceof Error ? error.message : "Could not import SKU",
+        ),
       });
     }
   }
+
+  await completeImportJob(job.id, {
+    status: errors.length && created + updated === 0 ? "failed" : "completed",
+    createdCount: created,
+    updatedCount: updated,
+    errorCount: errors.length,
+    errorLog: errors,
+  });
 
   res.json({
     imported: created + updated,
     created,
     updated,
     errors,
+    jobId: job.id,
   });
+});
+
+router.post("/admin/products/export", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  const body = ExportProductsBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const content = await buildProductExportCsv({
+    search: body.data.search,
+    status: body.data.status,
+    ids: body.data.ids,
+    reimportable: body.data.reimportable,
+    columns: body.data.columns,
+  });
+  res.json(
+    ExportProductsResponse.parse({
+      filename: "productos-mallorca.csv",
+      contentType: "text/csv; charset=utf-8",
+      content,
+    }),
+  );
+});
+
+router.post("/admin/products/bulk", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  const body = BulkUpdateProductsBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const result = await bulkUpdateProducts({
+    ids: body.data.ids,
+    action: body.data.action,
+    status: body.data.status,
+    categoryId: body.data.categoryId,
+    categoryIds: (body.data as any).categoryIds,
+    tagNames: (body.data as any).tagNames,
+    branchId: body.data.branchId,
+    minStock: (body.data as any).minStock,
+    price: body.data.price,
+    featured: body.data.featured,
+    crossSellProductIds: (body.data as any).crossSellProductIds,
+    promotion: body.data.promotion as any,
+    actorUserId: actor.id,
+  });
+  for (const id of body.data.ids) publishCatalogChange(id, "product");
+  res.json(BulkUpdateProductsResponse.parse(result));
+});
+
+router.post("/admin/products/:id/duplicate", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  const params = DuplicateProductParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const created = await duplicateProductById(params.data.id);
+  if (!created) {
+    res.status(404).json({ error: "Product not found" });
+    return;
+  }
+  const detail = await getProductDetailBySlug(created.slug);
+  publishCatalogChange(created.id, "product");
+  res.status(201).json(DuplicateProductResponse.parse(detail));
+});
+
+router.get("/admin/import-jobs", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  const query = ListImportJobsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(importJobsTable)
+    .where(query.data.type ? eq(importJobsTable.type, query.data.type) : undefined)
+    .orderBy(desc(importJobsTable.createdAt))
+    .limit(50);
+  res.json(
+    ListImportJobsResponse.parse(
+      rows.map((row) => ({
+        id: row.id,
+        type: row.type,
+        filename: row.filename,
+        status: row.status,
+        createdCount: row.createdCount,
+        updatedCount: row.updatedCount,
+        errorCount: row.errorCount,
+        errorLog: row.errorLog ?? [],
+        createdAt: row.createdAt,
+        completedAt: row.completedAt,
+        userId: row.userId,
+      })),
+    ),
+  );
+});
+
+router.get("/admin/import-jobs/:id", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  const params = GetImportJobParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [row] = await db.select().from(importJobsTable).where(eq(importJobsTable.id, params.data.id));
+  if (!row) {
+    res.status(404).json({ error: "Import job not found" });
+    return;
+  }
+  res.json(
+    GetImportJobResponse.parse({
+      id: row.id,
+      type: row.type,
+      filename: row.filename,
+      status: row.status,
+      createdCount: row.createdCount,
+      updatedCount: row.updatedCount,
+      errorCount: row.errorCount,
+      errorLog: row.errorLog ?? [],
+      createdAt: row.createdAt,
+      completedAt: row.completedAt,
+      userId: row.userId,
+    }),
+  );
 });
 
 router.get("/admin/products/:id/promotions", async (req, res): Promise<void> => {
@@ -1203,47 +3157,67 @@ router.post("/admin/products", async (req, res): Promise<void> => {
     throw error;
   }
 
-  const { branchConfigurations: _branchConfigurations, promotions: _promotions, ...productData } = body.data;
-  const [product] = await db.insert(productsTable).values({
-    ...productData,
-    gallery: body.data.gallery ?? [],
-    tags: [],
-  }).returning();
+  const {
+    branchConfigurations: _branchConfigurations,
+    promotions: _promotions,
+    categoryIds,
+    primaryCategoryId,
+    tags,
+    crossSellProductIds,
+    ...productData
+  } = body.data as typeof body.data & {
+    categoryIds?: number[];
+    primaryCategoryId?: number;
+    tags?: string[];
+    crossSellProductIds?: number[];
+  };
 
-  const branches = await db
-    .select({ id: branchesTable.id })
-    .from(branchesTable)
-    .where(eq(branchesTable.active, true));
-
-  if (branches.length) {
-    const configs = configurations.data ?? [];
-    await db.insert(branchProductsTable).values(
-      branches.map((branch) => {
-        const config = configs.find((item) => item.branchId === branch.id);
-        return ({
-        branchId: branch.id,
-        productId: product.id,
-        available: config?.available ?? false,
-        inventory: config?.inventory ?? 0,
-        minStock: config?.minStock ?? 0,
-        priceOverride: config?.priceOverride,
-        salePriceOverride: config?.salePriceOverride,
-        preparationTimeMinutes: config?.preparationTimeMinutes,
-        pickupAvailable: config?.pickupAvailable ?? true,
-        deliveryAvailable: config?.deliveryAvailable ?? true,
-      }); }),
-    );
-  }
+  let product;
   try {
-    await createPromotionsForProduct(req, product.id, promotions.data ?? []);
+    product = await upsertProductAggregate({
+      fields: {
+        sku: productData.sku,
+        name: productData.name,
+        slug: productData.slug,
+        shortDescription: productData.shortDescription,
+        description: productData.description,
+        price: productData.price,
+        salePrice: productData.salePrice,
+        imageUrl: productData.imageUrl,
+        gallery: productData.gallery ?? [],
+        featured: productData.featured,
+        seasonal: productData.seasonal,
+        status: productData.status,
+        minimumLeadTimeHours: productData.minimumLeadTimeHours,
+      },
+      categoryId: productData.categoryId,
+      categoryIds,
+      primaryCategoryId,
+      tags,
+      crossSellProductIds,
+      branchConfigurations: configurations.data ?? [],
+      promotions: (promotions.data ?? []).map((promo) => ({
+        ...promo,
+        startsAt: new Date(promo.startsAt),
+        endsAt: new Date(promo.endsAt),
+      })),
+      actorUserId: req.localUser?.id ?? null,
+      inventoryReason: "Alta de producto",
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
-      res.status(403).json({ error: "Branch access denied" });
+    if (
+      message === "PRIMARY_CATEGORY_REQUIRED" ||
+      message === "CATEGORIES_REQUIRED" ||
+      message === "PRIMARY_NOT_IN_CATEGORIES" ||
+      message === "UNKNOWN_CATEGORY" ||
+      message === "PRODUCT_FIELDS_REQUIRED"
+    ) {
+      res.status(400).json({ error: message });
       return;
     }
-    if (message === "UNKNOWN_BRANCH") {
-      res.status(400).json({ error: "Unknown branch" });
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
       return;
     }
     throw error;
@@ -1300,34 +3274,58 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
     throw error;
   }
 
-  const { branchConfigurations: _branchConfigurations, promotions: _promotions, ...productData } = body.data;
-  const [product] = await db
-    .update(productsTable)
-    .set(productData)
-    .where(eq(productsTable.id, params.data.id))
-    .returning();
+  const {
+    branchConfigurations: _branchConfigurations,
+    promotions: _promotions,
+    categoryIds,
+    primaryCategoryId,
+    tags,
+    crossSellProductIds,
+    ...productData
+  } = body.data as typeof body.data & {
+    categoryIds?: number[];
+    primaryCategoryId?: number;
+    tags?: string[];
+    crossSellProductIds?: number[];
+  };
 
-  if (!product) {
-    res.status(404).json({ error: "Producto no encontrado" });
-    return;
-  }
-
-  for (const config of configurations.data ?? []) {
-    const { branchId, ...values } = config;
-    await db.insert(branchProductsTable).values({ branchId, productId: product.id, ...values }).onConflictDoUpdate({
-      target: [branchProductsTable.branchId, branchProductsTable.productId], set: values,
-    });
-  }
+  let product;
   try {
-    await createPromotionsForProduct(req, product.id, promotions.data ?? []);
+    product = await upsertProductAggregate({
+      productId: params.data.id,
+      fields: { ...productData },
+      categoryId: productData.categoryId,
+      categoryIds,
+      primaryCategoryId,
+      tags,
+      crossSellProductIds,
+      crossSellMode: crossSellProductIds !== undefined ? "replace" : undefined,
+      branchConfigurations: configurations.data,
+      promotions: (promotions.data ?? []).map((promo) => ({
+        ...promo,
+        startsAt: new Date(promo.startsAt),
+        endsAt: new Date(promo.endsAt),
+      })),
+      actorUserId: req.localUser?.id ?? null,
+      inventoryReason: "Ajuste desde ficha de producto",
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
-      res.status(403).json({ error: "Branch access denied" });
+    if (message === "PRODUCT_NOT_FOUND") {
+      res.status(404).json({ error: "Producto no encontrado" });
       return;
     }
-    if (message === "UNKNOWN_BRANCH") {
-      res.status(400).json({ error: "Unknown branch" });
+    if (
+      message === "PRIMARY_CATEGORY_REQUIRED" ||
+      message === "CATEGORIES_REQUIRED" ||
+      message === "PRIMARY_NOT_IN_CATEGORIES" ||
+      message === "UNKNOWN_CATEGORY"
+    ) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
       return;
     }
     throw error;

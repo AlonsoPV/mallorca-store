@@ -1,16 +1,30 @@
-export type StockState = "NORMAL" | "LOW_STOCK" | "OUT_OF_STOCK";
+import { mapImportDiscountType, splitPipeList } from "./product-aggregate-pure.ts";
+import {
+  stockState,
+  enteredAlertState,
+  deriveInventoryStatus,
+  availableStock,
+  predictAlertOnStockChange,
+  type InventoryStatus,
+} from "./inventory-status.ts";
+
+export type StockState = InventoryStatus;
+
+export {
+  mapImportDiscountType,
+  splitPipeList,
+  stockState,
+  enteredAlertState,
+  deriveInventoryStatus,
+  availableStock,
+  predictAlertOnStockChange,
+};
 
 /** Computes the persisted alert state from an absolute inventory balance. */
-export function stockState(inventory: number, minStock: number): StockState {
-  if (inventory <= 0) return "OUT_OF_STOCK";
-  if (inventory <= minStock) return "LOW_STOCK";
-  return "NORMAL";
-}
+// stockState re-exported from inventory-status (available-aware callers should use deriveInventoryStatus)
 
 /** Alerts are emitted only when entering either alert state. */
-export function enteredAlertState(previous: StockState, next: StockState): boolean {
-  return next !== previous && (next === "LOW_STOCK" || next === "OUT_OF_STOCK");
-}
+// enteredAlertState re-exported
 
 export type ImportRow = { sku: string; branchCode: string; quantity: number };
 export type ImportRowError = { row: number; message: string };
@@ -24,6 +38,9 @@ export const productImportFields = [
   "price",
   "salePrice",
   "categoryId",
+  "categories",
+  "primaryCategory",
+  "tags",
   "imageUrl",
   "featured",
   "seasonal",
@@ -38,6 +55,12 @@ export const productImportFields = [
   "preparationTimeMinutes",
   "pickupAvailable",
   "deliveryAvailable",
+  "discountType",
+  "discountValue",
+  "discountStart",
+  "discountEnd",
+  "discountBranches",
+  "crossSellSkus",
 ] as const;
 
 export type ProductImportField = (typeof productImportFields)[number];
@@ -53,6 +76,9 @@ export type ProductImportRecord = {
   price?: number;
   salePrice?: number;
   categoryId?: number;
+  categories?: string[];
+  primaryCategory?: string;
+  tags?: string[];
   imageUrl?: string;
   featured?: boolean;
   seasonal?: boolean;
@@ -67,6 +93,12 @@ export type ProductImportRecord = {
   preparationTimeMinutes?: number;
   pickupAvailable?: boolean;
   deliveryAvailable?: boolean;
+  discountType?: "percentage" | "fixed_amount" | "fixed_price";
+  discountValue?: number;
+  discountStart?: string;
+  discountEnd?: string;
+  discountBranches?: string[];
+  crossSellSkus?: string[];
 };
 
 export type ProductImportIssue = ImportRowError;
@@ -109,6 +141,9 @@ function normalizeImportHeader(value: string): string {
 const importHeaderAliases: Partial<Record<ProductImportField, string[]>> = {
   shortDescription: ["short_description", "descripcion_corta", "descripción_corta"],
   categoryId: ["category_id", "categoria_id", "categoría_id"],
+  categories: ["category_names", "categorias"],
+  primaryCategory: ["primary_category", "categoria_principal"],
+  tags: ["etiquetas"],
   imageUrl: ["image_url", "imagen", "imagen_url"],
   branchCode: ["branch_code", "sucursal", "codigo_sucursal", "código_sucursal"],
   inventory: ["quantity", "cantidad", "stock"],
@@ -120,6 +155,12 @@ const importHeaderAliases: Partial<Record<ProductImportField, string[]>> = {
   preparationTimeMinutes: ["preparation_time_minutes", "minutos_preparacion"],
   pickupAvailable: ["pickup_available", "recogida_disponible"],
   deliveryAvailable: ["delivery_available", "entrega_disponible"],
+  discountType: ["discount_type"],
+  discountValue: ["discount_value"],
+  discountStart: ["discount_start"],
+  discountEnd: ["discount_end"],
+  discountBranches: ["discount_branches"],
+  crossSellSkus: ["cross_sell_skus", "cross_sell"],
 };
 
 function fieldIndex(
@@ -223,6 +264,15 @@ export function parseProductImportCsv(
       errors.push({ row, message: "status must be draft, active or inactive" });
     }
 
+    const discountTypeRaw = readText(values, indices.discountType);
+    const mappedDiscount = mapImportDiscountType(discountTypeRaw);
+    if (discountTypeRaw && !mappedDiscount) {
+      errors.push({
+        row,
+        message: "discount_type must be percentage, fixed_amount or fixed_price",
+      });
+    }
+
     const record: ProductImportRecord = {
       row,
       sku,
@@ -233,6 +283,9 @@ export function parseProductImportCsv(
       price: readNumber(values, indices.price, row, "price", errors),
       salePrice: readNumber(values, indices.salePrice, row, "salePrice", errors),
       categoryId: readNumber(values, indices.categoryId, row, "categoryId", errors),
+      categories: splitPipeList(readText(values, indices.categories)),
+      primaryCategory: readText(values, indices.primaryCategory),
+      tags: splitPipeList(readText(values, indices.tags)),
       imageUrl: readText(values, indices.imageUrl),
       featured: readBoolean(values, indices.featured, row, "featured", errors),
       seasonal: readBoolean(values, indices.seasonal, row, "seasonal", errors),
@@ -247,43 +300,104 @@ export function parseProductImportCsv(
       preparationTimeMinutes: readNumber(values, indices.preparationTimeMinutes, row, "preparationTimeMinutes", errors),
       pickupAvailable: readBoolean(values, indices.pickupAvailable, row, "pickupAvailable", errors),
       deliveryAvailable: readBoolean(values, indices.deliveryAvailable, row, "deliveryAvailable", errors),
+      discountType: mappedDiscount
+        ? (discountTypeRaw!.trim().toLowerCase() as ProductImportRecord["discountType"])
+        : undefined,
+      discountValue: readNumber(values, indices.discountValue, row, "discountValue", errors),
+      discountStart: readText(values, indices.discountStart),
+      discountEnd: readText(values, indices.discountEnd),
+      discountBranches: splitPipeList(readText(values, indices.discountBranches)),
+      crossSellSkus: splitPipeList(readText(values, indices.crossSellSkus)),
     };
     if (errors.length === rowErrorsBefore) rows.push(record);
   });
   return { rows, errors, headers };
 }
 
+export type InventoryImportRow = ImportRow & {
+  minStock?: number;
+  criticalStock?: number | null;
+  autoAlertEnabled?: boolean;
+};
+
 /**
- * Strict CSV parser for the inventory import contract. It intentionally accepts
- * only SKU, branch_code and quantity and rejects duplicate SKU/branch pairs.
+ * CSV parser for inventory import.
+ * Required: sku, branch_code, quantity.
+ * Optional: min_stock, critical_stock, auto_alert.
  */
 export function validateInventoryCsv(csv: string): {
-  rows: ImportRow[];
+  rows: InventoryImportRow[];
   errors: ImportRowError[];
 } {
   const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (!lines.length) return { rows: [], errors: [{ row: 1, message: "CSV is empty" }] };
   const header = lines[0].split(",").map((value) => value.trim().toLowerCase());
-  if (header.length !== 3 || header.join(",") !== "sku,branch_code,quantity") {
-    return { rows: [], errors: [{ row: 1, message: "Header must be sku,branch_code,quantity" }] };
+  const col = {
+    sku: header.indexOf("sku"),
+    branchCode: header.indexOf("branch_code"),
+    quantity: header.indexOf("quantity"),
+    minStock: header.indexOf("min_stock"),
+    criticalStock: header.indexOf("critical_stock"),
+    autoAlert: header.indexOf("auto_alert"),
+  };
+  if (col.sku < 0 || col.branchCode < 0 || col.quantity < 0) {
+    return {
+      rows: [],
+      errors: [{ row: 1, message: "Header must include sku,branch_code,quantity" }],
+    };
   }
-  const rows: ImportRow[] = [];
+  const rows: InventoryImportRow[] = [];
   const errors: ImportRowError[] = [];
   const seen = new Set<string>();
   lines.slice(1).forEach((line, index) => {
     const rowNumber = index + 2;
     const values = line.split(",").map((value) => value.trim());
-    if (values.length !== 3 || values.some((value) => !value)) {
+    const sku = values[col.sku];
+    const branchCode = values[col.branchCode];
+    const quantityRaw = values[col.quantity];
+    if (!sku || !branchCode || quantityRaw === undefined || quantityRaw === "") {
       errors.push({ row: rowNumber, message: "Expected non-empty sku, branch_code and quantity" });
       return;
     }
-    const quantity = Number(values[2]);
-    const key = `${values[0]}\u0000${values[1]}`;
-    if (!Number.isInteger(quantity) || quantity < 0) errors.push({ row: rowNumber, message: "Quantity must be a non-negative integer" });
+    const quantity = Number(quantityRaw);
+    const minRaw = col.minStock >= 0 ? values[col.minStock] : undefined;
+    const criticalRaw = col.criticalStock >= 0 ? values[col.criticalStock] : undefined;
+    const autoRaw = col.autoAlert >= 0 ? values[col.autoAlert] : undefined;
+    const minStock = minRaw !== undefined && minRaw !== "" ? Number(minRaw) : undefined;
+    const criticalStock =
+      criticalRaw !== undefined && criticalRaw !== "" ? Number(criticalRaw) : undefined;
+    let autoAlertEnabled: boolean | undefined;
+    if (autoRaw !== undefined && autoRaw !== "") {
+      const normalized = autoRaw.toLowerCase();
+      if (["1", "true", "yes", "si", "sí"].includes(normalized)) autoAlertEnabled = true;
+      else if (["0", "false", "no"].includes(normalized)) autoAlertEnabled = false;
+      else errors.push({ row: rowNumber, message: "auto_alert must be true/false" });
+    }
+    const key = `${sku}\u0000${branchCode}`;
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      errors.push({ row: rowNumber, message: "Quantity must be a non-negative integer" });
+    }
+    if (minStock != null && (!Number.isInteger(minStock) || minStock < 0)) {
+      errors.push({ row: rowNumber, message: "min_stock must be a non-negative integer" });
+    }
+    if (criticalStock != null && (!Number.isInteger(criticalStock) || criticalStock < 0)) {
+      errors.push({ row: rowNumber, message: "critical_stock must be a non-negative integer" });
+    }
     if (seen.has(key)) errors.push({ row: rowNumber, message: "Duplicate SKU + branch_code row" });
     seen.add(key);
-    if (Number.isInteger(quantity) && quantity >= 0 && !errors.some((error) => error.row === rowNumber)) {
-      rows.push({ sku: values[0], branchCode: values[1], quantity });
+    if (
+      Number.isInteger(quantity) &&
+      quantity >= 0 &&
+      !errors.some((error) => error.row === rowNumber)
+    ) {
+      rows.push({
+        sku,
+        branchCode,
+        quantity,
+        ...(minStock != null ? { minStock } : {}),
+        ...(criticalStock != null ? { criticalStock } : {}),
+        ...(autoAlertEnabled != null ? { autoAlertEnabled } : {}),
+      });
     }
   });
   return { rows, errors };

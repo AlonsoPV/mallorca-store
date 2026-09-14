@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BranchHour } from './branchHour';
+import type { BranchReservationProvider } from './branchReservationProvider';
+import type { BranchStatus } from './branchStatus';
 
 export interface Branch {
   id: number;
@@ -13,8 +15,16 @@ export interface Branch {
   slug: string;
   shortName: string;
   /** @nullable */
+  shortDescription?: string | null;
+  /** @nullable */
   description: string | null;
   address: string;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  externalNumber?: string | null;
+  /** @nullable */
+  internalNumber?: string | null;
   neighborhood: string;
   /** @nullable */
   borough: string | null;
@@ -26,15 +36,30 @@ export interface Branch {
   latitude: number | null;
   /** @nullable */
   longitude: number | null;
+  /** @nullable */
+  placeId?: string | null;
   phone: string;
   /** @nullable */
+  secondaryPhone?: string | null;
+  /** @nullable */
   whatsapp: string | null;
+  /** @nullable */
+  whatsappDefaultMessage?: string | null;
   email: string;
+  /** @nullable */
+  ordersEmail?: string | null;
+  /** @nullable */
+  reservationsEmail?: string | null;
   mapsUrl: string;
   /** @nullable */
   openTableUrl: string | null;
   /** @nullable */
   instagramUrl: string | null;
+  reservationProvider?: BranchReservationProvider;
+  /** @nullable */
+  reservationUrl?: string | null;
+  /** @nullable */
+  reservationCta?: string | null;
   /** @nullable */
   imageUrl: string | null;
   gallery: string[];
@@ -45,7 +70,17 @@ export interface Branch {
   deliveryRadiusKm: number | null;
   /** @nullable */
   minimumOrder: number | null;
+  /** @nullable */
+  freeDeliveryFrom?: number | null;
   preparationTimeMinutes: number;
   deliveryTimeMinutes: number;
+  featured?: boolean;
+  /** @nullable */
+  seoTitle?: string | null;
+  /** @nullable */
+  metaDescription?: string | null;
+  /** @nullable */
+  ogImageUrl?: string | null;
+  status?: BranchStatus;
   active: boolean;
 }

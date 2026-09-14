@@ -72,6 +72,17 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Replit routes /api at the platform edge. Local Windows needs a Vite proxy.
+    ...(process.env.REPL_ID
+      ? {}
+      : {
+          proxy: {
+            '/api': {
+              target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:8080',
+              changeOrigin: true,
+            },
+          },
+        }),
   },
   preview: {
     port,

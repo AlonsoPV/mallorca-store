@@ -13,6 +13,11 @@ export interface BranchAvailability {
   branchName: string;
   available: boolean;
   inventory: number;
+  minStock?: number;
+  /** @nullable */
+  criticalStock?: number | null;
+  autoAlertEnabled?: boolean;
+  alertState?: string;
   price: number;
   /** @nullable */
   salePrice: number | null;

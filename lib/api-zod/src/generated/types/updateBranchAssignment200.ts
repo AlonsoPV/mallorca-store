@@ -6,4 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BranchUpdateNotificationPreferences = {[key: string]: boolean};
+export type UpdateBranchAssignment200 = { [key: string]: unknown };

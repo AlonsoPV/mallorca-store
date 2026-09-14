@@ -5,15 +5,26 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
-import type { CartLineItem } from './cartLineItem';
 import type { OrderFulfillmentMethod } from './orderFulfillmentMethod';
+import type { OrderLineItem } from './orderLineItem';
+import type { OrderSource } from './orderSource';
 
 export interface Order {
   id: string;
   orderNumber: string;
   guestAccessToken: string;
+  orderSource?: OrderSource;
   status: string;
   paymentStatus: string;
+  /** @nullable */
+  paymentMethod?: string | null;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paymentNote?: string | null;
+  /** @nullable */
+  paymentLinkUrl?: string | null;
+  amountPaid?: number;
   fulfillmentMethod: OrderFulfillmentMethod;
   scheduledStart: Date;
   scheduledEnd: Date;
@@ -22,8 +33,30 @@ export interface Order {
   customerPhone: string;
   /** @nullable */
   deliveryAddress: string | null;
+  /** @nullable */
+  customerNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
   subtotal: number;
+  promotionDiscountTotal?: number;
+  discountAmount?: number;
+  /** @nullable */
+  discountPercent?: number | null;
+  /** @nullable */
+  discountReason?: string | null;
+  /** @nullable */
+  couponCode?: string | null;
+  couponDiscount?: number;
   deliveryFee: number;
   total: number;
-  items: CartLineItem[];
+  availabilityOverride?: boolean;
+  /** @nullable */
+  overrideReason?: string | null;
+  branchId?: number;
+  branchName?: string;
+  /** @nullable */
+  createdByUserId?: string | null;
+  items: OrderLineItem[];
 }

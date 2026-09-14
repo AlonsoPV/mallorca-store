@@ -1,6 +1,6 @@
 import { StoreLayout } from "@/components/layout/store-layout";
 import { useGetMe, useListMyOrders, useUpdateMe } from "@workspace/api-client-react";
-import { useClerk } from "@clerk/react";
+import { useAppSignOut } from "@/lib/app-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,7 @@ export default function AccountPage() {
   const { data: user, isLoading: isLoadingUser } = useGetMe();
   const { data: orders, isLoading: isLoadingOrders } = useListMyOrders();
   const updateMe = useUpdateMe();
-  const { signOut } = useClerk();
+  const signOut = useAppSignOut();
   const { toast } = useToast();
 
   const [firstName, setFirstName] = useState("");

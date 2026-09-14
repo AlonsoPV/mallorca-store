@@ -12,4 +12,5 @@ export interface ProductImportResult {
   created: number;
   updated: number;
   errors: ProductImportError[];
+  jobId?: string;
 }

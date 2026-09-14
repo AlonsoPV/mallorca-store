@@ -6,8 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProductImportInputMapping } from './productImportInputMapping';
+import type { ProductImportInputRelationMode } from './productImportInputRelationMode';
 
 export interface ProductImportInput {
   csv: string;
   mapping?: ProductImportInputMapping;
+  /** When false, existing SKUs are skipped (reported as errors) instead of updated */
+  updateExisting?: boolean;
+  /** When updating existing products, only these product-level fields/groups are applied */
+  updateFields?: string[];
+  /** How to apply categories, tags and cross-sell when updating */
+  relationMode?: ProductImportInputRelationMode;
+  /** Optional key to avoid double-processing the same import job */
+  idempotencyKey?: string;
+  filename?: string;
 }

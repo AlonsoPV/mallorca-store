@@ -15,7 +15,8 @@ const categoryImages = [
 export default function Home() {
   const { branchId, selectedTime } = useCart();
   const { data: categories, isLoading: isLoadingCategories } = useListCategories();
-  const { data: branches } = useListBranches();
+  const { data: branchesData } = useListBranches();
+  const branches = Array.isArray(branchesData) ? branchesData : undefined;
   const selectedBranch = branches?.find((branch) => branch.id === branchId);
   const { data: products, isLoading: isLoadingProducts } = useListProducts({
     featured: true,

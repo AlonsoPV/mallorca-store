@@ -50,8 +50,12 @@ export const ListBranchesResponseItem = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -60,12 +64,20 @@ export const ListBranchesResponseItem = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -74,14 +86,21 @@ export const ListBranchesResponseItem = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 })
 export const ListBranchesResponse = zod.array(ListBranchesResponseItem)
@@ -107,8 +126,12 @@ export const GetBranchResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -117,12 +140,20 @@ export const GetBranchResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -131,14 +162,21 @@ export const GetBranchResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }).and(zod.object({
   "products": zod.array(zod.object({
@@ -151,16 +189,26 @@ export const GetBranchResponse = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
-  "minimumLeadTimeHours": zod.number().int().optional(),
+  "seasonal": zod.boolean(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -227,16 +275,26 @@ export const ListProductsResponseItem = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
-  "minimumLeadTimeHours": zod.number().int().optional(),
+  "seasonal": zod.boolean(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -276,6 +334,8 @@ export const getProductResponseOneAvailabilityItemPromotionOneFinalPriceMin = 0;
 
 export const getProductResponseOneAvailabilityItemPromotionOneSavingsMin = 0;
 
+export const getProductResponseTwoCrossSellProductIdsMax = 6;
+
 
 
 export const GetProductResponse = zod.object({
@@ -288,9 +348,15 @@ export const GetProductResponse = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
+  "seasonal": zod.boolean(),
   "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
@@ -298,6 +364,10 @@ export const GetProductResponse = zod.object({
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -326,6 +396,7 @@ export const GetProductResponse = zod.object({
   "weight": zod.string().nullable(),
   "portions": zod.string().nullable(),
   "minimumLeadTimeHours": zod.number().int(),
+  "crossSellProductIds": zod.array(zod.number().int()).max(getProductResponseTwoCrossSellProductIdsMax).optional(),
   "variants": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -345,6 +416,13 @@ export const GetAdminSummaryResponse = zod.object({
   "activeProducts": zod.number().int(),
   "totalBranches": zod.number().int(),
   "lowStockProducts": zod.number().int(),
+  "criticalStockProducts": zod.number().int().optional(),
+  "outOfStockProducts": zod.number().int(),
+  "ordersToday": zod.number().int(),
+  "ordersPending": zod.number().int(),
+  "ordersNextHour": zod.number().int(),
+  "alertsCount": zod.number().int(),
+  "salesToday": zod.number(),
   "branchSummaries": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchName": zod.string(),
@@ -380,16 +458,26 @@ export const ListAdminProductsResponseItem = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
-  "minimumLeadTimeHours": zod.number().int().optional(),
+  "seasonal": zod.boolean(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -423,11 +511,16 @@ export const ListAdminProductsResponse = zod.array(ListAdminProductsResponseItem
 
 export const createProductBodyPriceMin = 0;
 
+
+export const createProductBodyCrossSellProductIdsMax = 6;
+
 export const createProductBodyMinimumLeadTimeHoursMin = 0;
 
 export const createProductBodyBranchConfigurationsItemInventoryMin = 0;
 
 export const createProductBodyBranchConfigurationsItemMinStockMin = 0;
+
+export const createProductBodyBranchConfigurationsItemCriticalStockMin = 0;
 
 
 export const createProductBodyPromotionsItemValueMin = 0;
@@ -442,7 +535,11 @@ export const CreateProductBody = zod.object({
   "description": zod.string(),
   "price": zod.number().min(createProductBodyPriceMin),
   "salePrice": zod.number().nullable(),
-  "categoryId": zod.number().int(),
+  "categoryId": zod.number().int().describe('Primary category (legacy). Prefer categoryIds + primaryCategoryId.'),
+  "categoryIds": zod.array(zod.number().int()).min(1).optional(),
+  "primaryCategoryId": zod.number().int().optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "crossSellProductIds": zod.array(zod.number().int()).max(createProductBodyCrossSellProductIdsMax).optional(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()).optional(),
   "featured": zod.boolean(),
@@ -454,6 +551,8 @@ export const CreateProductBody = zod.object({
   "available": zod.boolean().optional(),
   "inventory": zod.number().int().min(createProductBodyBranchConfigurationsItemInventoryMin).optional(),
   "minStock": zod.number().int().min(createProductBodyBranchConfigurationsItemMinStockMin).optional(),
+  "criticalStock": zod.number().int().min(createProductBodyBranchConfigurationsItemCriticalStockMin).nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
   "priceOverride": zod.number().nullish(),
   "salePriceOverride": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int().nullish(),
@@ -476,6 +575,8 @@ export const createProductResponseOneAvailabilityItemPromotionOneFinalPriceMin =
 
 export const createProductResponseOneAvailabilityItemPromotionOneSavingsMin = 0;
 
+export const createProductResponseTwoCrossSellProductIdsMax = 6;
+
 
 
 export const CreateProductResponse = zod.object({
@@ -488,9 +589,15 @@ export const CreateProductResponse = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
+  "seasonal": zod.boolean(),
   "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
@@ -498,6 +605,10 @@ export const CreateProductResponse = zod.object({
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -526,6 +637,7 @@ export const CreateProductResponse = zod.object({
   "weight": zod.string().nullable(),
   "portions": zod.string().nullable(),
   "minimumLeadTimeHours": zod.number().int(),
+  "crossSellProductIds": zod.array(zod.number().int()).max(createProductResponseTwoCrossSellProductIdsMax).optional(),
   "variants": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -547,11 +659,16 @@ export const UpdateProductParams = zod.object({
 
 export const updateProductBodyPriceMin = 0;
 
+
+export const updateProductBodyCrossSellProductIdsMax = 6;
+
 export const updateProductBodyMinimumLeadTimeHoursMin = 0;
 
 export const updateProductBodyBranchConfigurationsItemInventoryMin = 0;
 
 export const updateProductBodyBranchConfigurationsItemMinStockMin = 0;
+
+export const updateProductBodyBranchConfigurationsItemCriticalStockMin = 0;
 
 
 export const updateProductBodyPromotionsItemValueMin = 0;
@@ -565,6 +682,10 @@ export const UpdateProductBody = zod.object({
   "price": zod.number().min(updateProductBodyPriceMin).optional(),
   "salePrice": zod.number().nullish(),
   "categoryId": zod.number().int().optional(),
+  "categoryIds": zod.array(zod.number().int()).min(1).optional(),
+  "primaryCategoryId": zod.number().int().optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "crossSellProductIds": zod.array(zod.number().int()).max(updateProductBodyCrossSellProductIdsMax).optional(),
   "imageUrl": zod.string().nullish(),
   "gallery": zod.array(zod.string()).optional(),
   "featured": zod.boolean().optional(),
@@ -576,6 +697,8 @@ export const UpdateProductBody = zod.object({
   "available": zod.boolean().optional(),
   "inventory": zod.number().int().min(updateProductBodyBranchConfigurationsItemInventoryMin).optional(),
   "minStock": zod.number().int().min(updateProductBodyBranchConfigurationsItemMinStockMin).optional(),
+  "criticalStock": zod.number().int().min(updateProductBodyBranchConfigurationsItemCriticalStockMin).nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
   "priceOverride": zod.number().nullish(),
   "salePriceOverride": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int().nullish(),
@@ -598,6 +721,8 @@ export const updateProductResponseOneAvailabilityItemPromotionOneFinalPriceMin =
 
 export const updateProductResponseOneAvailabilityItemPromotionOneSavingsMin = 0;
 
+export const updateProductResponseTwoCrossSellProductIdsMax = 6;
+
 
 
 export const UpdateProductResponse = zod.object({
@@ -610,9 +735,15 @@ export const UpdateProductResponse = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
+  "seasonal": zod.boolean(),
   "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
@@ -620,6 +751,10 @@ export const UpdateProductResponse = zod.object({
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -648,6 +783,7 @@ export const UpdateProductResponse = zod.object({
   "weight": zod.string().nullable(),
   "portions": zod.string().nullable(),
   "minimumLeadTimeHours": zod.number().int(),
+  "crossSellProductIds": zod.array(zod.number().int()).max(updateProductResponseTwoCrossSellProductIdsMax).optional(),
   "variants": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -838,8 +974,12 @@ export const CreateCartSessionResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -848,12 +988,20 @@ export const CreateCartSessionResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -862,14 +1010,21 @@ export const CreateCartSessionResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "items": zod.array(zod.object({
@@ -900,8 +1055,12 @@ export const GetCartResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -910,12 +1069,20 @@ export const GetCartResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -924,14 +1091,21 @@ export const GetCartResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "items": zod.array(zod.object({
@@ -968,8 +1142,12 @@ export const PreviewCartBranchResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -978,12 +1156,20 @@ export const PreviewCartBranchResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -992,14 +1178,21 @@ export const PreviewCartBranchResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "items": zod.array(zod.object({
@@ -1045,8 +1238,12 @@ export const AddCartItemResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1055,12 +1252,20 @@ export const AddCartItemResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1069,14 +1274,21 @@ export const AddCartItemResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "items": zod.array(zod.object({
@@ -1115,8 +1327,12 @@ export const UpdateCartItemResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1125,12 +1341,20 @@ export const UpdateCartItemResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1139,14 +1363,21 @@ export const UpdateCartItemResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "items": zod.array(zod.object({
@@ -1178,8 +1409,12 @@ export const DeleteCartItemResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1188,12 +1423,20 @@ export const DeleteCartItemResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1202,14 +1445,21 @@ export const DeleteCartItemResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "items": zod.array(zod.object({
@@ -1313,8 +1563,14 @@ export const CreateOrderResponse = zod.object({
   "id": zod.string(),
   "orderNumber": zod.string(),
   "guestAccessToken": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
   "status": zod.string(),
   "paymentStatus": zod.string(),
+  "paymentMethod": zod.string().nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "paymentLinkUrl": zod.string().nullish(),
+  "amountPaid": zod.number().optional(),
   "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
   "scheduledStart": zod.coerce.date(),
   "scheduledEnd": zod.coerce.date(),
@@ -1322,19 +1578,36 @@ export const CreateOrderResponse = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "deliveryAddress": zod.string().nullable(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
   "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number().optional(),
+  "discountAmount": zod.number().optional(),
+  "discountPercent": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number().optional(),
   "deliveryFee": zod.number(),
   "total": zod.number(),
+  "availabilityOverride": zod.boolean().optional(),
+  "overrideReason": zod.string().nullish(),
+  "branchId": zod.number().int().optional(),
+  "branchName": zod.string().optional(),
+  "createdByUserId": zod.string().nullish(),
   "items": zod.array(zod.object({
   "id": zod.number().int(),
-  "productId": zod.number().int(),
+  "productId": zod.number().int().nullable(),
   "variantId": zod.number().int().nullable(),
   "sku": zod.string(),
   "name": zod.string(),
   "variantLabel": zod.string().nullable(),
   "quantity": zod.number().int(),
+  "listUnitPrice": zod.number().nullish(),
   "unitPrice": zod.number(),
-  "lineTotal": zod.number()
+  "lineTotal": zod.number(),
+  "promotionId": zod.number().int().nullish(),
+  "manualLineItem": zod.boolean().optional()
 }))
 })
 
@@ -1361,8 +1634,14 @@ export const GetOrderDetailsResponse = zod.object({
   "id": zod.string(),
   "orderNumber": zod.string(),
   "guestAccessToken": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
   "status": zod.string(),
   "paymentStatus": zod.string(),
+  "paymentMethod": zod.string().nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "paymentLinkUrl": zod.string().nullish(),
+  "amountPaid": zod.number().optional(),
   "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
   "scheduledStart": zod.coerce.date(),
   "scheduledEnd": zod.coerce.date(),
@@ -1370,19 +1649,36 @@ export const GetOrderDetailsResponse = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "deliveryAddress": zod.string().nullable(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
   "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number().optional(),
+  "discountAmount": zod.number().optional(),
+  "discountPercent": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number().optional(),
   "deliveryFee": zod.number(),
   "total": zod.number(),
+  "availabilityOverride": zod.boolean().optional(),
+  "overrideReason": zod.string().nullish(),
+  "branchId": zod.number().int().optional(),
+  "branchName": zod.string().optional(),
+  "createdByUserId": zod.string().nullish(),
   "items": zod.array(zod.object({
   "id": zod.number().int(),
-  "productId": zod.number().int(),
+  "productId": zod.number().int().nullable(),
   "variantId": zod.number().int().nullable(),
   "sku": zod.string(),
   "name": zod.string(),
   "variantLabel": zod.string().nullable(),
   "quantity": zod.number().int(),
+  "listUnitPrice": zod.number().nullish(),
   "unitPrice": zod.number(),
-  "lineTotal": zod.number()
+  "lineTotal": zod.number(),
+  "promotionId": zod.number().int().nullish(),
+  "manualLineItem": zod.boolean().optional()
 }))
 })
 
@@ -1396,8 +1692,14 @@ export const GetGuestOrderDetailsResponse = zod.object({
   "id": zod.string(),
   "orderNumber": zod.string(),
   "guestAccessToken": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
   "status": zod.string(),
   "paymentStatus": zod.string(),
+  "paymentMethod": zod.string().nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "paymentLinkUrl": zod.string().nullish(),
+  "amountPaid": zod.number().optional(),
   "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
   "scheduledStart": zod.coerce.date(),
   "scheduledEnd": zod.coerce.date(),
@@ -1405,19 +1707,36 @@ export const GetGuestOrderDetailsResponse = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "deliveryAddress": zod.string().nullable(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
   "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number().optional(),
+  "discountAmount": zod.number().optional(),
+  "discountPercent": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number().optional(),
   "deliveryFee": zod.number(),
   "total": zod.number(),
+  "availabilityOverride": zod.boolean().optional(),
+  "overrideReason": zod.string().nullish(),
+  "branchId": zod.number().int().optional(),
+  "branchName": zod.string().optional(),
+  "createdByUserId": zod.string().nullish(),
   "items": zod.array(zod.object({
   "id": zod.number().int(),
-  "productId": zod.number().int(),
+  "productId": zod.number().int().nullable(),
   "variantId": zod.number().int().nullable(),
   "sku": zod.string(),
   "name": zod.string(),
   "variantLabel": zod.string().nullable(),
   "quantity": zod.number().int(),
+  "listUnitPrice": zod.number().nullish(),
   "unitPrice": zod.number(),
-  "lineTotal": zod.number()
+  "lineTotal": zod.number(),
+  "promotionId": zod.number().int().nullish(),
+  "manualLineItem": zod.boolean().optional()
 }))
 })
 
@@ -1452,33 +1771,303 @@ export const ListMyOrdersResponseItem = zod.object({
   "id": zod.string(),
   "orderNumber": zod.string(),
   "status": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
   "total": zod.number(),
   "createdAt": zod.coerce.date(),
+  "scheduledStart": zod.coerce.date(),
   "branchId": zod.number().int(),
+  "branchName": zod.string().optional(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
-  "fulfillmentMethod": zod.enum(['pickup', 'delivery'])
+  "customerPhone": zod.string().optional(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "paymentStatus": zod.string().optional(),
+  "itemCount": zod.number().int().optional(),
+  "items": zod.array(zod.object({
+  "name": zod.string(),
+  "quantity": zod.number().int()
+})).optional()
 })
 export const ListMyOrdersResponse = zod.array(ListMyOrdersResponseItem)
 
 
 export const ListAdminOrdersQueryParams = zod.object({
   "status": zod.coerce.string().optional(),
-  "branchId": zod.coerce.number().int().optional()
+  "branchId": zod.coerce.number().int().optional(),
+  "from": zod.date().optional().describe('Filter by scheduledStart >= from'),
+  "to": zod.date().optional().describe('Filter by scheduledStart < to'),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']).optional(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional()
 })
 
 export const ListAdminOrdersResponseItem = zod.object({
   "id": zod.string(),
   "orderNumber": zod.string(),
   "status": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
   "total": zod.number(),
   "createdAt": zod.coerce.date(),
+  "scheduledStart": zod.coerce.date(),
   "branchId": zod.number().int(),
+  "branchName": zod.string().optional(),
   "customerName": zod.string(),
   "customerEmail": zod.string(),
-  "fulfillmentMethod": zod.enum(['pickup', 'delivery'])
+  "customerPhone": zod.string().optional(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "paymentStatus": zod.string().optional(),
+  "itemCount": zod.number().int().optional(),
+  "items": zod.array(zod.object({
+  "name": zod.string(),
+  "quantity": zod.number().int()
+})).optional()
 })
 export const ListAdminOrdersResponse = zod.array(ListAdminOrdersResponseItem)
+
+
+
+export const createAdminOrderBodyLinesItemManualLineItemDefault = false;
+export const createAdminOrderBodyManualDiscountValueMin = 0;
+
+
+
+
+
+export const CreateAdminOrderBody = zod.object({
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']),
+  "branchId": zod.number().int(),
+  "userId": zod.string().nullish(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "scheduledStart": zod.coerce.date(),
+  "customerEmail": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "deliveryAddress": zod.string().nullish(),
+  "deliveryLatitude": zod.number().nullish(),
+  "deliveryLongitude": zod.number().nullish(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "productId": zod.number().int().nullish(),
+  "variantId": zod.number().int().nullish(),
+  "quantity": zod.number().int().min(1),
+  "manualLineItem": zod.boolean().default(createAdminOrderBodyLinesItemManualLineItemDefault),
+  "description": zod.string().optional(),
+  "unitPrice": zod.number().optional()
+})).min(1),
+  "manualDiscount": zod.object({
+  "type": zod.enum(['percent', 'amount']),
+  "value": zod.number().min(createAdminOrderBodyManualDiscountValueMin),
+  "reason": zod.string().min(1)
+}).optional(),
+  "couponCode": zod.string().nullish(),
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY']).optional(),
+  "markPaid": zod.boolean().optional(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "amountPaid": zod.number().nullish(),
+  "overrides": zod.object({
+  "stock": zod.boolean().optional(),
+  "slot": zod.boolean().optional(),
+  "delivery": zod.boolean().optional(),
+  "reason": zod.string().min(1)
+}).optional()
+})
+
+export const CreateAdminOrderResponse = zod.object({
+  "id": zod.string(),
+  "orderNumber": zod.string(),
+  "guestAccessToken": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
+  "status": zod.string(),
+  "paymentStatus": zod.string(),
+  "paymentMethod": zod.string().nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "paymentLinkUrl": zod.string().nullish(),
+  "amountPaid": zod.number().optional(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "scheduledStart": zod.coerce.date(),
+  "scheduledEnd": zod.coerce.date(),
+  "customerEmail": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "deliveryAddress": zod.string().nullable(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
+  "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number().optional(),
+  "discountAmount": zod.number().optional(),
+  "discountPercent": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number().optional(),
+  "deliveryFee": zod.number(),
+  "total": zod.number(),
+  "availabilityOverride": zod.boolean().optional(),
+  "overrideReason": zod.string().nullish(),
+  "branchId": zod.number().int().optional(),
+  "branchName": zod.string().optional(),
+  "createdByUserId": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "productId": zod.number().int().nullable(),
+  "variantId": zod.number().int().nullable(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "variantLabel": zod.string().nullable(),
+  "quantity": zod.number().int(),
+  "listUnitPrice": zod.number().nullish(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "promotionId": zod.number().int().nullish(),
+  "manualLineItem": zod.boolean().optional()
+}))
+})
+
+
+
+export const previewAdminOrderBodyLinesItemManualLineItemDefault = false;
+export const previewAdminOrderBodyManualDiscountValueMin = 0;
+
+
+
+
+
+export const PreviewAdminOrderBody = zod.object({
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']),
+  "branchId": zod.number().int(),
+  "userId": zod.string().nullish(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "scheduledStart": zod.coerce.date(),
+  "customerEmail": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "deliveryAddress": zod.string().nullish(),
+  "deliveryLatitude": zod.number().nullish(),
+  "deliveryLongitude": zod.number().nullish(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "productId": zod.number().int().nullish(),
+  "variantId": zod.number().int().nullish(),
+  "quantity": zod.number().int().min(1),
+  "manualLineItem": zod.boolean().default(previewAdminOrderBodyLinesItemManualLineItemDefault),
+  "description": zod.string().optional(),
+  "unitPrice": zod.number().optional()
+})).min(1),
+  "manualDiscount": zod.object({
+  "type": zod.enum(['percent', 'amount']),
+  "value": zod.number().min(previewAdminOrderBodyManualDiscountValueMin),
+  "reason": zod.string().min(1)
+}).optional(),
+  "couponCode": zod.string().nullish(),
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY']).optional(),
+  "markPaid": zod.boolean().optional(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "amountPaid": zod.number().nullish(),
+  "overrides": zod.object({
+  "stock": zod.boolean().optional(),
+  "slot": zod.boolean().optional(),
+  "delivery": zod.boolean().optional(),
+  "reason": zod.string().min(1)
+}).optional()
+})
+
+export const PreviewAdminOrderResponse = zod.object({
+  "lines": zod.array(zod.object({
+  "productId": zod.number().int().nullish(),
+  "variantId": zod.number().int().nullish(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "variantLabel": zod.string().nullish(),
+  "quantity": zod.number().int(),
+  "listUnitPrice": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "promotionDiscount": zod.number(),
+  "manualLineItem": zod.boolean(),
+  "available": zod.boolean(),
+  "inventory": zod.number().int().nullish(),
+  "reason": zod.string().nullish()
+})),
+  "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number(),
+  "discountAmount": zod.number(),
+  "discountPercent": zod.number().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number(),
+  "deliveryFee": zod.number(),
+  "total": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+
+export const searchAdminCustomersQueryLimitDefault = 20;
+
+export const SearchAdminCustomersQueryParams = zod.object({
+  "q": zod.coerce.string().min(1),
+  "limit": zod.coerce.number().int().default(searchAdminCustomersQueryLimitDefault)
+})
+
+export const SearchAdminCustomersResponseItem = zod.object({
+  "userId": zod.string().nullish(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "orderCount": zod.number().int(),
+  "lastOrderAt": zod.coerce.date().nullish()
+})
+export const SearchAdminCustomersResponse = zod.array(SearchAdminCustomersResponseItem)
+
+
+export const ListAdminCouponsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['percentage', 'amount']),
+  "value": zod.number(),
+  "active": zod.boolean(),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
+  "maxRedemptions": zod.number().int().nullish(),
+  "redemptionCount": zod.number().int(),
+  "minSubtotal": zod.number().nullish()
+})
+export const ListAdminCouponsResponse = zod.array(ListAdminCouponsResponseItem)
+
+
+export const createAdminCouponBodyActiveDefault = true;
+
+export const CreateAdminCouponBody = zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['percentage', 'amount']),
+  "value": zod.number(),
+  "active": zod.boolean().default(createAdminCouponBodyActiveDefault),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
+  "maxRedemptions": zod.number().int().nullish(),
+  "minSubtotal": zod.number().nullish()
+})
+
+export const CreateAdminCouponResponse = zod.object({
+  "id": zod.number().int(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['percentage', 'amount']),
+  "value": zod.number(),
+  "active": zod.boolean(),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
+  "maxRedemptions": zod.number().int().nullish(),
+  "redemptionCount": zod.number().int(),
+  "minSubtotal": zod.number().nullish()
+})
 
 
 export const listAdminBranchesResponseTwoPreparationTimeMinutesMin = 0;
@@ -1495,8 +2084,12 @@ export const ListAdminBranchesResponseItem = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1505,12 +2098,20 @@ export const ListAdminBranchesResponseItem = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1519,39 +2120,468 @@ export const ListAdminBranchesResponseItem = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }).and(zod.object({
   "name": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "slug": zod.string(),
   "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "address": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
   "managerName": zod.string().nullish(),
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
-  "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
   "day": zod.string(),
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int().min(listAdminBranchesResponseTwoPreparationTimeMinutesMin),
   "deliveryTimeMinutes": zod.number().int().min(listAdminBranchesResponseTwoDeliveryTimeMinutesMin),
   "pickupSlotIntervalMinutes": zod.number().int().min(listAdminBranchesResponseTwoPickupSlotIntervalMinutesMin).optional(),
-  "pickupSlotCapacity": zod.number().int().min(1).optional()
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+})).and(zod.object({
+  "whatsappUrl": zod.string().nullish(),
+  "ordersToday": zod.number().int().optional(),
+  "alertsOpen": zod.number().int().optional(),
+  "primaryResponsible": zod.object({
+
+}).passthrough().nullish(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional()
 }))
 export const ListAdminBranchesResponse = zod.array(ListAdminBranchesResponseItem)
+
+
+export const createAdminBranchBodyOnePreparationTimeMinutesMin = 0;
+
+export const createAdminBranchBodyOneDeliveryTimeMinutesMin = 0;
+
+export const createAdminBranchBodyOnePickupSlotIntervalMinutesMin = 5;
+
+
+
+
+export const CreateAdminBranchBody = zod.object({
+  "name": zod.string(),
+  "shortName": zod.string().optional(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "slug": zod.string().optional(),
+  "branchCode": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string().optional(),
+  "borough": zod.string().nullish(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postalCode": zod.string().optional(),
+  "country": zod.string().optional(),
+  "address": zod.string().optional(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
+  "managerName": zod.string().nullish(),
+  "managerEmail": zod.string().email().nullish(),
+  "managerPhone": zod.string().nullish(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string().optional(),
+  "openTableUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "gallery": zod.array(zod.string()).optional(),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "pickupAvailable": zod.boolean().optional(),
+  "deliveryAvailable": zod.boolean().optional(),
+  "deliveryRadiusKm": zod.number().nullish(),
+  "minimumOrder": zod.number().nullish(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int().min(createAdminBranchBodyOnePreparationTimeMinutesMin).optional(),
+  "deliveryTimeMinutes": zod.number().int().min(createAdminBranchBodyOneDeliveryTimeMinutesMin).optional(),
+  "pickupSlotIntervalMinutes": zod.number().int().min(createAdminBranchBodyOnePickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean().optional()
+}).and(zod.object({
+
+}).passthrough())
+
+export const createAdminBranchResponseTwoPreparationTimeMinutesMin = 0;
+
+export const createAdminBranchResponseTwoDeliveryTimeMinutesMin = 0;
+
+export const createAdminBranchResponseTwoPickupSlotIntervalMinutesMin = 5;
+
+
+
+
+export const CreateAdminBranchResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int(),
+  "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+}).and(zod.object({
+  "name": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "slug": zod.string(),
+  "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "address": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
+  "managerName": zod.string().nullish(),
+  "managerEmail": zod.string().email().nullish(),
+  "managerPhone": zod.string().nullish(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int().min(createAdminBranchResponseTwoPreparationTimeMinutesMin),
+  "deliveryTimeMinutes": zod.number().int().min(createAdminBranchResponseTwoDeliveryTimeMinutesMin),
+  "pickupSlotIntervalMinutes": zod.number().int().min(createAdminBranchResponseTwoPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+})).and(zod.object({
+  "whatsappUrl": zod.string().nullish(),
+  "ordersToday": zod.number().int().optional(),
+  "alertsOpen": zod.number().int().optional(),
+  "primaryResponsible": zod.object({
+
+}).passthrough().nullish(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional()
+}))
+
+
+export const ExportAdminBranchesResponse = zod.unknown()
 
 
 export const GetAdminBranchParams = zod.object({
@@ -1573,8 +2603,12 @@ export const GetAdminBranchResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1583,12 +2617,20 @@ export const GetAdminBranchResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1597,37 +2639,152 @@ export const GetAdminBranchResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }).and(zod.object({
   "name": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "slug": zod.string(),
   "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "address": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
   "managerName": zod.string().nullish(),
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
-  "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
   "day": zod.string(),
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int().min(getAdminBranchResponseBranchTwoPreparationTimeMinutesMin),
   "deliveryTimeMinutes": zod.number().int().min(getAdminBranchResponseBranchTwoDeliveryTimeMinutesMin),
   "pickupSlotIntervalMinutes": zod.number().int().min(getAdminBranchResponseBranchTwoPickupSlotIntervalMinutesMin).optional(),
-  "pickupSlotCapacity": zod.number().int().min(1).optional()
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+})).and(zod.object({
+  "whatsappUrl": zod.string().nullish(),
+  "ordersToday": zod.number().int().optional(),
+  "alertsOpen": zod.number().int().optional(),
+  "primaryResponsible": zod.object({
+
+}).passthrough().nullish(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional()
 })),
   "general": zod.object({
 
@@ -1641,8 +2798,33 @@ export const GetAdminBranchResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
   "products": zod.array(zod.object({
 
 }).passthrough()),
@@ -1657,7 +2839,17 @@ export const GetAdminBranchResponse = zod.object({
 }).passthrough()),
   "notificationSettings": zod.object({
 
-}).passthrough()
+}).passthrough(),
+  "summary": zod.object({
+
+}).passthrough().optional(),
+  "team": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "audit": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "futureOrdersCount": zod.number().int().optional()
 })
 
 
@@ -1676,26 +2868,103 @@ export const updateAdminBranchBodyPickupSlotIntervalMinutesMin = 5;
 
 export const UpdateAdminBranchBody = zod.object({
   "name": zod.string().optional(),
+  "shortName": zod.string().optional(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "slug": zod.string().optional(),
   "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string().optional(),
+  "borough": zod.string().nullish(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postalCode": zod.string().optional(),
+  "country": zod.string().optional(),
+  "address": zod.string().optional(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string().optional(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email().optional(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
   "managerName": zod.string().nullish(),
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
-  "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean().optional(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string().optional(),
+  "openTableUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "gallery": zod.array(zod.string()).optional(),
   "hours": zod.array(zod.object({
   "day": zod.string(),
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
 })).optional(),
   "pickupAvailable": zod.boolean().optional(),
   "deliveryAvailable": zod.boolean().optional(),
+  "deliveryRadiusKm": zod.number().nullish(),
+  "minimumOrder": zod.number().nullish(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int().min(updateAdminBranchBodyPreparationTimeMinutesMin).optional(),
   "deliveryTimeMinutes": zod.number().int().min(updateAdminBranchBodyDeliveryTimeMinutesMin).optional(),
   "pickupSlotIntervalMinutes": zod.number().int().min(updateAdminBranchBodyPickupSlotIntervalMinutesMin).optional(),
-  "pickupSlotCapacity": zod.number().int().min(1).optional()
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean().optional()
 })
 
 export const updateAdminBranchResponseTwoPreparationTimeMinutesMin = 0;
@@ -1712,8 +2981,12 @@ export const UpdateAdminBranchResponse = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1722,12 +2995,20 @@ export const UpdateAdminBranchResponse = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1736,44 +3017,807 @@ export const UpdateAdminBranchResponse = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }).and(zod.object({
   "name": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "slug": zod.string(),
   "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "address": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
   "managerName": zod.string().nullish(),
   "managerEmail": zod.string().email().nullish(),
   "managerPhone": zod.string().nullish(),
-  "notificationPreferences": zod.record(zod.string(), zod.boolean()).optional(),
-  "active": zod.boolean(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
   "day": zod.string(),
   "label": zod.string(),
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int().min(updateAdminBranchResponseTwoPreparationTimeMinutesMin),
   "deliveryTimeMinutes": zod.number().int().min(updateAdminBranchResponseTwoDeliveryTimeMinutesMin),
   "pickupSlotIntervalMinutes": zod.number().int().min(updateAdminBranchResponseTwoPickupSlotIntervalMinutesMin).optional(),
-  "pickupSlotCapacity": zod.number().int().min(1).optional()
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+})).and(zod.object({
+  "whatsappUrl": zod.string().nullish(),
+  "ordersToday": zod.number().int().optional(),
+  "alertsOpen": zod.number().int().optional(),
+  "primaryResponsible": zod.object({
+
+}).passthrough().nullish(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional()
 }))
+
+
+export const DeleteAdminBranchParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteAdminBranchResponse = zod.void()
+
+
+export const DeactivateAdminBranchParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeactivateAdminBranchBody = zod.object({
+  "confirmFutureOrders": zod.boolean().optional()
+})
+
+export const deactivateAdminBranchResponseTwoPreparationTimeMinutesMin = 0;
+
+export const deactivateAdminBranchResponseTwoDeliveryTimeMinutesMin = 0;
+
+export const deactivateAdminBranchResponseTwoPickupSlotIntervalMinutesMin = 5;
+
+
+
+
+export const DeactivateAdminBranchResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int(),
+  "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+}).and(zod.object({
+  "name": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "slug": zod.string(),
+  "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "address": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
+  "managerName": zod.string().nullish(),
+  "managerEmail": zod.string().email().nullish(),
+  "managerPhone": zod.string().nullish(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int().min(deactivateAdminBranchResponseTwoPreparationTimeMinutesMin),
+  "deliveryTimeMinutes": zod.number().int().min(deactivateAdminBranchResponseTwoDeliveryTimeMinutesMin),
+  "pickupSlotIntervalMinutes": zod.number().int().min(deactivateAdminBranchResponseTwoPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+})).and(zod.object({
+  "whatsappUrl": zod.string().nullish(),
+  "ordersToday": zod.number().int().optional(),
+  "alertsOpen": zod.number().int().optional(),
+  "primaryResponsible": zod.object({
+
+}).passthrough().nullish(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional()
+}))
+
+
+export const ArchiveAdminBranchParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const archiveAdminBranchResponseTwoPreparationTimeMinutesMin = 0;
+
+export const archiveAdminBranchResponseTwoDeliveryTimeMinutesMin = 0;
+
+export const archiveAdminBranchResponseTwoPickupSlotIntervalMinutesMin = 5;
+
+
+
+
+export const ArchiveAdminBranchResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int(),
+  "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+}).and(zod.object({
+  "name": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "slug": zod.string(),
+  "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "address": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
+  "managerName": zod.string().nullish(),
+  "managerEmail": zod.string().email().nullish(),
+  "managerPhone": zod.string().nullish(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int().min(archiveAdminBranchResponseTwoPreparationTimeMinutesMin),
+  "deliveryTimeMinutes": zod.number().int().min(archiveAdminBranchResponseTwoDeliveryTimeMinutesMin),
+  "pickupSlotIntervalMinutes": zod.number().int().min(archiveAdminBranchResponseTwoPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+})).and(zod.object({
+  "whatsappUrl": zod.string().nullish(),
+  "ordersToday": zod.number().int().optional(),
+  "alertsOpen": zod.number().int().optional(),
+  "primaryResponsible": zod.object({
+
+}).passthrough().nullish(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional()
+}))
+
+
+export const DuplicateAdminBranchParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const duplicateAdminBranchBodyCopyHoursDefault = true;
+export const duplicateAdminBranchBodyCopyPickupDeliveryDefault = true;
+export const duplicateAdminBranchBodyCopyNotificationsDefault = true;
+export const duplicateAdminBranchBodyCopyProductAssignmentsDefault = false;
+export const duplicateAdminBranchBodyCopyTeamStructureDefault = false;
+
+export const DuplicateAdminBranchBody = zod.object({
+  "name": zod.string(),
+  "shortName": zod.string().optional(),
+  "branchCode": zod.string(),
+  "slug": zod.string().optional(),
+  "copyHours": zod.boolean().default(duplicateAdminBranchBodyCopyHoursDefault),
+  "copyPickupDelivery": zod.boolean().default(duplicateAdminBranchBodyCopyPickupDeliveryDefault),
+  "copyNotifications": zod.boolean().default(duplicateAdminBranchBodyCopyNotificationsDefault),
+  "copyProductAssignments": zod.boolean().default(duplicateAdminBranchBodyCopyProductAssignmentsDefault),
+  "copyTeamStructure": zod.boolean().default(duplicateAdminBranchBodyCopyTeamStructureDefault)
+})
+
+export const duplicateAdminBranchResponseTwoPreparationTimeMinutesMin = 0;
+
+export const duplicateAdminBranchResponseTwoDeliveryTimeMinutesMin = 0;
+
+export const duplicateAdminBranchResponseTwoPickupSlotIntervalMinutesMin = 5;
+
+
+
+
+export const DuplicateAdminBranchResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int(),
+  "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+}).and(zod.object({
+  "name": zod.string(),
+  "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "slug": zod.string(),
+  "branchCode": zod.string().optional(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
+  "neighborhood": zod.string(),
+  "borough": zod.string().nullable(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "country": zod.string(),
+  "address": zod.string(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
+  "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
+  "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
+  "email": zod.string().email(),
+  "ordersEmail": zod.string().email().nullish(),
+  "reservationsEmail": zod.string().email().nullish(),
+  "adminEmail": zod.string().email().nullish(),
+  "managerName": zod.string().nullish(),
+  "managerEmail": zod.string().email().nullish(),
+  "managerPhone": zod.string().nullish(),
+  "notificationPreferences": zod.object({
+  "email": zod.boolean().optional(),
+  "inApp": zod.boolean().optional(),
+  "whatsapp": zod.boolean().optional().describe('Queues whatsapp_pending; outbound send not implemented'),
+  "lowStock": zod.boolean().optional(),
+  "criticalStock": zod.boolean().optional(),
+  "outOfStock": zod.boolean().optional(),
+  "newOrder": zod.boolean().optional(),
+  "cancelledOrder": zod.boolean().optional(),
+  "incident": zod.boolean().optional()
+}).optional(),
+  "mapsUrl": zod.string(),
+  "openTableUrl": zod.string().nullable(),
+  "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
+  "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()),
+  "hours": zod.array(zod.object({
+  "day": zod.string(),
+  "label": zod.string(),
+  "open": zod.string(),
+  "close": zod.string(),
+  "closed": zod.boolean(),
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
+})),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "deliveryRadiusKm": zod.number().nullable(),
+  "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
+  "preparationTimeMinutes": zod.number().int().min(duplicateAdminBranchResponseTwoPreparationTimeMinutesMin),
+  "deliveryTimeMinutes": zod.number().int().min(duplicateAdminBranchResponseTwoDeliveryTimeMinutesMin),
+  "pickupSlotIntervalMinutes": zod.number().int().min(duplicateAdminBranchResponseTwoPickupSlotIntervalMinutesMin).optional(),
+  "pickupSlotCapacity": zod.number().int().min(1).optional(),
+  "deliveryFee": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
+  "active": zod.boolean()
+})).and(zod.object({
+  "whatsappUrl": zod.string().nullish(),
+  "ordersToday": zod.number().int().optional(),
+  "alertsOpen": zod.number().int().optional(),
+  "primaryResponsible": zod.object({
+
+}).passthrough().nullish(),
+  "links": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "type": zod.string(),
+  "label": zod.string(),
+  "url": zod.string(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "images": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "url": zod.string(),
+  "type": zod.enum(['hero', 'gallery', 'logo', 'card']),
+  "alt": zod.string().nullish(),
+  "sortOrder": zod.number().int().optional(),
+  "active": zod.boolean().optional()
+})).optional(),
+  "specialHours": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "date": zod.string(),
+  "openTime": zod.string().nullish(),
+  "closeTime": zod.string().nullish(),
+  "closed": zod.boolean(),
+  "label": zod.string().nullish()
+})).optional()
+}))
+
+
+export const ListBranchAuditParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListBranchAuditResponseItem = zod.object({
+
+}).passthrough()
+export const ListBranchAuditResponse = zod.array(ListBranchAuditResponseItem)
 
 
 export const ListAdminInventoryQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
   "branchId": zod.coerce.number().int().optional(),
-  "state": zod.enum(['NORMAL', 'LOW_STOCK', 'OUT_OF_STOCK']).optional(),
+  "state": zod.enum(['NORMAL', 'LOW_STOCK', 'CRITICAL_STOCK', 'OUT_OF_STOCK']).optional(),
   "categoryId": zod.coerce.number().int().optional()
 })
 
@@ -1794,8 +3838,12 @@ export const ListAdminInventoryResponseItem = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1804,12 +3852,20 @@ export const ListAdminInventoryResponseItem = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1818,14 +3874,21 @@ export const ListAdminInventoryResponseItem = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "product": zod.object({
@@ -1838,16 +3901,26 @@ export const ListAdminInventoryResponseItem = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
-  "minimumLeadTimeHours": zod.number().int().optional(),
+  "seasonal": zod.boolean(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -1867,7 +3940,12 @@ export const ListAdminInventoryResponseItem = zod.object({
 }),zod.null()])
 }))
 }),
-  "reservedStock": zod.number().int()
+  "reservedStock": zod.number().int(),
+  "availableStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "openAlertCount": zod.number().int().optional(),
+  "inventoryStatus": zod.enum(['NORMAL', 'LOW_STOCK', 'CRITICAL_STOCK', 'OUT_OF_STOCK']).optional()
 })
 export const ListAdminInventoryResponse = zod.array(ListAdminInventoryResponseItem)
 
@@ -1903,6 +3981,18 @@ export const ListInventoryMovementsResponseItem = zod.object({
 export const ListInventoryMovementsResponse = zod.array(ListInventoryMovementsResponseItem)
 
 
+export const ListInventoryAlertsQueryParams = zod.object({
+  "branchId": zod.coerce.number().int().optional(),
+  "productId": zod.coerce.number().int().optional(),
+  "type": zod.coerce.string().optional(),
+  "priority": zod.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  "status": zod.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'DISMISSED']).optional(),
+  "source": zod.enum(['AUTOMATIC', 'MANUAL']).optional(),
+  "assignedUserId": zod.coerce.string().optional(),
+  "from": zod.date().optional(),
+  "to": zod.date().optional()
+})
+
 export const listInventoryAlertsResponseProductAvailabilityItemPromotionOneValueMin = 0;
 
 export const listInventoryAlertsResponseProductAvailabilityItemPromotionOneFinalPriceMin = 0;
@@ -1920,8 +4010,12 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "name": zod.string(),
   "slug": zod.string(),
   "shortName": zod.string(),
+  "shortDescription": zod.string().nullish(),
   "description": zod.string().nullable(),
   "address": zod.string(),
+  "street": zod.string().nullish(),
+  "externalNumber": zod.string().nullish(),
+  "internalNumber": zod.string().nullish(),
   "neighborhood": zod.string(),
   "borough": zod.string().nullable(),
   "city": zod.string(),
@@ -1930,12 +4024,20 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "country": zod.string(),
   "latitude": zod.number().nullable(),
   "longitude": zod.number().nullable(),
+  "placeId": zod.string().nullish(),
   "phone": zod.string(),
+  "secondaryPhone": zod.string().nullish(),
   "whatsapp": zod.string().nullable(),
+  "whatsappDefaultMessage": zod.string().nullish(),
   "email": zod.string(),
+  "ordersEmail": zod.string().nullish(),
+  "reservationsEmail": zod.string().nullish(),
   "mapsUrl": zod.string(),
   "openTableUrl": zod.string().nullable(),
   "instagramUrl": zod.string().nullable(),
+  "reservationProvider": zod.enum(['opentable', 'external', 'none']).optional(),
+  "reservationUrl": zod.string().nullish(),
+  "reservationCta": zod.string().nullish(),
   "imageUrl": zod.string().nullable(),
   "gallery": zod.array(zod.string()),
   "hours": zod.array(zod.object({
@@ -1944,14 +4046,21 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "open": zod.string(),
   "close": zod.string(),
   "closed": zod.boolean(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "slotOrder": zod.number().int().optional()
 })),
   "pickupAvailable": zod.boolean(),
   "deliveryAvailable": zod.boolean(),
   "deliveryRadiusKm": zod.number().nullable(),
   "minimumOrder": zod.number().nullable(),
+  "freeDeliveryFrom": zod.number().nullish(),
   "preparationTimeMinutes": zod.number().int(),
   "deliveryTimeMinutes": zod.number().int(),
+  "featured": zod.boolean().optional(),
+  "seoTitle": zod.string().nullish(),
+  "metaDescription": zod.string().nullish(),
+  "ogImageUrl": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive', 'archived']).optional(),
   "active": zod.boolean()
 }),
   "product": zod.object({
@@ -1964,16 +4073,26 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryName": zod.string(),
   "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
   "imageUrl": zod.string().nullable(),
   "featured": zod.boolean(),
-  "seasonal": zod.boolean().optional(),
-  "minimumLeadTimeHours": zod.number().int().optional(),
+  "seasonal": zod.boolean(),
+  "minimumLeadTimeHours": zod.number().int(),
   "availability": zod.array(zod.object({
   "branchId": zod.number().int(),
   "branchSlug": zod.string(),
   "branchName": zod.string(),
   "available": zod.boolean(),
   "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
   "price": zod.number(),
   "salePrice": zod.number().nullable(),
   "preparationTimeMinutes": zod.number().int(),
@@ -1997,8 +4116,50 @@ export const ListInventoryAlertsResponseItem = zod.object({
 export const ListInventoryAlertsResponse = zod.array(ListInventoryAlertsResponseItem)
 
 
+export const CreateInventoryAlertBody = zod.object({
+  "productId": zod.number().int().optional(),
+  "productIds": zod.array(zod.number().int()).optional(),
+  "branchId": zod.number().int(),
+  "type": zod.enum(['INVENTORY_REVIEW', 'RESTOCK_REQUEST', 'INVENTORY_MISMATCH', 'CUSTOM', 'LOW_STOCK', 'CRITICAL_STOCK', 'OUT_OF_STOCK']),
+  "priority": zod.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  "message": zod.string(),
+  "assignedUserId": zod.string().nullish()
+})
+
+export const CreateInventoryAlertResponse = zod.object({
+
+}).passthrough()
+
+
+export const UpdateInventoryAlertParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateInventoryAlertBody = zod.object({
+  "status": zod.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'DISMISSED']).optional(),
+  "priority": zod.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  "assignedUserId": zod.string().nullish(),
+  "resolutionNote": zod.string().nullish()
+})
+
+export const UpdateInventoryAlertResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListInventoryAlertEventsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListInventoryAlertEventsResponse = zod.object({
+
+}).passthrough()
+
+
 export const PreviewInventoryImportBody = zod.object({
-  "csv": zod.string()
+  "csv": zod.string(),
+  "idempotencyKey": zod.string().optional(),
+  "filename": zod.string().optional()
 })
 
 export const PreviewInventoryImportResponse = zod.object({
@@ -2013,20 +4174,31 @@ export const PreviewInventoryImportResponse = zod.object({
 
 
 export const ImportInventoryBody = zod.object({
-  "csv": zod.string()
+  "csv": zod.string(),
+  "idempotencyKey": zod.string().optional(),
+  "filename": zod.string().optional()
 })
 
 export const ImportInventoryResponse = zod.object({
   "imported": zod.number().int(),
   "errors": zod.array(zod.object({
 
-}).passthrough())
+}).passthrough()),
+  "jobId": zod.string().optional()
 })
 
 
+export const previewProductImportBodyUpdateExistingDefault = true;
+export const previewProductImportBodyRelationModeDefault = `add`;
+
 export const PreviewProductImportBody = zod.object({
   "csv": zod.string(),
-  "mapping": zod.record(zod.string(), zod.string()).optional()
+  "mapping": zod.record(zod.string(), zod.string()).optional(),
+  "updateExisting": zod.boolean().default(previewProductImportBodyUpdateExistingDefault).describe('When false, existing SKUs are skipped (reported as errors) instead of updated'),
+  "updateFields": zod.array(zod.string()).optional().describe('When updating existing products, only these product-level fields/groups are applied'),
+  "relationMode": zod.enum(['add', 'replace']).default(previewProductImportBodyRelationModeDefault).describe('How to apply categories, tags and cross-sell when updating'),
+  "idempotencyKey": zod.string().optional().describe('Optional key to avoid double-processing the same import job'),
+  "filename": zod.string().optional()
 })
 
 export const PreviewProductImportResponse = zod.object({
@@ -2045,9 +4217,17 @@ export const PreviewProductImportResponse = zod.object({
 })
 
 
+export const importProductsBodyUpdateExistingDefault = true;
+export const importProductsBodyRelationModeDefault = `add`;
+
 export const ImportProductsBody = zod.object({
   "csv": zod.string(),
-  "mapping": zod.record(zod.string(), zod.string()).optional()
+  "mapping": zod.record(zod.string(), zod.string()).optional(),
+  "updateExisting": zod.boolean().default(importProductsBodyUpdateExistingDefault).describe('When false, existing SKUs are skipped (reported as errors) instead of updated'),
+  "updateFields": zod.array(zod.string()).optional().describe('When updating existing products, only these product-level fields/groups are applied'),
+  "relationMode": zod.enum(['add', 'replace']).default(importProductsBodyRelationModeDefault).describe('How to apply categories, tags and cross-sell when updating'),
+  "idempotencyKey": zod.string().optional().describe('Optional key to avoid double-processing the same import job'),
+  "filename": zod.string().optional()
 })
 
 export const ImportProductsResponse = zod.object({
@@ -2057,6 +4237,251 @@ export const ImportProductsResponse = zod.object({
   "errors": zod.array(zod.object({
   "row": zod.number().int(),
   "message": zod.string()
+})),
+  "jobId": zod.string().optional()
+})
+
+
+export const exportProductsBodyFormatDefault = `csv`;
+export const exportProductsBodyReimportableDefault = true;
+
+export const ExportProductsBody = zod.object({
+  "search": zod.string().optional(),
+  "status": zod.enum(['draft', 'active', 'inactive']).optional(),
+  "ids": zod.array(zod.number().int()).optional(),
+  "format": zod.enum(['csv', 'xlsx']).default(exportProductsBodyFormatDefault),
+  "reimportable": zod.boolean().default(exportProductsBodyReimportableDefault),
+  "columns": zod.array(zod.string()).optional()
+})
+
+export const ExportProductsResponse = zod.object({
+  "filename": zod.string(),
+  "contentType": zod.string(),
+  "content": zod.string().describe('CSV text (also used as payload for xlsx client packaging)')
+})
+
+
+
+export const bulkUpdateProductsBodyMinStockMin = 0;
+
+export const bulkUpdateProductsBodyCrossSellProductIdsMax = 6;
+
+
+export const bulkUpdateProductsBodyPromotionValueMin = 0;
+
+
+
+export const BulkUpdateProductsBody = zod.object({
+  "ids": zod.array(zod.number().int()).min(1),
+  "action": zod.enum(['set_status', 'set_category', 'add_categories', 'remove_categories', 'replace_categories', 'add_tags', 'remove_tags', 'replace_tags', 'assign_branch', 'unassign_branch', 'set_min_stock', 'set_price', 'set_featured', 'archive', 'create_promotion', 'cancel_promotions', 'add_cross_sell', 'replace_cross_sell']),
+  "status": zod.enum(['draft', 'active', 'inactive']).optional(),
+  "categoryId": zod.number().int().optional(),
+  "categoryIds": zod.array(zod.number().int()).optional(),
+  "tagNames": zod.array(zod.string()).optional(),
+  "branchId": zod.number().int().optional(),
+  "minStock": zod.number().int().min(bulkUpdateProductsBodyMinStockMin).optional(),
+  "price": zod.number().optional(),
+  "featured": zod.boolean().optional(),
+  "crossSellProductIds": zod.array(zod.number().int()).max(bulkUpdateProductsBodyCrossSellProductIdsMax).optional(),
+  "promotion": zod.object({
+  "name": zod.string().min(1),
+  "type": zod.enum(['fixed', 'percentage', 'amount']),
+  "value": zod.number().min(bulkUpdateProductsBodyPromotionValueMin),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
+  "branchIds": zod.array(zod.number().int())
+}).optional()
+})
+
+export const BulkUpdateProductsResponse = zod.object({
+  "updated": zod.number().int(),
+  "errors": zod.array(zod.object({
+  "id": zod.number().int(),
+  "message": zod.string()
+}))
+})
+
+
+export const DuplicateProductParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const duplicateProductResponseOneAvailabilityItemPromotionOneValueMin = 0;
+
+export const duplicateProductResponseOneAvailabilityItemPromotionOneFinalPriceMin = 0;
+
+export const duplicateProductResponseOneAvailabilityItemPromotionOneSavingsMin = 0;
+
+export const duplicateProductResponseTwoCrossSellProductIdsMax = 6;
+
+
+
+export const DuplicateProductResponse = zod.object({
+  "id": zod.number().int(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "shortDescription": zod.string(),
+  "price": zod.number(),
+  "salePrice": zod.number().nullable(),
+  "categoryName": zod.string(),
+  "categorySlug": zod.string(),
+  "categories": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "isPrimary": zod.boolean()
+})).optional(),
+  "imageUrl": zod.string().nullable(),
+  "featured": zod.boolean(),
+  "seasonal": zod.boolean(),
+  "minimumLeadTimeHours": zod.number().int(),
+  "availability": zod.array(zod.object({
+  "branchId": zod.number().int(),
+  "branchSlug": zod.string(),
+  "branchName": zod.string(),
+  "available": zod.boolean(),
+  "inventory": zod.number().int(),
+  "minStock": zod.number().int().optional(),
+  "criticalStock": zod.number().int().nullish(),
+  "autoAlertEnabled": zod.boolean().optional(),
+  "alertState": zod.string().optional(),
+  "price": zod.number(),
+  "salePrice": zod.number().nullable(),
+  "preparationTimeMinutes": zod.number().int(),
+  "pickupAvailable": zod.boolean(),
+  "deliveryAvailable": zod.boolean(),
+  "promotion": zod.union([zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "type": zod.enum(['fixed', 'percentage', 'amount']),
+  "value": zod.number().min(duplicateProductResponseOneAvailabilityItemPromotionOneValueMin),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
+  "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
+  "finalPrice": zod.number().min(duplicateProductResponseOneAvailabilityItemPromotionOneFinalPriceMin),
+  "savings": zod.number().min(duplicateProductResponseOneAvailabilityItemPromotionOneSavingsMin),
+  "branchIds": zod.array(zod.number().int())
+}),zod.null()])
+}))
+}).and(zod.object({
+  "description": zod.string(),
+  "tags": zod.array(zod.string()),
+  "gallery": zod.array(zod.string()),
+  "ingredients": zod.string().nullable(),
+  "allergens": zod.string().nullable(),
+  "conservation": zod.string().nullable(),
+  "weight": zod.string().nullable(),
+  "portions": zod.string().nullable(),
+  "minimumLeadTimeHours": zod.number().int(),
+  "crossSellProductIds": zod.array(zod.number().int()).max(duplicateProductResponseTwoCrossSellProductIdsMax).optional(),
+  "variants": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "value": zod.string(),
+  "sku": zod.string(),
+  "price": zod.number(),
+  "salePrice": zod.number().nullable()
+}))
+}))
+
+
+export const ListImportJobsQueryParams = zod.object({
+  "type": zod.enum(['product', 'inventory']).optional()
+})
+
+export const ListImportJobsResponseItem = zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['product', 'inventory']),
+  "filename": zod.string().nullable(),
+  "status": zod.enum(['pending', 'running', 'completed', 'failed']),
+  "createdCount": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "errorCount": zod.number().int(),
+  "errorLog": zod.array(zod.object({
+
+}).passthrough()),
+  "createdAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullable(),
+  "userId": zod.string().nullable()
+})
+export const ListImportJobsResponse = zod.array(ListImportJobsResponseItem)
+
+
+export const GetImportJobParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetImportJobResponse = zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['product', 'inventory']),
+  "filename": zod.string().nullable(),
+  "status": zod.enum(['pending', 'running', 'completed', 'failed']),
+  "createdCount": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "errorCount": zod.number().int(),
+  "errorLog": zod.array(zod.object({
+
+}).passthrough()),
+  "createdAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullable(),
+  "userId": zod.string().nullable()
+})
+
+
+export const GetAdminOrderParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetAdminOrderResponse = zod.object({
+  "id": zod.string(),
+  "orderNumber": zod.string(),
+  "guestAccessToken": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
+  "status": zod.string(),
+  "paymentStatus": zod.string(),
+  "paymentMethod": zod.string().nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "paymentLinkUrl": zod.string().nullish(),
+  "amountPaid": zod.number().optional(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "scheduledStart": zod.coerce.date(),
+  "scheduledEnd": zod.coerce.date(),
+  "customerEmail": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "deliveryAddress": zod.string().nullable(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
+  "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number().optional(),
+  "discountAmount": zod.number().optional(),
+  "discountPercent": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number().optional(),
+  "deliveryFee": zod.number(),
+  "total": zod.number(),
+  "availabilityOverride": zod.boolean().optional(),
+  "overrideReason": zod.string().nullish(),
+  "branchId": zod.number().int().optional(),
+  "branchName": zod.string().optional(),
+  "createdByUserId": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "productId": zod.number().int().nullable(),
+  "variantId": zod.number().int().nullable(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "variantLabel": zod.string().nullable(),
+  "quantity": zod.number().int(),
+  "listUnitPrice": zod.number().nullish(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "promotionId": zod.number().int().nullish(),
+  "manualLineItem": zod.boolean().optional()
 }))
 })
 
@@ -2065,16 +4490,41 @@ export const UpdateAdminOrderParams = zod.object({
   "id": zod.coerce.string()
 })
 
+
+export const updateAdminOrderBodyLinesItemManualLineItemDefault = false;
+
 export const UpdateAdminOrderBody = zod.object({
-  "status": zod.enum(['pending_payment', 'paid', 'preparing', 'ready', 'completed', 'cancelled'])
+  "status": zod.enum(['pending_payment', 'paid', 'preparing', 'ready', 'completed', 'cancelled']).optional(),
+  "cancelReason": zod.string().nullish(),
+  "customerEmail": zod.string().optional(),
+  "customerName": zod.string().optional(),
+  "customerPhone": zod.string().optional(),
+  "scheduledStart": zod.coerce.date().optional(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "productId": zod.number().int().nullish(),
+  "variantId": zod.number().int().nullish(),
+  "quantity": zod.number().int().min(1),
+  "manualLineItem": zod.boolean().default(updateAdminOrderBodyLinesItemManualLineItemDefault),
+  "description": zod.string().optional(),
+  "unitPrice": zod.number().optional()
+})).optional()
 })
 
 export const UpdateAdminOrderResponse = zod.object({
   "id": zod.string(),
   "orderNumber": zod.string(),
   "guestAccessToken": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
   "status": zod.string(),
   "paymentStatus": zod.string(),
+  "paymentMethod": zod.string().nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "paymentLinkUrl": zod.string().nullish(),
+  "amountPaid": zod.number().optional(),
   "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
   "scheduledStart": zod.coerce.date(),
   "scheduledEnd": zod.coerce.date(),
@@ -2082,19 +4532,144 @@ export const UpdateAdminOrderResponse = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "deliveryAddress": zod.string().nullable(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
   "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number().optional(),
+  "discountAmount": zod.number().optional(),
+  "discountPercent": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number().optional(),
   "deliveryFee": zod.number(),
   "total": zod.number(),
+  "availabilityOverride": zod.boolean().optional(),
+  "overrideReason": zod.string().nullish(),
+  "branchId": zod.number().int().optional(),
+  "branchName": zod.string().optional(),
+  "createdByUserId": zod.string().nullish(),
   "items": zod.array(zod.object({
   "id": zod.number().int(),
-  "productId": zod.number().int(),
+  "productId": zod.number().int().nullable(),
   "variantId": zod.number().int().nullable(),
   "sku": zod.string(),
   "name": zod.string(),
   "variantLabel": zod.string().nullable(),
   "quantity": zod.number().int(),
+  "listUnitPrice": zod.number().nullish(),
   "unitPrice": zod.number(),
-  "lineTotal": zod.number()
+  "lineTotal": zod.number(),
+  "promotionId": zod.number().int().nullish(),
+  "manualLineItem": zod.boolean().optional()
+}))
+})
+
+
+export const RecordAdminOrderPaymentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const recordAdminOrderPaymentBodyMarkPaidDefault = true;
+
+export const RecordAdminOrderPaymentBody = zod.object({
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY']),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "amountPaid": zod.number().nullish(),
+  "markPaid": zod.boolean().default(recordAdminOrderPaymentBodyMarkPaidDefault)
+})
+
+export const RecordAdminOrderPaymentResponse = zod.object({
+  "id": zod.string(),
+  "orderNumber": zod.string(),
+  "guestAccessToken": zod.string(),
+  "orderSource": zod.enum(['STOREFRONT', 'PHONE', 'WHATSAPP', 'POS', 'CORPORATE', 'ADMIN', 'OTHER']).optional(),
+  "status": zod.string(),
+  "paymentStatus": zod.string(),
+  "paymentMethod": zod.string().nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paymentNote": zod.string().nullish(),
+  "paymentLinkUrl": zod.string().nullish(),
+  "amountPaid": zod.number().optional(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "scheduledStart": zod.coerce.date(),
+  "scheduledEnd": zod.coerce.date(),
+  "customerEmail": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "deliveryAddress": zod.string().nullable(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
+  "subtotal": zod.number(),
+  "promotionDiscountTotal": zod.number().optional(),
+  "discountAmount": zod.number().optional(),
+  "discountPercent": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "couponDiscount": zod.number().optional(),
+  "deliveryFee": zod.number(),
+  "total": zod.number(),
+  "availabilityOverride": zod.boolean().optional(),
+  "overrideReason": zod.string().nullish(),
+  "branchId": zod.number().int().optional(),
+  "branchName": zod.string().optional(),
+  "createdByUserId": zod.string().nullish(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "productId": zod.number().int().nullable(),
+  "variantId": zod.number().int().nullable(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "variantLabel": zod.string().nullable(),
+  "quantity": zod.number().int(),
+  "listUnitPrice": zod.number().nullish(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "promotionId": zod.number().int().nullish(),
+  "manualLineItem": zod.boolean().optional()
+}))
+})
+
+
+export const CreateAdminOrderPaymentLinkParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const CreateAdminOrderPaymentLinkResponse = zod.object({
+  "url": zod.string(),
+  "orderId": zod.string()
+})
+
+
+export const DuplicateAdminOrderParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+export const duplicateAdminOrderResponseLinesItemManualLineItemDefault = false;
+
+export const DuplicateAdminOrderResponse = zod.object({
+  "branchId": zod.number().int(),
+  "customerEmail": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "userId": zod.string().nullish(),
+  "fulfillmentMethod": zod.enum(['pickup', 'delivery']),
+  "deliveryAddress": zod.string().nullish(),
+  "deliveryLatitude": zod.number().nullish(),
+  "deliveryLongitude": zod.number().nullish(),
+  "customerNotes": zod.string().nullish(),
+  "productionNotes": zod.string().nullish(),
+  "internalNotes": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "productId": zod.number().int().nullish(),
+  "variantId": zod.number().int().nullish(),
+  "quantity": zod.number().int().min(1),
+  "manualLineItem": zod.boolean().default(duplicateAdminOrderResponseLinesItemManualLineItemDefault),
+  "description": zod.string().optional(),
+  "unitPrice": zod.number().optional()
 }))
 })
 
@@ -2122,11 +4697,32 @@ export const CreateBranchAssignmentParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const createBranchAssignmentBodyRoleDefault = `staff`;
+export const createBranchAssignmentBodyIsPrimaryDefault = false;
+
 export const CreateBranchAssignmentBody = zod.object({
-  "userId": zod.string()
+  "userId": zod.string(),
+  "role": zod.enum(['branch_manager', 'staff', 'operations']).default(createBranchAssignmentBodyRoleDefault),
+  "isPrimary": zod.boolean().default(createBranchAssignmentBodyIsPrimaryDefault)
 })
 
 export const CreateBranchAssignmentResponse = zod.object({
+
+}).passthrough()
+
+
+export const UpdateBranchAssignmentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateBranchAssignmentBody = zod.object({
+  "userId": zod.string(),
+  "role": zod.enum(['branch_manager', 'staff', 'operations']).optional(),
+  "isPrimary": zod.boolean().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateBranchAssignmentResponse = zod.object({
 
 }).passthrough()
 

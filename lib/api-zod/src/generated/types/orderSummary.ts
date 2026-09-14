@@ -5,16 +5,25 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderSource } from './orderSource';
 import type { OrderSummaryFulfillmentMethod } from './orderSummaryFulfillmentMethod';
+import type { OrderSummaryItem } from './orderSummaryItem';
 
 export interface OrderSummary {
   id: string;
   orderNumber: string;
   status: string;
+  orderSource?: OrderSource;
   total: number;
   createdAt: Date;
+  scheduledStart: Date;
   branchId: number;
+  branchName?: string;
   customerName: string;
   customerEmail: string;
+  customerPhone?: string;
   fulfillmentMethod: OrderSummaryFulfillmentMethod;
+  paymentStatus?: string;
+  itemCount?: number;
+  items?: OrderSummaryItem[];
 }

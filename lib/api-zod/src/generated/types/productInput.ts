@@ -22,7 +22,14 @@ export interface ProductInput {
   price: number;
   /** @nullable */
   salePrice: number | null;
+  /** Primary category (legacy). Prefer categoryIds + primaryCategoryId. */
   categoryId: number;
+  /** @minItems 1 */
+  categoryIds?: number[];
+  primaryCategoryId?: number;
+  tags?: string[];
+  /** @maxItems 6 */
+  crossSellProductIds?: number[];
   /** @nullable */
   imageUrl: string | null;
   gallery?: string[];

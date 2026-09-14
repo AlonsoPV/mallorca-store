@@ -8,4 +8,6 @@
 
 export interface CsvImportInput {
   csv: string;
+  idempotencyKey?: string;
+  filename?: string;
 }

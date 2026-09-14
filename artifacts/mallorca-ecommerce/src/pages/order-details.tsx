@@ -3,11 +3,11 @@ import { useGetGuestOrderDetails, useGetOrderDetails, getGetGuestOrderDetailsQue
 import { useParams, Link } from "wouter";
 import { CheckCircle, Clock, MapPin, Map, Phone, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@clerk/react";
+import { useAppAuth } from "@/lib/app-auth";
 
 export default function OrderDetailsPage() {
   const { id, token } = useParams<{ id: string; token?: string }>();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn } = useAppAuth();
   
   const isGuest = !isSignedIn && !!token && token !== "user";
   
