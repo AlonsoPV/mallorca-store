@@ -4,3 +4,4 @@
 - [Product media storage](product-media-storage.md) — Keep storefront reads public while protecting presigned upload URL creation with the existing staff auth.
 - [Product import grouping](product-import-grouping.md) — Group product imports by SKU while applying each valid branch row independently.
 - [Promotion price authority](promotion-price-authority.md) — Recalculate the active branch promotion for catalog, cart, and order totals; stored sale prices are only fallback data.
+- [OpenAPI query generation](openapi-query-generation.md) — A path plus query parameter can collide in Orval's Zod barrel; keep query params typed without duplicate exports.

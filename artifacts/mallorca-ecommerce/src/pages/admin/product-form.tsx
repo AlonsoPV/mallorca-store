@@ -135,6 +135,7 @@ export default function AdminProductForm() {
 
   const { data: productDetail, isLoading: isLoadingDetail } = useGetProduct(
     productSlug,
+    undefined,
     { query: { enabled: !!existingProduct?.slug, queryKey: getGetProductQueryKey(productSlug) } },
   );
   const { data: promotionHistory } = useListProductPromotions(Number(id), {

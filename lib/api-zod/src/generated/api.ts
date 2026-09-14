@@ -266,6 +266,10 @@ export const GetProductParams = zod.object({
   "slug": zod.coerce.string()
 })
 
+export const GetProductQueryParams = zod.object({
+  "branchId": zod.coerce.number().int().optional().describe('Branch used to resolve the current price of each variant')
+})
+
 export const getProductResponseOneAvailabilityItemPromotionOneValueMin = 0;
 
 export const getProductResponseOneAvailabilityItemPromotionOneFinalPriceMin = 0;

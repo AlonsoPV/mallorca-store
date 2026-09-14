@@ -9,6 +9,7 @@ import {
 import {
   GetBranchParams,
   GetBranchResponse,
+  GetProductQueryParams,
   GetProductParams,
   GetProductResponse,
   ListBranchesResponse,
@@ -118,8 +119,13 @@ router.get("/products/:slug", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const query = GetProductQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
 
-  const product = await getProductDetailBySlug(params.data.slug);
+  const product = await getProductDetailBySlug(params.data.slug, query.data.branchId);
   if (!product || product.status !== "active") {
     res.status(404).json({ error: "Producto no encontrado" });
     return;

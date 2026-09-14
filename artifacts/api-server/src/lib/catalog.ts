@@ -351,7 +351,7 @@ export async function listProductCards(filters: ProductFilters = {}) {
     });
 }
 
-export async function getProductDetailBySlug(slug: string) {
+export async function getProductDetailBySlug(slug: string, branchId?: number) {
   const [row] = await db
     .select({
       product: productsTable,
@@ -385,6 +385,10 @@ export async function getProductDetailBySlug(slug: string) {
     )
     .orderBy(asc(productVariantsTable.id));
 
+  const promotion = branchId == null
+    ? undefined
+    : await getActivePromotion(row.product.id, branchId);
+
   return {
     ...card,
     description: row.product.description,
@@ -402,7 +406,9 @@ export async function getProductDetailBySlug(slug: string) {
       value: variant.value,
       sku: variant.sku,
       price: variant.price,
-      salePrice: variant.salePrice,
+      salePrice: promotion
+        ? calculatePromotionPrice(variant.price, promotion.promotion).finalPrice
+        : variant.salePrice,
     })),
   };
 }

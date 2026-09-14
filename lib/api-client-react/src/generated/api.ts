@@ -47,6 +47,7 @@ import type {
   FulfillmentSlot,
   GetBranchReportParams,
   GetInventoryMatrix200Item,
+  GetProductParams,
   HealthStatus,
   ImportPreview,
   ImportResult,
@@ -594,20 +595,29 @@ export function useListProducts<TData = Awaited<ReturnType<typeof listProducts>>
 
 
 
-export const getGetProductUrl = (slug: string,) => {
+export const getGetProductUrl = (slug: string,
+    params?: GetProductParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/products/${slug}`
+  return stringifiedParams.length > 0 ? `/api/products/${slug}?${stringifiedParams}` : `/api/products/${slug}`
 }
 
 /**
  * @summary Get a product with branch availability and variants
  */
-export const getProduct = async (slug: string, options?: Parameters<typeof customFetch>[1]): Promise<ProductDetail> => {
+export const getProduct = async (slug: string,
+    params?: GetProductParams, options?: Parameters<typeof customFetch>[1]): Promise<ProductDetail> => {
 
-  return customFetch<ProductDetail>(getGetProductUrl(slug),
+  return customFetch<ProductDetail>(getGetProductUrl(slug,params),
   {
     ...options,
     method: 'GET'
@@ -620,23 +630,25 @@ export const getProduct = async (slug: string, options?: Parameters<typeof custo
 
 
 
-export const getGetProductQueryKey = (slug: string,) => {
+export const getGetProductQueryKey = (slug: string,
+    params?: GetProductParams,) => {
     return [
-    `/api/products/${slug}`
+    `/api/products/${slug}`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetProductQueryOptions = <TData = Awaited<ReturnType<typeof getProduct>>, TError = ErrorType<ErrorResponse>>(slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetProductQueryOptions = <TData = Awaited<ReturnType<typeof getProduct>>, TError = ErrorType<ErrorResponse>>(slug: string,
+    params?: GetProductParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetProductQueryKey(slug);
+  const queryKey =  queryOptions?.queryKey ?? getGetProductQueryKey(slug,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProduct>>> = ({ signal }) => getProduct(slug, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProduct>>> = ({ signal }) => getProduct(slug,params, { signal, ...requestOptions });
 
 
 
@@ -654,11 +666,12 @@ export type GetProductQueryError = ErrorType<ErrorResponse>
  */
 
 export function useGetProduct<TData = Awaited<ReturnType<typeof getProduct>>, TError = ErrorType<ErrorResponse>>(
- slug: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ slug: string,
+    params?: GetProductParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProduct>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetProductQueryOptions(slug,options)
+  const queryOptions = getGetProductQueryOptions(slug,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

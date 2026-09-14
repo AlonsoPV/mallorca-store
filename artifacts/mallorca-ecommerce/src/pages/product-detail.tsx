@@ -13,10 +13,11 @@ import { useQueryClient } from "@tanstack/react-query";
 export default function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { branchId, selectedDate, selectedTime } = useCart();
-  const { data: product, isLoading, isError } = useGetProduct(slug || "", {
+  const productParams = branchId ? { branchId } : undefined;
+  const { data: product, isLoading, isError } = useGetProduct(slug || "", productParams, {
     query: {
       enabled: Boolean(slug && branchId && selectedDate && selectedTime),
-      queryKey: getGetProductQueryKey(slug || ""),
+      queryKey: getGetProductQueryKey(slug || "", productParams),
     },
   });
   const [quantity, setQuantity] = useState(1);
@@ -74,9 +75,18 @@ export default function ProductDetail() {
     }).format(price);
   };
 
-  const currentPrice = selectedVariant 
-    ? (product.variants.find(v => v.id === selectedVariant)?.salePrice || product.variants.find(v => v.id === selectedVariant)?.price || product.price)
-    : (currentBranchAvailability?.salePrice || currentBranchAvailability?.price || product.salePrice || product.price);
+  const selectedVariantData = selectedVariant
+    ? product.variants.find((variant) => variant.id === selectedVariant)
+    : undefined;
+  const currentBasePrice = selectedVariantData?.price
+    ?? currentBranchAvailability?.price
+    ?? product.price;
+  const currentSalePrice = selectedVariantData?.salePrice
+    ?? (selectedVariantData ? null : currentBranchAvailability?.salePrice ?? product.salePrice);
+  const currentPrice = currentSalePrice ?? currentBasePrice;
+  const currentSavings = currentSalePrice == null
+    ? 0
+    : Math.round((currentBasePrice - currentSalePrice) * 100) / 100;
   const scheduleAvailable = Boolean(
     selectedTime &&
     currentBranchAvailability &&
@@ -183,11 +193,23 @@ export default function ProductDetail() {
               {product.name}
             </h1>
             
-            <div className="mb-8 mt-5 flex items-center gap-3 font-serif text-3xl text-foreground">
-              {formatPrice(currentPrice)}
-              {((currentBranchAvailability?.salePrice || product.salePrice) && !selectedVariant) && (
-                <span className="text-base text-muted-foreground line-through font-sans">
-                  {formatPrice(currentBranchAvailability?.price || product.price)}
+            <div className="mb-8 mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-foreground">
+              {currentSalePrice != null && currentSavings > 0 && (
+                <span className="font-serif text-3xl text-primary">
+                  {formatPrice(currentSalePrice)}
+                </span>
+              )}
+              <span className={cn(
+                "font-serif",
+                currentSalePrice != null && currentSavings > 0
+                  ? "text-xl text-muted-foreground line-through"
+                  : "text-3xl text-primary",
+              )}>
+                {formatPrice(currentBasePrice)}
+              </span>
+              {currentSalePrice != null && currentSavings > 0 && (
+                <span className="text-sm font-medium text-primary">
+                  Ahorras {formatPrice(currentSavings)}
                 </span>
               )}
             </div>

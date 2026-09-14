@@ -814,6 +814,13 @@ scheduledStart?: string;
 includeUnavailable?: boolean;
 };
 
+export type GetProductParams = {
+/**
+ * Branch used to resolve the current price of each variant
+ */
+branchId?: number;
+};
+
 export type ListAdminProductsParams = {
 search?: string;
 status?: ListAdminProductsStatus;

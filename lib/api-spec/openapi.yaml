@@ -163,6 +163,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: branchId
+          in: query
+          required: false
+          description: Branch used to resolve the current price of each variant
+          schema:
+            type: integer
       responses:
         "200":
           description: Product detail
