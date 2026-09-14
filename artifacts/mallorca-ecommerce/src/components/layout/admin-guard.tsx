@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 
 export function AdminGuard({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth();
+  const [location] = useLocation();
   
   const { data: user, isLoading: isUserLoading, isError } = useGetMe({
     query: {
@@ -27,7 +28,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
   }
 
   if (!isSignedIn) {
-    return <Redirect to="/sign-in" />;
+    return <Redirect to={`/sign-in?redirect_url=${encodeURIComponent(location)}`} />;
   }
 
   if (isUserLoading) {
