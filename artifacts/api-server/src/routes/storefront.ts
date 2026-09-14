@@ -114,6 +114,7 @@ router.get("/products", async (req, res): Promise<void> => {
 });
 
 router.get("/products/:slug", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
   const params = GetProductParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

@@ -10,6 +10,8 @@ import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
+const PRODUCT_PRICE_REFRESH_INTERVAL_MS = 30_000;
+
 export default function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { branchId, selectedDate, selectedTime } = useCart();
@@ -18,6 +20,10 @@ export default function ProductDetail() {
     query: {
       enabled: Boolean(slug && branchId && selectedDate && selectedTime),
       queryKey: getGetProductQueryKey(slug || "", productParams),
+      staleTime: PRODUCT_PRICE_REFRESH_INTERVAL_MS,
+      refetchInterval: PRODUCT_PRICE_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
     },
   });
   const [quantity, setQuantity] = useState(1);

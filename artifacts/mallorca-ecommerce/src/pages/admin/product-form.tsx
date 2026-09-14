@@ -137,6 +137,12 @@ export default function AdminProductForm() {
   const existingProduct = isEditing ? adminProducts?.find(p => p.id === Number(id)) : undefined;
   const productSlug = existingProduct?.slug || "";
 
+  const invalidateProductDetail = () => {
+    if (productSlug) {
+      void queryClient.invalidateQueries({ queryKey: getGetProductQueryKey(productSlug) });
+    }
+  };
+
   const { data: productDetail, isLoading: isLoadingDetail } = useGetProduct(
     productSlug,
     undefined,
@@ -478,6 +484,7 @@ export default function AdminProductForm() {
         onSuccess: () => {
           void queryClient.invalidateQueries({ queryKey: getListProductPromotionsQueryKey(Number(id)) });
           void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+          invalidateProductDetail();
           toast({ title: "Promoción actualizada", description: "La promoción programada conserva su registro histórico." });
           stopEditingPromotion();
         },
@@ -496,6 +503,7 @@ export default function AdminProductForm() {
         onSuccess: () => {
           void queryClient.invalidateQueries({ queryKey: getListProductPromotionsQueryKey(Number(id)) });
           void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+          invalidateProductDetail();
           if (editingPromotionId === promotionId) stopEditingPromotion();
           toast({ title: "Promoción cancelada", description: "La promoción ya no se aplicará cuando llegue su horario." });
         },
@@ -530,6 +538,7 @@ export default function AdminProductForm() {
       void queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+      invalidateProductDetail();
       if (!isEditing) localStorage.removeItem(DRAFT_STORAGE_KEY);
       toast({ title: msg, description: "Los cambios se reflejarán en el sistema en breve." });
       setShowConfirmDialog(false);
