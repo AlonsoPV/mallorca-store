@@ -887,11 +887,22 @@ export default function AdminProductForm() {
                           <div className="space-y-2">
                             {promotionHistory.map((promotion) => (
                               <div key={promotion.id} className="flex flex-wrap items-center justify-between gap-2 border border-[#E8DED0] bg-[#FBFAF7] px-3 py-2 text-xs dark:border-border dark:bg-muted/10">
-                                <div>
+                                <div className="min-w-0">
                                   <span className="font-semibold">{promotion.name}</span>
                                   <span className="ml-2 text-muted-foreground">
                                     {promotion.type === "percentage" ? `${promotion.value}%` : promotion.type === "fixed" ? `$${promotion.value} fijo` : `-$${promotion.value}`}
                                   </span>
+                                  {(promotion.cancelledBy || promotion.cancelledAt) && (
+                                    <div className="mt-1 text-muted-foreground">
+                                      {promotion.cancelledBy && <span>Cancelada por {promotion.cancelledBy}</span>}
+                                      {promotion.cancelledBy && promotion.cancelledAt && <span> · </span>}
+                                      {promotion.cancelledAt && (
+                                        <span>
+                                          {new Intl.DateTimeFormat("es-MX", { dateStyle: "short", timeStyle: "short" }).format(new Date(promotion.cancelledAt))}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                    <span>{promotion.status === "scheduled" ? "Programada" : promotion.status === "active" ? "Activa" : promotion.status === "cancelled" ? "Cancelada" : "Finalizada"}</span>
