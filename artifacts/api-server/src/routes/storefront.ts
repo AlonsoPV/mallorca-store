@@ -22,8 +22,32 @@ import {
   listProductCards,
   serializeBranch,
 } from "../lib/catalog";
+import { subscribeToCatalogChanges } from "../lib/catalog-events";
 
 const router: IRouter = Router();
+
+router.get("/catalog/events", (req, res): void => {
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  res.write("retry: 3000\n\n");
+
+  const unsubscribe = subscribeToCatalogChanges((event) => {
+    res.write(`event: catalog-change\ndata: ${JSON.stringify(event)}\n\n`);
+  });
+  const heartbeat = setInterval(() => {
+    res.write(": heartbeat\n\n");
+  }, 15_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    res.end();
+  });
+});
 
 router.get("/branches", async (_req, res): Promise<void> => {
   const branches = await db

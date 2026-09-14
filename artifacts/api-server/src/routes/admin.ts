@@ -53,6 +53,7 @@ import {
 } from "../lib/promotion-validation";
 import { z } from "zod/v4";
 import { applyInventoryAlert } from "./commerce";
+import { publishCatalogChange } from "../lib/catalog-events";
 
 const router: IRouter = Router();
 
@@ -539,6 +540,7 @@ router.post("/admin/inventory/update", async (req, res): Promise<void> => {
       await applyInventoryAlert(tx, bp, next);
       return { inventory: updated, ledger };
     });
+    publishCatalogChange(result.inventory.productId, "inventory");
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
@@ -600,9 +602,11 @@ router.post("/admin/inventory/import", async (req, res): Promise<void> => {
     else if (branchId && !existingPairs.has(`${branchId}:${productId}`)) errors.push({ row: i + 2, message: "SKU is not configured for branch" });
   }
   if (errors.length) { res.status(400).json({ imported: 0, errors }); return; }
+  const importedProductIds = new Set<number>();
   const imported = await db.transaction(async (tx) => {
     for (const row of parsed.rows) {
       const branchId = branchMap.get(row.branchCode)!, productId = productMap.get(row.sku)!;
+      importedProductIds.add(productId);
       const [bp] = await tx.select().from(branchProductsTable).where(and(eq(branchProductsTable.branchId, branchId), eq(branchProductsTable.productId, productId))).for("update");
       if (!bp) throw new Error(`Missing branch product for ${row.sku}/${row.branchCode}`);
       const state = stockState(row.quantity, bp.minStock);
@@ -612,6 +616,9 @@ router.post("/admin/inventory/import", async (req, res): Promise<void> => {
     }
     return parsed.rows.length;
   });
+  for (const productId of importedProductIds) {
+    publishCatalogChange(productId, "inventory");
+  }
   res.json({ imported, errors: [] });
 });
 
@@ -858,6 +865,7 @@ router.post("/admin/products/import", async (req, res): Promise<void> => {
       });
       if (groupCreated) created += 1;
       if (groupUpdated) updated += 1;
+      if (productId) publishCatalogChange(productId, "product");
     } catch (error) {
       const row = records[0]?.row ?? 0;
       errors.push({
@@ -953,6 +961,7 @@ router.post("/admin/products/:id/promotions", async (req, res): Promise<void> =>
       res.status(404).json({ error: "Product not found" });
       return;
     }
+    publishCatalogChange(params.data.id, "promotion");
     res.status(201).json(
       CreateProductPromotionResponse.parse(
         promotionHistoryShape(item.promotion, item.branchIds, product[0].price),
@@ -1076,6 +1085,7 @@ router.patch("/admin/products/:id/promotions/:promotionId", async (req, res): Pr
     res.status(409).json({ error: "Only scheduled promotions can be edited" });
     return;
   }
+  publishCatalogChange(productId, "promotion");
   res.json(
     UpdateProductPromotionResponse.parse(
       promotionHistoryShape(updated, body.data.branchIds, current.productPrice),
@@ -1146,6 +1156,7 @@ router.post("/admin/products/:id/promotions/:promotionId/cancel", async (req, re
     return;
   }
 
+  publishCatalogChange(productId, "promotion");
   res.json(
     CancelProductPromotionResponse.parse(
       promotionHistoryShape(cancelled, existingBranches.map(({ branchId }) => branchId), current.productPrice),
@@ -1239,6 +1250,7 @@ router.post("/admin/products", async (req, res): Promise<void> => {
   }
 
   const detail = await getProductDetailBySlug(product.slug);
+  publishCatalogChange(product.id, "product");
   res.status(201).json(CreateProductResponse.parse(detail));
 });
 
@@ -1322,6 +1334,7 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   }
 
   const detail = await getProductDetailBySlug(product.slug);
+  publishCatalogChange(product.id, "product");
   res.json(UpdateProductResponse.parse(detail));
 });
 
