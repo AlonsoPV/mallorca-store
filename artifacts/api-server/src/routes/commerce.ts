@@ -21,6 +21,7 @@ import {
 import {
   calculatePromotionPrice,
   getActivePromotion,
+  resolveCatalogPrice,
   serializeBranch,
 } from "../lib/catalog";
 import { buildBranchPreviewItems } from "../lib/branch-preview";
@@ -113,15 +114,16 @@ async function cartView(cartId: string): Promise<CartShape | undefined> {
     const basePrice = variant?.price ?? branchProduct?.priceOverride ?? product.price;
     const legacySalePrice =
       variant?.salePrice ??
-      (branchProduct?.salePriceOverride !== null
-        ? branchProduct?.salePriceOverride
-        : product.salePrice);
+      branchProduct?.salePriceOverride ??
+      product.salePrice;
     const promotion = branchProduct
       ? await getActivePromotion(product.id, row.cart.branchId)
       : undefined;
-    const unitPrice = promotion
-      ? calculatePromotionPrice(basePrice, promotion.promotion).finalPrice
-      : legacySalePrice ?? basePrice;
+    const unitPrice = resolveCatalogPrice(
+      basePrice,
+      legacySalePrice,
+      promotion?.promotion,
+    ).finalPrice;
     return {
       id: item.id, productId: item.productId, variantId: item.variantId, sku: variant?.sku ?? product.sku,
       name: product.name, variantLabel: variant ? `${variant.name}: ${variant.value}` : null,
@@ -209,9 +211,11 @@ router.post("/cart/:id/items", async (req, res): Promise<void> => {
   const basePrice = variant?.price ?? product.bp.priceOverride ?? product.product.price;
   const legacySalePrice = variant?.salePrice ?? product.bp.salePriceOverride ?? product.product.salePrice;
   const promotion = await getActivePromotion(product.product.id, cart.cart.branchId);
-  const price = promotion
-    ? calculatePromotionPrice(basePrice, promotion.promotion).finalPrice
-    : legacySalePrice ?? basePrice;
+  const price = resolveCatalogPrice(
+    basePrice,
+    legacySalePrice,
+    promotion?.promotion,
+  ).finalPrice;
   const existing = await db.select().from(cartItemsTable).where(and(eq(cartItemsTable.cartId, cart.cart.id), eq(cartItemsTable.productId, b.data.productId), b.data.variantId == null ? sql`${cartItemsTable.variantId} is null` : eq(cartItemsTable.variantId, b.data.variantId as number)));
   const resulting = (existing[0]?.quantity ?? 0) + b.data.quantity;
   if (resulting > product.bp.inventory) { res.status(409).json({ error: "Insufficient inventory" }); return; }
@@ -420,9 +424,11 @@ router.post("/orders", async (req, res): Promise<void> => {
     const promotion = await getActivePromotion(row.product.id, cart.branch.id);
     return {
       ...row,
-      serverPrice: promotion
-        ? calculatePromotionPrice(basePrice, promotion.promotion).finalPrice
-        : legacySalePrice ?? basePrice,
+      serverPrice: resolveCatalogPrice(
+        basePrice,
+        legacySalePrice,
+        promotion?.promotion,
+      ).finalPrice,
     };
   }));
   const serverSubtotal = currentItems.reduce((sum, x) => sum + x.item.quantity * x.serverPrice, 0);

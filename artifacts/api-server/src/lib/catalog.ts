@@ -24,6 +24,7 @@ import {
 import {
   calculatePromotionPrice,
   promotionStatus,
+  resolveCatalogPrice,
   selectPromotionForBranch,
   type PromotionCandidate,
 } from "./catalog-promotions.ts";
@@ -78,6 +79,7 @@ type ProductFilters = {
 export {
   calculatePromotionPrice,
   promotionStatus,
+  resolveCatalogPrice,
   selectPromotionForBranch,
   type PromotionStatus,
 } from "./catalog-promotions.ts";
@@ -348,6 +350,10 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
   const promotion = branchId == null
     ? undefined
     : await getActivePromotion(row.product.id, branchId);
+  const branchAvailability = branchId == null
+    ? undefined
+    : card.availability.find((item) => item.branchId === branchId);
+  const inheritedSalePrice = branchAvailability?.salePrice ?? row.product.salePrice;
 
   return {
     ...card,
@@ -366,9 +372,11 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
       value: variant.value,
       sku: variant.sku,
       price: variant.price,
-      salePrice: promotion
-        ? calculatePromotionPrice(variant.price, promotion.promotion).finalPrice
-        : variant.salePrice,
+      salePrice: resolveCatalogPrice(
+        variant.price,
+        variant.salePrice ?? inheritedSalePrice,
+        promotion?.promotion,
+      ).finalPrice,
     })),
   };
 }

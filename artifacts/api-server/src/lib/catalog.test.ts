@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   calculatePromotionPrice,
   promotionStatus,
+  resolveCatalogPrice,
   selectPromotionForBranch,
 } from "./catalog-promotions.ts";
 
@@ -133,4 +134,89 @@ test("uses the most recently created promotion as the date tie-breaker", () => {
     selectPromotionForBranch([older, newer], 7)?.promotion.id,
     10,
   );
+});
+
+test("keeps variant detail and cart prices aligned for a branch promotion", () => {
+  const branchId = 7;
+  const variant = {
+    id: 501,
+    productId: 10,
+    price: 125,
+    salePrice: null,
+  };
+  const activePromotion = selectPromotionForBranch(
+    [
+      candidate(
+        {
+          type: "percentage",
+          value: 20,
+        },
+        [branchId],
+      ),
+    ],
+    branchId,
+  );
+
+  const detailPrice = resolveCatalogPrice(
+    variant.price,
+    variant.salePrice,
+    activePromotion?.promotion,
+  );
+  const cartPrice = resolveCatalogPrice(
+    variant.price,
+    variant.salePrice,
+    activePromotion?.promotion,
+  );
+
+  assert.deepEqual(detailPrice, { finalPrice: 100, savings: 25 });
+  assert.deepEqual(cartPrice, detailPrice);
+});
+
+test("keeps variant detail and cart prices aligned without promotion or inherited sale price", () => {
+  const variant = {
+    id: 502,
+    productId: 10,
+    price: 125,
+    salePrice: null,
+  };
+  const promotionForOtherBranch = selectPromotionForBranch(
+    [candidate({}, [7])],
+    8,
+  );
+
+  const detailPrice = resolveCatalogPrice(
+    variant.price,
+    variant.salePrice,
+    promotionForOtherBranch?.promotion,
+  );
+  const cartPrice = resolveCatalogPrice(
+    variant.price,
+    variant.salePrice,
+    promotionForOtherBranch?.promotion,
+  );
+
+  assert.deepEqual(detailPrice, { finalPrice: 125, savings: 0 });
+  assert.deepEqual(cartPrice, detailPrice);
+});
+
+test("inherits the product sale price equally when a variant has no sale price", () => {
+  const variant = {
+    id: 503,
+    productId: 10,
+    price: 125,
+    salePrice: null,
+  };
+  const inheritedSalePrice = 110;
+
+  const detailPrice = resolveCatalogPrice(
+    variant.price,
+    variant.salePrice ?? inheritedSalePrice,
+  );
+  const cartPrice = resolveCatalogPrice(
+    variant.price,
+    variant.salePrice ?? inheritedSalePrice,
+  );
+
+  assert.deepEqual(detailPrice, { finalPrice: 110, savings: 15 });
+  assert.deepEqual(cartPrice, detailPrice);
 });

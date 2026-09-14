@@ -46,6 +46,20 @@ export function calculatePromotionPrice(
   };
 }
 
+export function resolveCatalogPrice(
+  basePrice: number,
+  fallbackSalePrice: number | null | undefined,
+  promotion?: Pick<PromotionCandidate["promotion"], "type" | "value">,
+) {
+  if (promotion) return calculatePromotionPrice(basePrice, promotion);
+
+  const finalPrice = fallbackSalePrice ?? basePrice;
+  return {
+    finalPrice,
+    savings: Math.round((basePrice - finalPrice) * 100) / 100,
+  };
+}
+
 export function selectPromotionForBranch(
   candidates: PromotionCandidate[] | undefined,
   branchId: number,
