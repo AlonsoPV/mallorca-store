@@ -242,7 +242,7 @@ export async function getProductDetailBySlug(slug: string) {
     ...card,
     description: row.product.description,
     tags: row.product.tags,
-    gallery: row.product.gallery,
+    gallery: row.product.gallery.filter((image) => image !== row.product.imageUrl),
     ingredients: row.product.ingredients,
     allergens: row.product.allergens,
     conservation: row.product.conservation,

@@ -21,11 +21,26 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Save, Loader2, Image as ImageIcon, Store, AlertCircle, Info } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  Loader2,
+  Image as ImageIcon,
+  Store,
+  AlertCircle,
+  Info,
+  Upload,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { getImageUrl } from "@/lib/image-url";
+import { ImageWithFallback } from "@/components/image-with-fallback";
 
 const formSchema = z.object({
   sku: z.string().min(1, "SKU es requerido"),
@@ -36,7 +51,8 @@ const formSchema = z.object({
   price: z.coerce.number().min(0, "Precio debe ser mayor o igual a 0"),
   salePrice: z.coerce.number().nullable().optional(),
   categoryId: z.coerce.number().min(1, "Seleccione una categoría"),
-  imageUrl: z.string().nullable().optional().refine((val) => !val || val.startsWith("/") || val.startsWith("http"), "URL inválida"),
+  imageUrl: z.string().nullable().optional(),
+  gallery: z.array(z.string()).default([]),
   featured: z.boolean().default(false),
   seasonal: z.boolean().default(false),
   status: z.enum(['draft', 'active', 'inactive']),
@@ -46,6 +62,20 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const DRAFT_STORAGE_KEY = "mallorca_product_draft";
+const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+
+type ImageAssetStatus = "uploaded" | "uploading" | "error";
+type ImageAsset = {
+  id: string;
+  path?: string;
+  previewUrl: string;
+  file?: File;
+  fileName: string;
+  status: ImageAssetStatus;
+  progress: number;
+  error?: string;
+};
 
 export default function AdminProductForm() {
   const { id } = useParams<{ id?: string }>();
@@ -60,6 +90,10 @@ export default function AdminProductForm() {
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubmitData, setPendingSubmitData] = useState<FormValues | null>(null);
+  const [imageAssets, setImageAssets] = useState<ImageAsset[]>([]);
+  const [isImageDropActive, setIsImageDropActive] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const imageId = useRef(0);
 
   const adminProductParams = {};
   const { data: adminProducts, isLoading: isLoadingList } = useListAdminProducts(
@@ -90,6 +124,7 @@ export default function AdminProductForm() {
       salePrice: null,
       categoryId: 0,
       imageUrl: "",
+      gallery: [],
       featured: false,
       seasonal: false,
       status: "draft",
@@ -101,6 +136,133 @@ export default function AdminProductForm() {
   const slugValue = form.watch("slug");
   const priceValue = form.watch("price");
   const salePriceValue = form.watch("salePrice");
+
+  const nextImageId = () => {
+    imageId.current += 1;
+    return `product-image-${imageId.current}`;
+  };
+
+  const assetsFromPaths = (mainPath: string | null | undefined, gallery: string[] = []): ImageAsset[] => {
+    return [mainPath, ...gallery]
+      .filter((path): path is string => Boolean(path))
+      .filter((path, index, paths) => paths.indexOf(path) === index)
+      .map((path) => ({
+        id: nextImageId(),
+        path,
+        previewUrl: getImageUrl(path) || path,
+        fileName: path.split("/").pop() || "Imagen guardada",
+        status: "uploaded" as const,
+        progress: 100,
+      }));
+  };
+
+  const syncImageFields = (assets: ImageAsset[]) => {
+    const uploaded = assets.filter((asset) => asset.status === "uploaded" && asset.path);
+    form.setValue("imageUrl", uploaded[0]?.path || null, { shouldDirty: true });
+    form.setValue("gallery", uploaded.slice(1).map((asset) => asset.path!), { shouldDirty: true });
+  };
+
+  useEffect(() => {
+    syncImageFields(imageAssets);
+  }, [imageAssets]);
+
+  const updateAsset = (id: string, update: Partial<ImageAsset>) => {
+    setImageAssets((current) => current.map((asset) => asset.id === id ? { ...asset, ...update } : asset));
+  };
+
+  const uploadImage = async (asset: ImageAsset) => {
+    if (!asset.file) return;
+    updateAsset(asset.id, { status: "uploading", progress: 0, error: undefined });
+    try {
+      const response = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: asset.file.name,
+          size: asset.file.size,
+          contentType: asset.file.type,
+        }),
+      });
+      if (!response.ok) throw new Error("No se pudo preparar la subida.");
+      const upload = await response.json() as { uploadURL?: string; objectPath?: string };
+      if (!upload.uploadURL || !upload.objectPath) throw new Error("La respuesta de almacenamiento no es válida.");
+
+      await new Promise<void>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("PUT", upload.uploadURL!, true);
+        request.setRequestHeader("Content-Type", asset.file!.type);
+        request.upload.onprogress = (event) => {
+          if (event.lengthComputable) updateAsset(asset.id, { progress: Math.round((event.loaded / event.total) * 100) });
+        };
+        request.onload = () => request.status >= 200 && request.status < 300
+          ? resolve()
+          : reject(new Error("El almacenamiento rechazó la imagen."));
+        request.onerror = () => reject(new Error("No se pudo completar la subida."));
+        request.send(asset.file);
+      });
+
+      setImageAssets((current) => {
+        return current.map((item) => item.id === asset.id
+          ? { ...item, path: upload.objectPath, status: "uploaded" as const, progress: 100, error: undefined }
+          : item);
+      });
+    } catch (error) {
+      updateAsset(asset.id, {
+        status: "error",
+        progress: 0,
+        error: error instanceof Error ? error.message : "No se pudo subir la imagen.",
+      });
+      toast({ title: "No se pudo subir una imagen", description: "El resto del formulario sigue intacto. Puedes reintentar o eliminar este archivo.", variant: "destructive" });
+    }
+  };
+
+  const handleImageFiles = async (files: File[]) => {
+    const accepted: ImageAsset[] = [];
+    const rejected: string[] = [];
+    for (const file of files) {
+      if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+        rejected.push(`${file.name}: formato no compatible`);
+        continue;
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        rejected.push(`${file.name}: supera 8 MB`);
+        continue;
+      }
+      accepted.push({
+        id: nextImageId(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        fileName: file.name,
+        status: "uploading",
+        progress: 0,
+      });
+    }
+    if (rejected.length) {
+      toast({ title: "Algunas imágenes no se agregaron", description: rejected.join(". "), variant: "destructive" });
+    }
+    if (!accepted.length) return;
+    setImageAssets((current) => [...current, ...accepted]);
+    await Promise.all(accepted.map((asset) => uploadImage(asset)));
+  };
+
+  const removeImage = (id: string) => {
+    setImageAssets((current) => {
+      const removed = current.find((asset) => asset.id === id);
+      if (removed?.previewUrl.startsWith("blob:")) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((asset) => asset.id !== id);
+    });
+  };
+
+  const moveImage = (index: number, direction: -1 | 1) => {
+    setImageAssets((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
 
   // Auto-generate slug
   useEffect(() => {
@@ -118,6 +280,7 @@ export default function AdminProductForm() {
         try {
           const parsed = JSON.parse(saved);
           form.reset(parsed.form);
+            setImageAssets(assetsFromPaths(parsed.form?.imageUrl, parsed.form?.gallery));
           if (parsed.branches) setBranchConfigurations(parsed.branches);
           toast({ title: "Borrador recuperado", description: "Se han restaurado los datos guardados localmente." });
         } catch (e) {}
@@ -148,11 +311,13 @@ export default function AdminProductForm() {
         salePrice: productDetail.salePrice || null,
         categoryId: categories?.find(c => c.slug === productDetail.categorySlug)?.id || 0,
         imageUrl: productDetail.imageUrl || "",
+        gallery: productDetail.gallery || [],
         featured: productDetail.featured,
         seasonal: productDetail.seasonal,
         status: (existingProduct as any)?.status || "draft",
         minimumLeadTimeHours: productDetail.minimumLeadTimeHours,
       });
+      setImageAssets(assetsFromPaths(productDetail.imageUrl, productDetail.gallery));
       initialized.current = true;
     }
   }, [isEditing, productDetail, existingProduct, form, categories]);
@@ -168,6 +333,11 @@ export default function AdminProductForm() {
   }, [formValues, branchConfigurations, isEditing]);
 
   const preSubmit = (data: FormValues) => {
+    if (imageAssets.some((asset) => asset.status === "uploading")) {
+      toast({ title: "Espera a que terminen las imágenes", description: "Puedes seguir editando el formulario mientras se completan las subidas." });
+      return;
+    }
+
     // Validation: At least one branch must be available if active
     if (data.status === 'active') {
       const isAvailableAnywhere = Object.values(branchConfigurations).some(c => c.available);
@@ -351,25 +521,95 @@ export default function AdminProductForm() {
                       </FormItem>
                     )} />
 
-                    <FormField control={form.control} name="imageUrl" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Imagen del Producto (URL)</FormLabel>
-                        <div className="flex gap-6 items-start mt-2">
-                          <div className="w-28 h-28 bg-[#F5F0E8] dark:bg-muted border border-[#E8DED0] dark:border-border overflow-hidden flex items-center justify-center shrink-0">
-                            {field.value ? (
-                              <img src={field.value} alt="Preview" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                            ) : (
-                              <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
-                            )}
+                  <FormItem>
+                    <FormLabel>Imágenes del producto</FormLabel>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => imageInputRef.current?.click()}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") imageInputRef.current?.click();
+                      }}
+                      onDragOver={(event) => { event.preventDefault(); setIsImageDropActive(true); }}
+                      onDragLeave={() => setIsImageDropActive(false)}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        setIsImageDropActive(false);
+                        void handleImageFiles(Array.from(event.dataTransfer.files));
+                      }}
+                      className={`mt-2 flex min-h-28 cursor-pointer flex-col items-center justify-center border border-dashed px-5 py-6 text-center transition-colors ${
+                        isImageDropActive ? "border-[#D43B2B] bg-[#D43B2B]/5" : "border-[#CFC3B5] bg-[#FBFAF7] hover:border-[#D43B2B]"
+                      }`}
+                    >
+                      <Upload className="mb-2 h-6 w-6 text-[#D43B2B]" />
+                      <p className="text-sm font-medium">Arrastra imágenes aquí o selecciónalas</p>
+                      <p className="mt-1 text-xs text-muted-foreground">JPG, PNG, WEBP, GIF o AVIF · máximo 8 MB por archivo</p>
+                      <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                        multiple
+                        className="sr-only"
+                        onChange={(event) => {
+                          void handleImageFiles(Array.from(event.target.files || []));
+                          event.target.value = "";
+                        }}
+                      />
+                    </div>
+
+                    {imageAssets.length > 0 ? (
+                      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {imageAssets.map((asset, index) => (
+                          <div key={asset.id} className="group relative overflow-hidden border border-[#E8DED0] bg-[#F5F0E8]">
+                            <div className="aspect-square">
+                              <ImageWithFallback
+                                src={asset.previewUrl}
+                                alt={index === 0 ? "Imagen principal del producto" : `Imagen ${index + 1} del producto`}
+                                className="h-full w-full object-cover"
+                                fallback={<div role="img" aria-label={`${asset.fileName}: imagen no disponible`} className="flex h-full w-full items-center justify-center p-3 text-center text-xs text-muted-foreground">Imagen no disponible</div>}
+                              />
+                              {asset.status === "error" && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#4B3028]/90 p-3 text-center text-xs text-white">
+                                  <AlertCircle className="h-5 w-5" />
+                                  <span>{asset.error}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="absolute left-2 top-2 flex gap-1">
+                              {index === 0 && <span className="bg-[#4B3028] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Principal</span>}
+                              {asset.status === "uploading" && <span className="bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#4B3028]">{asset.progress}%</span>}
+                            </div>
+                            <div className="flex items-center justify-between gap-1 border-t border-[#E8DED0] bg-white p-1">
+                              <span className="min-w-0 flex-1 truncate px-1 text-[10px] text-muted-foreground" title={asset.fileName}>{asset.fileName}</span>
+                              <div className="flex shrink-0">
+                                {asset.status === "error" && asset.file && (
+                                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-none" onClick={() => void uploadImage(asset)} aria-label={`Reintentar ${asset.fileName}`}>
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-none" onClick={() => moveImage(index, -1)} disabled={index === 0} aria-label="Mover imagen a la izquierda">
+                                  <ChevronLeft className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-none" onClick={() => moveImage(index, 1)} disabled={index === imageAssets.length - 1} aria-label="Mover imagen a la derecha">
+                                  <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-none text-destructive hover:text-destructive" onClick={() => removeImage(asset.id)} aria-label={`Eliminar ${asset.fileName}`}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            {asset.status === "uploading" && <div className="h-1 bg-[#E8DED0]"><div className="h-full bg-[#D43B2B] transition-all" style={{ width: `${asset.progress}%` }} /></div>}
                           </div>
-                          <div className="flex-1 pt-2">
-                            <FormControl><Input placeholder="https://..." value={field.value || ""} onChange={field.onChange} className="rounded-none border-[#E8DED0] dark:border-border focus-visible:ring-[#D43B2B]" /></FormControl>
-                            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1"><Info className="w-3 h-3"/> Recomendado: formato cuadrado, fondo claro.</p>
-                          </div>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                        <ImageIcon className="h-4 w-4" />
+                        <span>La primera imagen será la principal; las demás formarán la galería.</span>
+                      </div>
+                    )}
+                    {imageAssets.length > 0 && <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><Info className="h-3 w-3" /> Usa las flechas para reordenar. La primera imagen será la principal.</p>}
+                  </FormItem>
                   </div>
 
                   {/* Branches */}

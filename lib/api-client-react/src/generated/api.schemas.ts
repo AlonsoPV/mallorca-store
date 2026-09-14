@@ -215,6 +215,7 @@ export interface ProductInput {
   categoryId: number;
   /** @nullable */
   imageUrl: string | null;
+  gallery?: string[];
   featured: boolean;
   seasonal: boolean;
   status: ProductInputStatus;
@@ -244,12 +245,34 @@ export interface ProductUpdate {
   categoryId?: number;
   /** @nullable */
   imageUrl?: string | null;
+  gallery?: string[];
   featured?: boolean;
   seasonal?: boolean;
   status?: ProductUpdateStatus;
   /** @minimum 0 */
   minimumLeadTimeHours?: number;
   branchConfigurations?: BranchConfiguration[];
+}
+
+export interface StorageUploadRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export type StorageUploadResponseMetadata = {
+  name: string;
+  size: number;
+  contentType: string;
+};
+
+export interface StorageUploadResponse {
+  uploadURL: string;
+  objectPath: string;
+  metadata: StorageUploadResponseMetadata;
 }
 
 export type BranchUpdateNotificationPreferences = {[key: string]: boolean};

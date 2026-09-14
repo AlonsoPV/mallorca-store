@@ -8,6 +8,7 @@ import { useAddCartItem, useCreateCartSession, getGetCartQueryKey } from "@works
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { ImageWithFallback } from "@/components/image-with-fallback";
 
 interface ProductCardProps {
   product: ProductCardType;
@@ -67,18 +68,13 @@ export function ProductCard({ product, className, showBranchAvailability = false
     <article className={cn("group flex flex-col", className)}>
       <Link href={`/producto/${product.slug}`} className="block">
         <div className="relative aspect-[4/5] overflow-hidden bg-secondary">
-          {product.imageUrl ? (
-            <img
-              src={product.imageUrl} 
-              alt={product.name} 
-               className="mallorca-image h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-secondary/50 text-muted-foreground">
-              <span className="font-serif italic text-sm">Sin imagen</span>
-            </div>
-          )}
+          <ImageWithFallback
+            src={product.imageUrl}
+            alt={product.name}
+            className="mallorca-image h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
+            loading="lazy"
+            fallback={<div role="img" aria-label={`${product.name}: imagen no disponible`} className="flex h-full w-full items-center justify-center bg-secondary/50 text-muted-foreground"><span className="font-serif italic text-sm">Imagen no disponible</span></div>}
+          />
           
           <div className="absolute left-4 top-4 flex flex-col gap-2">
             {product.featured && (

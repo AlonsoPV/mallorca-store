@@ -7,7 +7,8 @@ import {
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Edit, Image as ImageIcon, Filter } from "lucide-react";
+import { Search, Plus, Edit, Filter } from "lucide-react";
+import { ImageWithFallback } from "@/components/image-with-fallback";
 
 export default function AdminProductsList() {
   const [search, setSearch] = useState("");
@@ -134,11 +135,12 @@ export default function AdminProductsList() {
                     <tr key={product.id} className="hover:bg-[#F5F0E8]/40 dark:hover:bg-muted/30 transition-colors group">
                       <td className="px-6 py-3">
                         <div className="h-12 w-12 bg-[#F5F0E8] dark:bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                          {product.imageUrl ? (
-                            <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
-                          ) : (
-                            <ImageIcon className="h-5 w-5 text-muted-foreground/30" />
-                          )}
+                          <ImageWithFallback
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                            fallback={<div role="img" aria-label={`${product.name}: imagen no disponible`} className="flex h-full w-full items-center justify-center bg-[#F5F0E8] text-center text-[10px] text-muted-foreground">Imagen no disponible</div>}
+                          />
                         </div>
                       </td>
                       <td className="px-6 py-3">

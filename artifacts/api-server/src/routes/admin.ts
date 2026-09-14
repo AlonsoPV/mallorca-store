@@ -473,7 +473,11 @@ router.post("/admin/products", async (req, res): Promise<void> => {
     if (!(await canAccessBranch(req, config.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
   }
 
-  const [product] = await db.insert(productsTable).values({ ...body.data, gallery: body.data.imageUrl ? [body.data.imageUrl] : [], tags: [] }).returning();
+  const [product] = await db.insert(productsTable).values({
+    ...body.data,
+    gallery: body.data.gallery ?? [],
+    tags: [],
+  }).returning();
 
   const branches = await db
     .select({ id: branchesTable.id })

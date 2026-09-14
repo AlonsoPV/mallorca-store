@@ -14,7 +14,33 @@ tags:
     description: Public catalog and branch operations
   - name: admin
     description: Internal catalog operations
+  - name: storage
+    description: Persistent file storage
 paths:
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned URL for an authenticated upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StorageUploadRequest"
+      responses:
+        "200":
+          description: Presigned upload URL and object path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageUploadResponse"
+        "400":
+          description: Invalid upload metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /healthz:
     get:
       operationId: healthCheck
@@ -886,6 +912,10 @@ components:
           type: integer
         imageUrl:
           type: ["string", "null"]
+        gallery:
+          type: array
+          items:
+            type: string
         featured:
           type: boolean
         seasonal:
@@ -933,6 +963,10 @@ components:
           type: integer
         imageUrl:
           type: ["string", "null"]
+        gallery:
+          type: array
+          items:
+            type: string
         featured:
           type: boolean
         seasonal:
@@ -960,6 +994,26 @@ components:
         pickupAvailable: { type: boolean }
         deliveryAvailable: { type: boolean }
       required: [branchId]
+    StorageUploadRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: integer, minimum: 1 }
+        contentType: { type: string, minLength: 1 }
+      required: [name, size, contentType]
+    StorageUploadResponse:
+      type: object
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string }
+        metadata:
+          type: object
+          properties:
+            name: { type: string }
+            size: { type: integer }
+            contentType: { type: string }
+          required: [name, size, contentType]
+      required: [uploadURL, objectPath, metadata]
     BranchUpdate:
       type: object
       properties:

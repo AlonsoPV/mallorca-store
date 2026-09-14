@@ -20,6 +20,7 @@ export interface ProductUpdate {
   categoryId?: number;
   /** @nullable */
   imageUrl?: string | null;
+  gallery?: string[];
   featured?: boolean;
   seasonal?: boolean;
   status?: ProductUpdateStatus;

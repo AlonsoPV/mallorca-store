@@ -9,6 +9,31 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Request a presigned URL for an authenticated upload
+ */
+
+
+
+
+
+export const RequestUploadUrlBody = zod.object({
+  "name": zod.string().min(1),
+  "size": zod.number().int().min(1),
+  "contentType": zod.string().min(1)
+})
+
+export const RequestUploadUrlResponse = zod.object({
+  "uploadURL": zod.string().url(),
+  "objectPath": zod.string(),
+  "metadata": zod.object({
+  "name": zod.string(),
+  "size": zod.number().int(),
+  "contentType": zod.string()
+})
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -332,6 +357,7 @@ export const CreateProductBody = zod.object({
   "salePrice": zod.number().nullable(),
   "categoryId": zod.number().int(),
   "imageUrl": zod.string().nullable(),
+  "gallery": zod.array(zod.string()).optional(),
   "featured": zod.boolean(),
   "seasonal": zod.boolean(),
   "status": zod.enum(['draft', 'active', 'inactive']),
@@ -422,6 +448,7 @@ export const UpdateProductBody = zod.object({
   "salePrice": zod.number().nullish(),
   "categoryId": zod.number().int().optional(),
   "imageUrl": zod.string().nullish(),
+  "gallery": zod.array(zod.string()).optional(),
   "featured": zod.boolean().optional(),
   "seasonal": zod.boolean().optional(),
   "status": zod.enum(['draft', 'active', 'inactive']).optional(),

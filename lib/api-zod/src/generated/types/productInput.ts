@@ -24,6 +24,7 @@ export interface ProductInput {
   categoryId: number;
   /** @nullable */
   imageUrl: string | null;
+  gallery?: string[];
   featured: boolean;
   seasonal: boolean;
   status: ProductInputStatus;

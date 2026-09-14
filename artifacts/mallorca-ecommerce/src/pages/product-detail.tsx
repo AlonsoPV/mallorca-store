@@ -1,4 +1,5 @@
 import { StoreLayout } from "@/components/layout/store-layout";
+import { ImageWithFallback } from "@/components/image-with-fallback";
 import { useGetProduct, useAddCartItem, useCreateCartSession, getGetCartQueryKey, getGetProductQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -146,24 +147,24 @@ export default function ProductDetail() {
           {/* Images */}
           <div className="w-full md:w-[55%]">
             <div className="mallorca-paper-edge relative aspect-[0.86] overflow-hidden bg-secondary">
-              {product.imageUrl ? (
-                <img 
-                  src={product.imageUrl} 
-                  alt={product.name}
-                  className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  <span className="font-serif italic text-lg">Sin imagen</span>
-                </div>
-              )}
+              <ImageWithFallback
+                src={product.imageUrl}
+                alt={product.name}
+                className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
+                fallback={<div role="img" aria-label={`${product.name}: imagen no disponible`} className="flex h-full w-full items-center justify-center text-muted-foreground"><span className="font-serif italic text-lg">Imagen no disponible</span></div>}
+              />
             </div>
             
             {product.gallery && product.gallery.length > 0 && (
               <div className="mt-4 grid grid-cols-4 gap-3">
                 {product.gallery.map((img, i) => (
-                  <div key={i} className="aspect-square bg-secondary cursor-pointer hover:opacity-80 transition-opacity">
-                    <img src={img} alt={`${product.name} ${i}`} className="w-full h-full object-cover" />
+                    <div key={i} className="aspect-square bg-secondary cursor-pointer hover:opacity-80 transition-opacity">
+                      <ImageWithFallback
+                        src={img}
+                        alt={`${product.name} ${i + 1}`}
+                        className="h-full w-full object-cover"
+                        fallback={<div role="img" aria-label={`${product.name} imagen ${i + 1}: imagen no disponible`} className="flex h-full w-full items-center justify-center text-center text-[10px] text-muted-foreground">Imagen no disponible</div>}
+                      />
                   </div>
                 ))}
               </div>
