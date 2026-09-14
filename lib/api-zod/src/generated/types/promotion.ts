@@ -15,6 +15,7 @@ export interface Promotion {
   /** @minimum 0 */
   value: number;
   startsAt: Date;
+  /** Must be later than startsAt. */
   endsAt: Date;
   status: PromotionStatus;
   /** @minimum 0 */

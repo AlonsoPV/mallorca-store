@@ -172,7 +172,7 @@ export const GetBranchResponse = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(getBranchResponseTwoProductsItemAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(getBranchResponseTwoProductsItemAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(getBranchResponseTwoProductsItemAvailabilityItemPromotionOneSavingsMin),
@@ -248,7 +248,7 @@ export const ListProductsResponseItem = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(listProductsResponseAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listProductsResponseAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listProductsResponseAvailabilityItemPromotionOneSavingsMin),
@@ -309,7 +309,7 @@ export const GetProductResponse = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(getProductResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(getProductResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(getProductResponseOneAvailabilityItemPromotionOneSavingsMin),
@@ -401,7 +401,7 @@ export const ListAdminProductsResponseItem = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(listAdminProductsResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listAdminProductsResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listAdminProductsResponseOneAvailabilityItemPromotionOneSavingsMin),
@@ -465,7 +465,7 @@ export const CreateProductBody = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(createProductBodyPromotionsItemValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "branchIds": zod.array(zod.number().int())
 })).optional()
 })
@@ -509,7 +509,7 @@ export const CreateProductResponse = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(createProductResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(createProductResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(createProductResponseOneAvailabilityItemPromotionOneSavingsMin),
@@ -587,7 +587,7 @@ export const UpdateProductBody = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(updateProductBodyPromotionsItemValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "branchIds": zod.array(zod.number().int())
 })).optional()
 })
@@ -631,7 +631,7 @@ export const UpdateProductResponse = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(updateProductResponseOneAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(updateProductResponseOneAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(updateProductResponseOneAvailabilityItemPromotionOneSavingsMin),
@@ -680,7 +680,7 @@ export const ListProductPromotionsResponseItem = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(listProductPromotionsResponseOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listProductPromotionsResponseOneFinalPriceMin),
   "savings": zod.number().min(listProductPromotionsResponseOneSavingsMin),
@@ -711,7 +711,7 @@ export const CreateProductPromotionBody = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(createProductPromotionBodyValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "branchIds": zod.array(zod.number().int())
 })
 
@@ -729,7 +729,7 @@ export const CreateProductPromotionResponse = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(createProductPromotionResponseOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(createProductPromotionResponseOneFinalPriceMin),
   "savings": zod.number().min(createProductPromotionResponseOneSavingsMin),
@@ -760,7 +760,7 @@ export const UpdateProductPromotionBody = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(updateProductPromotionBodyValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "branchIds": zod.array(zod.number().int())
 })
 
@@ -778,7 +778,7 @@ export const UpdateProductPromotionResponse = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(updateProductPromotionResponseOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(updateProductPromotionResponseOneFinalPriceMin),
   "savings": zod.number().min(updateProductPromotionResponseOneSavingsMin),
@@ -813,7 +813,7 @@ export const CancelProductPromotionResponse = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(cancelProductPromotionResponseOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(cancelProductPromotionResponseOneFinalPriceMin),
   "savings": zod.number().min(cancelProductPromotionResponseOneSavingsMin),
@@ -1859,7 +1859,7 @@ export const ListAdminInventoryResponseItem = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(listAdminInventoryResponseProductAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listAdminInventoryResponseProductAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listAdminInventoryResponseProductAvailabilityItemPromotionOneSavingsMin),
@@ -1985,7 +1985,7 @@ export const ListInventoryAlertsResponseItem = zod.object({
   "type": zod.enum(['fixed', 'percentage', 'amount']),
   "value": zod.number().min(listInventoryAlertsResponseProductAvailabilityItemPromotionOneValueMin),
   "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date().describe('Must be later than startsAt.'),
   "status": zod.enum(['scheduled', 'active', 'finished', 'cancelled']),
   "finalPrice": zod.number().min(listInventoryAlertsResponseProductAvailabilityItemPromotionOneFinalPriceMin),
   "savings": zod.number().min(listInventoryAlertsResponseProductAvailabilityItemPromotionOneSavingsMin),

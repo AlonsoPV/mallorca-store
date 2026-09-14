@@ -1049,7 +1049,10 @@ components:
           enum: [fixed, percentage, amount]
         value: { type: number, minimum: 0 }
         startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time }
+        endsAt:
+          type: string
+          format: date-time
+          description: Must be later than startsAt.
         status:
           type: string
           enum: [scheduled, active, finished, cancelled]
@@ -1068,7 +1071,10 @@ components:
           enum: [fixed, percentage, amount]
         value: { type: number, minimum: 0 }
         startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time }
+        endsAt:
+          type: string
+          format: date-time
+          description: Must be later than startsAt.
         branchIds:
           type: array
           items: { type: integer }

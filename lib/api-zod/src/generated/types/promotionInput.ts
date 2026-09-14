@@ -14,6 +14,7 @@ export interface PromotionInput {
   /** @minimum 0 */
   value: number;
   startsAt: Date;
+  /** Must be later than startsAt. */
   endsAt: Date;
   branchIds: number[];
 }

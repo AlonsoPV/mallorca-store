@@ -91,6 +91,7 @@ export interface Promotion {
   /** @minimum 0 */
   value: number;
   startsAt: string;
+  /** Must be later than startsAt. */
   endsAt: string;
   status: PromotionStatus;
   /** @minimum 0 */
@@ -175,6 +176,7 @@ export interface PromotionInput {
   /** @minimum 0 */
   value: number;
   startsAt: string;
+  /** Must be later than startsAt. */
   endsAt: string;
   branchIds: number[];
 }

@@ -45,6 +45,12 @@ import {
   type ProductImportMapping,
   type ProductImportRecord,
 } from "../lib/inventory";
+import {
+  promotionInputSchema,
+  promotionsInputSchema,
+  promotionValidationError,
+  type PromotionInputData,
+} from "../lib/promotion-validation";
 import { z } from "zod/v4";
 import { applyInventoryAlert } from "./commerce";
 
@@ -240,25 +246,6 @@ const branchConfigurationSchema = z.object({
   deliveryAvailable: z.boolean().optional(),
 });
 const branchConfigurationsSchema = z.array(branchConfigurationSchema).optional();
-
-const promotionInputSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(["fixed", "percentage", "amount"]),
-  value: z.number().min(0),
-  startsAt: z.coerce.date(),
-  endsAt: z.coerce.date(),
-  branchIds: z.array(z.number().int()),
-}).superRefine((value, ctx) => {
-  if (value.endsAt <= value.startsAt) {
-    ctx.addIssue({ code: "custom", path: ["endsAt"], message: "endsAt must be after startsAt" });
-  }
-  if (value.type === "percentage" && value.value > 100) {
-    ctx.addIssue({ code: "custom", path: ["value"], message: "Percentage cannot exceed 100" });
-  }
-});
-const promotionsInputSchema = z.array(promotionInputSchema).optional();
-
-type PromotionInputData = z.infer<typeof promotionInputSchema>;
 
 function promotionHistoryShape(
   promotion: typeof promotionsTable.$inferSelect,
@@ -949,7 +936,10 @@ router.post("/admin/products/:id/promotions", async (req, res): Promise<void> =>
   const body = CreateProductPromotionBody.safeParse(req.body);
   const promotion = promotionInputSchema.safeParse(req.body);
   if (!params.success || !body.success || !promotion.success) {
-    res.status(400).json({ error: "Invalid promotion" });
+    const error = !promotion.success
+      ? promotionValidationError(promotion.error)
+      : "Invalid promotion";
+    res.status(400).json({ error });
     return;
   }
   try {
@@ -1168,7 +1158,13 @@ router.post("/admin/products", async (req, res): Promise<void> => {
   const configurations = branchConfigurationsSchema.safeParse(req.body?.branchConfigurations);
   const promotions = promotionsInputSchema.safeParse(req.body?.promotions);
   if (!body.success || !configurations.success || !promotions.success) {
-    const message = !body.success ? body.error.message : configurations.error?.message ?? "Invalid branch configuration";
+    const message = !body.success
+      ? body.error.message
+      : !configurations.success
+        ? configurations.error.message
+        : promotions.error
+          ? promotionValidationError(promotions.error)
+          : "Invalid branch configuration";
     req.log.warn({ errors: message }, "Invalid product");
     res.status(400).json({ error: message });
     return;
@@ -1258,7 +1254,14 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   }
 
   if (!body.success || !configurations.success || !promotions.success) {
-    res.status(400).json({ error: !body.success ? body.error.message : configurations.error?.message ?? "Invalid branch configuration" });
+    const error = !body.success
+      ? body.error.message
+      : !configurations.success
+        ? configurations.error.message
+        : promotions.error
+          ? promotionValidationError(promotions.error)
+          : "Invalid branch configuration";
+    res.status(400).json({ error });
     return;
   }
 
