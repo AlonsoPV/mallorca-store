@@ -19,6 +19,12 @@ export const productStatusEnum = pgEnum("product_status", [
   "inactive",
 ]);
 
+export const promotionTypeEnum = pgEnum("promotion_type", [
+  "fixed",
+  "percentage",
+  "amount",
+]);
+
 export type BranchHour = {
   day: string;
   label: string;
@@ -205,6 +211,51 @@ export const branchProductsTable = pgTable(
   ],
 );
 
+export const promotionsTable = pgTable(
+  "promotions",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => productsTable.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    type: promotionTypeEnum("type").notNull(),
+    value: numeric("value", { mode: "number" }).notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("promotions_product_name_start_unique").on(
+      table.productId,
+      table.name,
+      table.startsAt,
+    ),
+  ],
+);
+
+export const promotionBranchesTable = pgTable(
+  "promotion_branches",
+  {
+    id: serial("id").primaryKey(),
+    promotionId: integer("promotion_id")
+      .notNull()
+      .references(() => promotionsTable.id, { onDelete: "cascade" }),
+    branchId: integer("branch_id")
+      .notNull()
+      .references(() => branchesTable.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("promotion_branch_unique").on(
+      table.promotionId,
+      table.branchId,
+    ),
+  ],
+);
+
 export const insertBranchSchema = createInsertSchema(branchesTable).omit({
   id: true,
   createdAt: true,
@@ -220,12 +271,19 @@ export const insertProductSchema = createInsertSchema(productsTable).omit({
   createdAt: true,
   updatedAt: true,
 });
+export const insertPromotionSchema = createInsertSchema(promotionsTable).omit({
+  id: true,
+  createdAt: true,
+});
 
 export type Branch = typeof branchesTable.$inferSelect;
 export type Category = typeof categoriesTable.$inferSelect;
 export type Product = typeof productsTable.$inferSelect;
 export type ProductVariant = typeof productVariantsTable.$inferSelect;
 export type BranchProduct = typeof branchProductsTable.$inferSelect;
+export type Promotion = typeof promotionsTable.$inferSelect;
+export type PromotionBranch = typeof promotionBranchesTable.$inferSelect;
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type InsertPromotion = z.infer<typeof insertPromotionSchema>;

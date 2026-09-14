@@ -5,6 +5,7 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { Promotion } from './promotion';
 
 export interface BranchAvailability {
   branchId: number;
@@ -18,4 +19,5 @@ export interface BranchAvailability {
   preparationTimeMinutes: number;
   pickupAvailable: boolean;
   deliveryAvailable: boolean;
+  promotion: Promotion | null;
 }

@@ -11,7 +11,10 @@ import {
   useListCategories,
   useListAdminProducts,
   useListAdminBranches,
+  useListProductPromotions,
+  getListProductPromotionsQueryKey,
   type ProductInput,
+  type PromotionType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
@@ -60,10 +63,33 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+type PromotionDraft = {
+  name: string;
+  type: PromotionType;
+  value: number;
+  startsAt: string;
+  endsAt: string;
+};
 
 const DRAFT_STORAGE_KEY = "mallorca_product_draft";
 const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+
+function localDateTimeValue(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function initialPromotionDraft(): PromotionDraft {
+  const start = new Date(Date.now() + 5 * 60_000);
+  return {
+    name: "",
+    type: "percentage",
+    value: 10,
+    startsAt: localDateTimeValue(start),
+    endsAt: localDateTimeValue(new Date(start.getTime() + 24 * 60 * 60_000)),
+  };
+}
 
 type ImageAssetStatus = "uploaded" | "uploading" | "error";
 type ImageAsset = {
@@ -87,6 +113,9 @@ export default function AdminProductForm() {
   const { data: categories } = useListCategories();
   const { data: branches } = useListAdminBranches();
   const [branchConfigurations, setBranchConfigurations] = useState<Record<number, any>>({});
+  const [promotionEnabled, setPromotionEnabled] = useState(false);
+  const [promotionAllBranches, setPromotionAllBranches] = useState(true);
+  const [promotionDraft, setPromotionDraft] = useState<PromotionDraft>(initialPromotionDraft);
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSubmitData, setPendingSubmitData] = useState<FormValues | null>(null);
@@ -108,6 +137,12 @@ export default function AdminProductForm() {
     productSlug,
     { query: { enabled: !!existingProduct?.slug, queryKey: getGetProductQueryKey(productSlug) } },
   );
+  const { data: promotionHistory } = useListProductPromotions(Number(id), {
+    query: {
+      enabled: isEditing && Boolean(id),
+      queryKey: getListProductPromotionsQueryKey(Number(id)),
+    },
+  });
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
@@ -347,6 +382,25 @@ export default function AdminProductForm() {
       }
     }
 
+    if (promotionEnabled) {
+      if (!promotionDraft.name.trim() || !promotionDraft.startsAt || !promotionDraft.endsAt) {
+        toast({ title: "Promoción incompleta", description: "Agrega un nombre y el horario de la promoción.", variant: "destructive" });
+        return;
+      }
+      if (new Date(promotionDraft.endsAt) <= new Date(promotionDraft.startsAt)) {
+        toast({ title: "Horario inválido", description: "La fecha final debe ser posterior a la fecha inicial.", variant: "destructive" });
+        return;
+      }
+      if (promotionDraft.type === "percentage" && (promotionDraft.value < 0 || promotionDraft.value > 100)) {
+        toast({ title: "Porcentaje inválido", description: "El porcentaje debe estar entre 0 y 100.", variant: "destructive" });
+        return;
+      }
+      if (!promotionAllBranches && !Object.values(branchConfigurations).some((config) => config.available)) {
+        toast({ title: "Alcance vacío", description: "Selecciona al menos una sucursal para esta promoción.", variant: "destructive" });
+        return;
+      }
+    }
+
     setPendingSubmitData(data);
     setShowConfirmDialog(true);
   };
@@ -359,6 +413,17 @@ export default function AdminProductForm() {
       ...data,
       imageUrl: data.imageUrl || null,
       salePrice: data.salePrice || null,
+      promotions: promotionEnabled ? [{
+        ...promotionDraft,
+        name: promotionDraft.name.trim(),
+        startsAt: new Date(promotionDraft.startsAt).toISOString(),
+        endsAt: new Date(promotionDraft.endsAt).toISOString(),
+        branchIds: promotionAllBranches
+          ? []
+          : Object.entries(branchConfigurations)
+            .filter(([, config]) => config.available)
+            .map(([branchId]) => Number(branchId)),
+      }] : undefined,
       branchConfigurations: Object.entries(branchConfigurations).map(([branchId, config]) => ({
         branchId: Number(branchId), ...config,
       })),
@@ -610,6 +675,89 @@ export default function AdminProductForm() {
                     )}
                     {imageAssets.length > 0 && <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><Info className="h-3 w-3" /> Usa las flechas para reordenar. La primera imagen será la principal.</p>}
                   </FormItem>
+                  </div>
+
+                  {/* Promotions */}
+                  <div className="bg-white dark:bg-card p-8 border border-[#E8DED0] dark:border-border space-y-6">
+                    <div className="flex items-start justify-between gap-4 border-b border-[#E8DED0] dark:border-border pb-3">
+                      <div>
+                        <h2 className="text-lg font-semibold font-serif text-[#25211E] dark:text-foreground">Promociones programadas</h2>
+                        <p className="mt-1 text-xs text-muted-foreground">El precio final se calcula en el servidor y cambia automáticamente según el horario.</p>
+                      </div>
+                      <label className="flex shrink-0 items-center gap-2 text-sm font-medium cursor-pointer">
+                        <Checkbox checked={promotionEnabled} onCheckedChange={(value) => setPromotionEnabled(!!value)} className="data-[state=checked]:bg-[#D43B2B] data-[state=checked]:border-[#D43B2B]" />
+                        Programar
+                      </label>
+                    </div>
+
+                    {promotionEnabled && (
+                      <div className="space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_140px] gap-4">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Nombre de la promoción
+                            <Input value={promotionDraft.name} onChange={(event) => setPromotionDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Ej. Fin de semana" className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" />
+                          </label>
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Tipo
+                            <select value={promotionDraft.type} onChange={(event) => setPromotionDraft((current) => ({ ...current, type: event.target.value as PromotionType }))} className="mt-1 flex h-10 w-full rounded-none border border-[#E8DED0] bg-white px-3 text-sm dark:border-border dark:bg-background">
+                              <option value="fixed">Precio fijo</option>
+                              <option value="percentage">Porcentaje</option>
+                              <option value="amount">Monto a descontar</option>
+                            </select>
+                          </label>
+                          <label className="text-sm font-medium text-muted-foreground">
+                            {promotionDraft.type === "percentage" ? "Porcentaje" : "Valor (MXN)"}
+                            <Input type="number" min="0" max={promotionDraft.type === "percentage" ? 100 : undefined} step="0.01" value={promotionDraft.value} onChange={(event) => setPromotionDraft((current) => ({ ...current, value: Number(event.target.value) }))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" />
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Inicia
+                            <Input type="datetime-local" value={promotionDraft.startsAt} onChange={(event) => setPromotionDraft((current) => ({ ...current, startsAt: event.target.value }))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" />
+                          </label>
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Finaliza
+                            <Input type="datetime-local" value={promotionDraft.endsAt} onChange={(event) => setPromotionDraft((current) => ({ ...current, endsAt: event.target.value }))} className="mt-1 rounded-none border-[#E8DED0] dark:border-border bg-white" />
+                          </label>
+                        </div>
+                        <div className="space-y-3 border-t border-dashed border-[#E8DED0] pt-4">
+                          <p className="text-sm font-medium text-muted-foreground">Alcance por sucursal</p>
+                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox checked={promotionAllBranches} onCheckedChange={(value) => setPromotionAllBranches(!!value)} className="data-[state=checked]:bg-[#D43B2B] data-[state=checked]:border-[#D43B2B]" />
+                            Todas las sucursales
+                          </label>
+                          {!promotionAllBranches && (
+                            <p className="text-xs text-muted-foreground">Se aplicará a las sucursales marcadas como “Publicar aquí” abajo.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {isEditing && (
+                      <div className="border-t border-[#E8DED0] pt-5">
+                        <p className="mb-3 text-sm font-semibold text-[#25211E] dark:text-foreground">Historial</p>
+                        {promotionHistory?.length ? (
+                          <div className="space-y-2">
+                            {promotionHistory.map((promotion) => (
+                              <div key={promotion.id} className="flex flex-wrap items-center justify-between gap-2 border border-[#E8DED0] bg-[#FBFAF7] px-3 py-2 text-xs dark:border-border dark:bg-muted/10">
+                                <div>
+                                  <span className="font-semibold">{promotion.name}</span>
+                                  <span className="ml-2 text-muted-foreground">
+                                    {promotion.type === "percentage" ? `${promotion.value}%` : promotion.type === "fixed" ? `$${promotion.value} fijo` : `-$${promotion.value}`}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <span>{promotion.status === "scheduled" ? "Programada" : promotion.status === "active" ? "Activa" : "Finalizada"}</span>
+                                  <span>{new Intl.DateTimeFormat("es-MX", { dateStyle: "short", timeStyle: "short" }).format(new Date(promotion.startsAt))}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Todavía no hay promociones registradas.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Branches */}

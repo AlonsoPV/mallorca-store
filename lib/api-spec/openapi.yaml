@@ -273,6 +273,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /admin/products/{id}/promotions:
+    get:
+      operationId: listProductPromotions
+      tags: [admin]
+      summary: List the promotion history for a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Promotion history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromotionHistoryItem"
+    post:
+      operationId: createProductPromotion
+      tags: [admin]
+      summary: Schedule a promotion for a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionInput"
+      responses:
+        "201":
+          description: Scheduled promotion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionHistoryItem"
+        "400":
+          description: Invalid promotion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Branch access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /cart/session:
     post:
       operationId: createCartSession
@@ -804,6 +863,10 @@ components:
           type: boolean
         deliveryAvailable:
           type: boolean
+        promotion:
+          oneOf:
+            - $ref: "#/components/schemas/Promotion"
+            - type: "null"
       required:
         - branchId
         - branchSlug
@@ -815,6 +878,7 @@ components:
         - preparationTimeMinutes
         - pickupAvailable
         - deliveryAvailable
+        - promotion
     ProductVariant:
       type: object
       properties:
@@ -879,6 +943,48 @@ components:
         - seasonal
          - minimumLeadTimeHours
         - availability
+    Promotion:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        type:
+          type: string
+          enum: [fixed, percentage, amount]
+        value: { type: number, minimum: 0 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [scheduled, active, finished]
+        finalPrice: { type: number, minimum: 0 }
+        savings: { type: number, minimum: 0 }
+        branchIds:
+          type: array
+          items: { type: integer }
+      required: [id, name, type, value, startsAt, endsAt, status, finalPrice, savings, branchIds]
+    PromotionInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        type:
+          type: string
+          enum: [fixed, percentage, amount]
+        value: { type: number, minimum: 0 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        branchIds:
+          type: array
+          items: { type: integer }
+      required: [name, type, value, startsAt, endsAt, branchIds]
+    PromotionHistoryItem:
+      allOf:
+        - $ref: "#/components/schemas/Promotion"
+        - type: object
+          properties:
+            createdAt: { type: string, format: date-time }
+            createdBy: { type: ["string", "null"] }
+          required: [createdAt, createdBy]
     ProductDetail:
       allOf:
         - $ref: "#/components/schemas/ProductCard"
@@ -964,6 +1070,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BranchConfiguration"
+        promotions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromotionInput"
       required:
         - sku
         - name
@@ -1015,6 +1125,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BranchConfiguration"
+        promotions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromotionInput"
     BranchConfiguration:
       type: object
       properties:

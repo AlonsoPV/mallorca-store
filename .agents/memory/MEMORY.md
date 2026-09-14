@@ -3,3 +3,4 @@
 - [Branch switching safety](branch-switching-safety.md) — Revalidate target inventory, keep only explicitly available cart lines, and clear empty sessions tied to the old branch.
 - [Product media storage](product-media-storage.md) — Keep storefront reads public while protecting presigned upload URL creation with the existing staff auth.
 - [Product import grouping](product-import-grouping.md) — Group product imports by SKU while applying each valid branch row independently.
+- [Promotion price authority](promotion-price-authority.md) — Recalculate the active branch promotion for catalog, cart, and order totals; stored sale prices are only fallback data.

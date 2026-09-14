@@ -65,6 +65,40 @@ export interface Branch {
   active: boolean;
 }
 
+export type PromotionType = typeof PromotionType[keyof typeof PromotionType];
+
+
+export const PromotionType = {
+  fixed: 'fixed',
+  percentage: 'percentage',
+  amount: 'amount',
+} as const;
+
+export type PromotionStatus = typeof PromotionStatus[keyof typeof PromotionStatus];
+
+
+export const PromotionStatus = {
+  scheduled: 'scheduled',
+  active: 'active',
+  finished: 'finished',
+} as const;
+
+export interface Promotion {
+  id: number;
+  name: string;
+  type: PromotionType;
+  /** @minimum 0 */
+  value: number;
+  startsAt: string;
+  endsAt: string;
+  status: PromotionStatus;
+  /** @minimum 0 */
+  finalPrice: number;
+  /** @minimum 0 */
+  savings: number;
+  branchIds: number[];
+}
+
 export interface BranchAvailability {
   branchId: number;
   branchSlug: string;
@@ -77,6 +111,7 @@ export interface BranchAvailability {
   preparationTimeMinutes: number;
   pickupAvailable: boolean;
   deliveryAvailable: boolean;
+  promotion: Promotion | null;
 }
 
 export interface ProductCard {
@@ -122,6 +157,32 @@ export interface ProductVariant {
   /** @nullable */
   salePrice: number | null;
 }
+
+export type PromotionInputType = typeof PromotionInputType[keyof typeof PromotionInputType];
+
+
+export const PromotionInputType = {
+  fixed: 'fixed',
+  percentage: 'percentage',
+  amount: 'amount',
+} as const;
+
+export interface PromotionInput {
+  /** @minLength 1 */
+  name: string;
+  type: PromotionInputType;
+  /** @minimum 0 */
+  value: number;
+  startsAt: string;
+  endsAt: string;
+  branchIds: number[];
+}
+
+export type PromotionHistoryItem = Promotion & ({
+  createdAt: string;
+  /** @nullable */
+  createdBy: string | null;
+});
 
 export type ProductDetail = ProductCard & ({
   description: string;
@@ -222,6 +283,7 @@ export interface ProductInput {
   /** @minimum 0 */
   minimumLeadTimeHours: number;
   branchConfigurations?: BranchConfiguration[];
+  promotions?: PromotionInput[];
 }
 
 export type ProductUpdateStatus = typeof ProductUpdateStatus[keyof typeof ProductUpdateStatus];
@@ -252,6 +314,7 @@ export interface ProductUpdate {
   /** @minimum 0 */
   minimumLeadTimeHours?: number;
   branchConfigurations?: BranchConfiguration[];
+  promotions?: PromotionInput[];
 }
 
 export interface StorageUploadRequest {

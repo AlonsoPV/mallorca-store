@@ -18,7 +18,11 @@ import {
   GetGuestOrderDetailsResponse, GetMeResponse, UpdateMeBody, UpdateMeResponse,
   ListMyOrdersResponse, type Cart as CartShape,
 } from "@workspace/api-zod";
-import { serializeBranch } from "../lib/catalog";
+import {
+  calculatePromotionPrice,
+  getActivePromotion,
+  serializeBranch,
+} from "../lib/catalog";
 import { buildBranchPreviewItems } from "../lib/branch-preview";
 import { getRequestUser, requireAuth } from "../middlewares/auth";
 import crypto from "node:crypto";
@@ -105,10 +109,24 @@ async function cartView(cartId: string): Promise<CartShape | undefined> {
       eq(branchProductsTable.branchId, row.cart.branchId),
     ))
     .where(eq(cartItemsTable.cartId, cartId));
-  const lines = items.map(({ item, product, variant }) => ({
-    id: item.id, productId: item.productId, variantId: item.variantId, sku: variant?.sku ?? product.sku,
-    name: product.name, variantLabel: variant ? `${variant.name}: ${variant.value}` : null,
-    quantity: item.quantity, unitPrice: item.unitPrice, lineTotal: item.unitPrice * item.quantity,
+  const lines = await Promise.all(items.map(async ({ item, product, variant, branchProduct }) => {
+    const basePrice = variant?.price ?? branchProduct?.priceOverride ?? product.price;
+    const legacySalePrice =
+      variant?.salePrice ??
+      (branchProduct?.salePriceOverride !== null
+        ? branchProduct?.salePriceOverride
+        : product.salePrice);
+    const promotion = branchProduct
+      ? await getActivePromotion(product.id, row.cart.branchId)
+      : undefined;
+    const unitPrice = promotion
+      ? calculatePromotionPrice(basePrice, promotion.promotion).finalPrice
+      : legacySalePrice ?? basePrice;
+    return {
+      id: item.id, productId: item.productId, variantId: item.variantId, sku: variant?.sku ?? product.sku,
+      name: product.name, variantLabel: variant ? `${variant.name}: ${variant.value}` : null,
+      quantity: item.quantity, unitPrice, lineTotal: unitPrice * item.quantity,
+    };
   }));
   return { id: cartId, branch: serializeBranch(row.branch), items: lines, subtotal: lines.reduce((s, x) => s + x.lineTotal, 0),
     quantity: lines.reduce((s, x) => s + x.quantity, 0),
@@ -160,7 +178,15 @@ router.post("/cart/:id/branch-preview", async (req, res): Promise<void> => {
     )
     .where(eq(cartItemsTable.cartId, cart.id));
 
-  const items = buildBranchPreviewItems(rows);
+  const previewItems = buildBranchPreviewItems(rows);
+  const items = await Promise.all(previewItems.map(async (item) => {
+    const promotion = await getActivePromotion(item.productId, b.data.branchId);
+    if (!promotion) return item;
+    return {
+      ...item,
+      salePrice: calculatePromotionPrice(item.price, promotion.promotion).finalPrice,
+    };
+  }));
 
   res.json(PreviewCartBranchResponse.parse({
     branch: serializeBranch(targetBranch),
@@ -180,7 +206,12 @@ router.post("/cart/:id/items", async (req, res): Promise<void> => {
   if (!cart || cart.cart.status !== "active" || !cart.branch.active || !product?.bp.available || product.product.status !== "active") { res.status(409).json({ error: "Product unavailable" }); return; }
   const variant = b.data.variantId ? (await db.select().from(productVariantsTable).where(and(eq(productVariantsTable.id, b.data.variantId), eq(productVariantsTable.productId, b.data.productId), eq(productVariantsTable.active, true))))[0] : undefined;
   if (b.data.variantId && !variant) { res.status(409).json({ error: "Variant unavailable" }); return; }
-  const price = variant?.salePrice ?? variant?.price ?? product.bp.salePriceOverride ?? product.bp.priceOverride ?? product.product.salePrice ?? product.product.price;
+  const basePrice = variant?.price ?? product.bp.priceOverride ?? product.product.price;
+  const legacySalePrice = variant?.salePrice ?? product.bp.salePriceOverride ?? product.product.salePrice;
+  const promotion = await getActivePromotion(product.product.id, cart.cart.branchId);
+  const price = promotion
+    ? calculatePromotionPrice(basePrice, promotion.promotion).finalPrice
+    : legacySalePrice ?? basePrice;
   const existing = await db.select().from(cartItemsTable).where(and(eq(cartItemsTable.cartId, cart.cart.id), eq(cartItemsTable.productId, b.data.productId), b.data.variantId == null ? sql`${cartItemsTable.variantId} is null` : eq(cartItemsTable.variantId, b.data.variantId as number)));
   const resulting = (existing[0]?.quantity ?? 0) + b.data.quantity;
   if (resulting > product.bp.inventory) { res.status(409).json({ error: "Insufficient inventory" }); return; }
@@ -377,13 +408,24 @@ router.post("/orders", async (req, res): Promise<void> => {
   const b = CreateOrderBody.safeParse(req.body); if (!b.success) { res.status(400).json({ error: b.error.message }); return; }
   const requestUser = await getRequestUser(req);
   const cart = await cartView(b.data.cartId); if (!cart || !cart.items.length) { res.status(409).json({ error: "Cart is empty" }); return; }
-  const currentItems = await db.select({ item: cartItemsTable, product: productsTable, variant: productVariantsTable, bp: branchProductsTable })
+  const currentItemRows = await db.select({ item: cartItemsTable, product: productsTable, variant: productVariantsTable, bp: branchProductsTable })
     .from(cartItemsTable).innerJoin(productsTable, eq(cartItemsTable.productId, productsTable.id))
     .leftJoin(productVariantsTable, eq(cartItemsTable.variantId, productVariantsTable.id))
     .innerJoin(cartsTable, eq(cartItemsTable.cartId, cartsTable.id))
     .innerJoin(branchProductsTable, and(eq(branchProductsTable.branchId, cartsTable.branchId), eq(branchProductsTable.productId, cartItemsTable.productId)))
     .where(eq(cartItemsTable.cartId, b.data.cartId));
-  const serverSubtotal = currentItems.reduce((sum, x) => sum + (x.item.quantity * (x.variant?.salePrice ?? x.variant?.price ?? x.bp.salePriceOverride ?? x.bp.priceOverride ?? x.product.salePrice ?? x.product.price)), 0);
+  const currentItems = await Promise.all(currentItemRows.map(async (row) => {
+    const basePrice = row.variant?.price ?? row.bp.priceOverride ?? row.product.price;
+    const legacySalePrice = row.variant?.salePrice ?? row.bp.salePriceOverride ?? row.product.salePrice;
+    const promotion = await getActivePromotion(row.product.id, cart.branch.id);
+    return {
+      ...row,
+      serverPrice: promotion
+        ? calculatePromotionPrice(basePrice, promotion.promotion).finalPrice
+        : legacySalePrice ?? basePrice,
+    };
+  }));
+  const serverSubtotal = currentItems.reduce((sum, x) => sum + x.item.quantity * x.serverPrice, 0);
   if (currentItems.length !== cart.items.length || currentItems.some((x) => !x.product.status || x.product.status !== "active" || !x.bp.available || x.item.quantity > x.bp.inventory)) { res.status(409).json({ error: "Cart items unavailable" }); return; }
   const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, (await db.select({ branchId: cartsTable.branchId }).from(cartsTable).where(eq(cartsTable.id, b.data.cartId)))[0]?.branchId ?? -1));
   if (!branch || (b.data.fulfillmentMethod === "pickup" && !branch.pickupAvailable) || (b.data.fulfillmentMethod === "delivery" && (!branch.deliveryAvailable || !b.data.deliveryAddress || b.data.deliveryLatitude == null || b.data.deliveryLongitude == null))) { res.status(409).json({ error: "Invalid fulfillment" }); return; }
@@ -421,7 +463,7 @@ router.post("/orders", async (req, res): Promise<void> => {
       const o = inserted[0];
       for (const item of cart.items) {
         const source = currentItems.find((x) => x.item.id === item.id);
-        const serverPrice = source ? (source.variant?.salePrice ?? source.variant?.price ?? source.bp.salePriceOverride ?? source.bp.priceOverride ?? source.product.salePrice ?? source.product.price) : item.unitPrice;
+        const serverPrice = source?.serverPrice ?? item.unitPrice;
         const [bp] = await tx.select().from(branchProductsTable).where(and(eq(branchProductsTable.branchId, branch.id), eq(branchProductsTable.productId, item.productId)));
         const updated = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} - ${item.quantity}` }).where(and(eq(branchProductsTable.id, bp.id), sql`${branchProductsTable.inventory} >= ${item.quantity}`)).returning({ inventory: branchProductsTable.inventory });
         if (!updated.length) throw new Error("OUT_OF_STOCK");

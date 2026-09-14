@@ -7,6 +7,7 @@
  */
 import type { BranchConfiguration } from './branchConfiguration';
 import type { ProductInputStatus } from './productInputStatus';
+import type { PromotionInput } from './promotionInput';
 
 export interface ProductInput {
   /** @minLength 1 */
@@ -31,4 +32,5 @@ export interface ProductInput {
   /** @minimum 0 */
   minimumLeadTimeHours: number;
   branchConfigurations?: BranchConfiguration[];
+  promotions?: PromotionInput[];
 }

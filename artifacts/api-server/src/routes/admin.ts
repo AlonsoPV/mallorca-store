@@ -5,6 +5,8 @@ import {
   branchesTable,
   db,
   productsTable,
+  promotionBranchesTable,
+  promotionsTable,
 } from "@workspace/db";
 import {
   CreateProductBody,
@@ -15,12 +17,19 @@ import {
   UpdateProductBody,
   UpdateProductParams,
   UpdateProductResponse,
+  CreateProductPromotionBody,
+  CreateProductPromotionParams,
+  CreateProductPromotionResponse,
+  ListProductPromotionsParams,
+  ListProductPromotionsResponse,
 } from "@workspace/api-zod";
 import { ordersTable, orderItemsTable, inventoryReservationsTable, inventoryLedgerTable, inventoryAlertsTable, usersTable, branchUserAssignmentsTable, categoryResponsibleAssignmentsTable, categoriesTable } from "@workspace/db";
 import { ListAdminOrdersQueryParams, ListAdminOrdersResponse, UpdateAdminOrderParams, UpdateAdminOrderBody, UpdateAdminOrderResponse } from "@workspace/api-zod";
 import {
+  calculatePromotionPrice,
   getProductDetailBySlug,
   listProductCards,
+  promotionStatus,
 } from "../lib/catalog";
 import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
 import {
@@ -226,6 +235,121 @@ const branchConfigurationSchema = z.object({
   deliveryAvailable: z.boolean().optional(),
 });
 const branchConfigurationsSchema = z.array(branchConfigurationSchema).optional();
+
+const promotionInputSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(["fixed", "percentage", "amount"]),
+  value: z.number().min(0),
+  startsAt: z.coerce.date(),
+  endsAt: z.coerce.date(),
+  branchIds: z.array(z.number().int()),
+}).superRefine((value, ctx) => {
+  if (value.endsAt <= value.startsAt) {
+    ctx.addIssue({ code: "custom", path: ["endsAt"], message: "endsAt must be after startsAt" });
+  }
+  if (value.type === "percentage" && value.value > 100) {
+    ctx.addIssue({ code: "custom", path: ["value"], message: "Percentage cannot exceed 100" });
+  }
+});
+const promotionsInputSchema = z.array(promotionInputSchema).optional();
+
+type PromotionInputData = z.infer<typeof promotionInputSchema>;
+
+function promotionHistoryShape(
+  promotion: typeof promotionsTable.$inferSelect,
+  branchIds: number[],
+  basePrice: number,
+  now = new Date(),
+) {
+  return {
+    id: promotion.id,
+    name: promotion.name,
+    type: promotion.type,
+    value: promotion.value,
+    startsAt: promotion.startsAt,
+    endsAt: promotion.endsAt,
+    status: promotionStatus(promotion, now),
+    ...calculatePromotionPrice(basePrice, promotion),
+    branchIds,
+    createdAt: promotion.createdAt,
+    createdBy: promotion.createdBy,
+  };
+}
+
+async function createPromotionsForProduct(
+  req: Parameters<typeof getRequestUser>[0],
+  productId: number,
+  inputs: PromotionInputData[],
+) {
+  if (!inputs.length) return [];
+  await validatePromotionScope(req, inputs);
+  const [product] = await db
+    .select({ price: productsTable.price })
+    .from(productsTable)
+    .where(eq(productsTable.id, productId));
+  if (!product) throw new Error("PRODUCT_NOT_FOUND");
+
+  const created: Array<{
+    promotion: typeof promotionsTable.$inferSelect;
+    branchIds: number[];
+  }> = [];
+  for (const input of inputs) {
+    const [promotion] = await db
+      .insert(promotionsTable)
+      .values({
+        productId,
+        name: input.name,
+        type: input.type,
+        value: input.value,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        createdBy: req.localUser?.id ?? null,
+      })
+      .returning();
+    if (input.branchIds.length) {
+      await db.insert(promotionBranchesTable).values(
+        input.branchIds.map((branchId) => ({
+          promotionId: promotion.id,
+          branchId,
+        })),
+      );
+    }
+    created.push({ promotion, branchIds: input.branchIds });
+  }
+  return created;
+}
+
+async function validatePromotionScope(
+  req: Parameters<typeof getRequestUser>[0],
+  inputs: PromotionInputData[],
+) {
+  if (!inputs.length) return;
+  const branchIds = [...new Set(inputs.flatMap((input) => input.branchIds))];
+  const accessibleBranchIds = await getAccessibleBranchIds(req);
+  if (
+    accessibleBranchIds !== null &&
+    inputs.some((input) => input.branchIds.length === 0)
+  ) {
+    throw new Error("GLOBAL_PROMOTION_ACCESS_REQUIRED");
+  }
+  if (
+    accessibleBranchIds !== null &&
+    branchIds.some((branchId) => !accessibleBranchIds.includes(branchId))
+  ) {
+    throw new Error("FORBIDDEN_BRANCH");
+  }
+  const knownBranches = await db
+    .select({ id: branchesTable.id })
+    .from(branchesTable)
+    .where(
+      branchIds.length
+        ? inArray(branchesTable.id, branchIds)
+        : sql`false`,
+    );
+  if (knownBranches.length !== branchIds.length) {
+    throw new Error("UNKNOWN_BRANCH");
+  }
+}
 
 router.get("/admin/orders", async (req, res): Promise<void> => {
   const q = ListAdminOrdersQueryParams.safeParse(req.query);
@@ -757,10 +881,109 @@ router.post("/admin/products/import", async (req, res): Promise<void> => {
   });
 });
 
+router.get("/admin/products/:id/promotions", async (req, res): Promise<void> => {
+  const params = ListProductPromotionsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [product] = await db
+    .select({ id: productsTable.id, price: productsTable.price })
+    .from(productsTable)
+    .where(eq(productsTable.id, params.data.id));
+  if (!product) {
+    res.status(404).json({ error: "Product not found" });
+    return;
+  }
+
+  const accessibleBranchIds = await getAccessibleBranchIds(req);
+  const rows = await db
+    .select({
+      promotion: promotionsTable,
+      branchId: promotionBranchesTable.branchId,
+    })
+    .from(promotionsTable)
+    .leftJoin(
+      promotionBranchesTable,
+      eq(promotionBranchesTable.promotionId, promotionsTable.id),
+    )
+    .where(eq(promotionsTable.productId, product.id))
+    .orderBy(desc(promotionsTable.createdAt), desc(promotionsTable.id));
+  const grouped = new Map<number, { promotion: typeof promotionsTable.$inferSelect; branchIds: number[] }>();
+  for (const row of rows) {
+    if (
+      accessibleBranchIds !== null &&
+      row.branchId !== null &&
+      !accessibleBranchIds.includes(row.branchId)
+    ) {
+      continue;
+    }
+    const current = grouped.get(row.promotion.id);
+    if (current) {
+      if (row.branchId !== null) current.branchIds.push(row.branchId);
+    } else {
+      grouped.set(row.promotion.id, {
+        promotion: row.promotion,
+        branchIds: row.branchId === null ? [] : [row.branchId],
+      });
+    }
+  }
+  res.json(
+    ListProductPromotionsResponse.parse(
+      [...grouped.values()].map(({ promotion, branchIds }) =>
+        promotionHistoryShape(promotion, branchIds, product.price),
+      ),
+    ),
+  );
+});
+
+router.post("/admin/products/:id/promotions", async (req, res): Promise<void> => {
+  const params = CreateProductPromotionParams.safeParse(req.params);
+  const body = CreateProductPromotionBody.safeParse(req.body);
+  const promotion = promotionInputSchema.safeParse(req.body);
+  if (!params.success || !body.success || !promotion.success) {
+    res.status(400).json({ error: "Invalid promotion" });
+    return;
+  }
+  try {
+    const created = await createPromotionsForProduct(req, params.data.id, [promotion.data]);
+    const product = await db
+      .select({ price: productsTable.price })
+      .from(productsTable)
+      .where(eq(productsTable.id, params.data.id));
+    const item = created[0];
+    if (!item || !product[0]) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    res.status(201).json(
+      CreateProductPromotionResponse.parse(
+        promotionHistoryShape(item.promotion, item.branchIds, product[0].price),
+      ),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "PRODUCT_NOT_FOUND") {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
+      return;
+    }
+    if (message === "UNKNOWN_BRANCH") {
+      res.status(400).json({ error: "Unknown branch" });
+      return;
+    }
+    throw error;
+  }
+});
+
 router.post("/admin/products", async (req, res): Promise<void> => {
   const body = CreateProductBody.safeParse(req.body);
   const configurations = branchConfigurationsSchema.safeParse(req.body?.branchConfigurations);
-  if (!body.success || !configurations.success) {
+  const promotions = promotionsInputSchema.safeParse(req.body?.promotions);
+  if (!body.success || !configurations.success || !promotions.success) {
     const message = !body.success ? body.error.message : configurations.error?.message ?? "Invalid branch configuration";
     req.log.warn({ errors: message }, "Invalid product");
     res.status(400).json({ error: message });
@@ -774,9 +997,24 @@ router.post("/admin/products", async (req, res): Promise<void> => {
   for (const config of configurations.data ?? []) {
     if (!(await canAccessBranch(req, config.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
   }
+  try {
+    await validatePromotionScope(req, promotions.data ?? []);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
+      return;
+    }
+    if (message === "UNKNOWN_BRANCH") {
+      res.status(400).json({ error: "Unknown branch" });
+      return;
+    }
+    throw error;
+  }
 
+  const { branchConfigurations: _branchConfigurations, promotions: _promotions, ...productData } = body.data;
   const [product] = await db.insert(productsTable).values({
-    ...body.data,
+    ...productData,
     gallery: body.data.gallery ?? [],
     tags: [],
   }).returning();
@@ -805,6 +1043,20 @@ router.post("/admin/products", async (req, res): Promise<void> => {
       }); }),
     );
   }
+  try {
+    await createPromotionsForProduct(req, product.id, promotions.data ?? []);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
+      return;
+    }
+    if (message === "UNKNOWN_BRANCH") {
+      res.status(400).json({ error: "Unknown branch" });
+      return;
+    }
+    throw error;
+  }
 
   const detail = await getProductDetailBySlug(product.slug);
   res.status(201).json(CreateProductResponse.parse(detail));
@@ -814,13 +1066,14 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   const params = UpdateProductParams.safeParse(req.params);
   const body = UpdateProductBody.safeParse(req.body);
   const configurations = branchConfigurationsSchema.safeParse(req.body?.branchConfigurations);
+  const promotions = promotionsInputSchema.safeParse(req.body?.promotions);
 
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  if (!body.success || !configurations.success) {
+  if (!body.success || !configurations.success || !promotions.success) {
     res.status(400).json({ error: !body.success ? body.error.message : configurations.error?.message ?? "Invalid branch configuration" });
     return;
   }
@@ -833,10 +1086,25 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   for (const config of configurations.data ?? []) {
     if (!(await canAccessBranch(req, config.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
   }
+  try {
+    await validatePromotionScope(req, promotions.data ?? []);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
+      return;
+    }
+    if (message === "UNKNOWN_BRANCH") {
+      res.status(400).json({ error: "Unknown branch" });
+      return;
+    }
+    throw error;
+  }
 
+  const { branchConfigurations: _branchConfigurations, promotions: _promotions, ...productData } = body.data;
   const [product] = await db
     .update(productsTable)
-    .set(body.data)
+    .set(productData)
     .where(eq(productsTable.id, params.data.id))
     .returning();
 
@@ -850,6 +1118,20 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
     await db.insert(branchProductsTable).values({ branchId, productId: product.id, ...values }).onConflictDoUpdate({
       target: [branchProductsTable.branchId, branchProductsTable.productId], set: values,
     });
+  }
+  try {
+    await createPromotionsForProduct(req, product.id, promotions.data ?? []);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "FORBIDDEN_BRANCH" || message === "GLOBAL_PROMOTION_ACCESS_REQUIRED") {
+      res.status(403).json({ error: "Branch access denied" });
+      return;
+    }
+    if (message === "UNKNOWN_BRANCH") {
+      res.status(400).json({ error: "Unknown branch" });
+      return;
+    }
+    throw error;
   }
 
   const detail = await getProductDetailBySlug(product.slug);
