@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { useAuth } from "@clerk/react";
 import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Redirect, Link } from "wouter";
+import { Redirect, Link, useLocation } from "wouter";
 import { StoreLayout } from "./store-layout";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
