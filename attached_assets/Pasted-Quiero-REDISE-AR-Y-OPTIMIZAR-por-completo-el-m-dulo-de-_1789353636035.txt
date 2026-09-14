@@ -1,0 +1,1059 @@
+Quiero REDISEÑAR Y OPTIMIZAR por completo el módulo de ALTA DE PRODUCTOS de Pastelería Mallorca, tanto individual como masiva.
+
+El objetivo es que subir un producto sea:
+
+- rápido
+- intuitivo
+- visual
+- difícil de hacer mal
+- fácil de usar por personal no técnico
+- compatible con operación multi-sucursal
+
+IMPORTANTE:
+
+Actualmente existe una estructura inspirada en WooCommerce con demasiados campos.
+
+No quiero replicar una ficha enorme de ecommerce genérico.
+
+Quiero un alta adaptada específicamente a una pastelería multi-sucursal.
+
+==================================================
+1. OBJETIVO DEL NUEVO MÓDULO
+==================================================
+
+El administrador debe poder:
+
+A) crear productos individualmente
+
+B) importar productos masivamente
+
+C) asignar cada producto a una o varias sucursales
+
+D) configurar inventario independiente por sucursal
+
+E) establecer precio normal
+
+F) crear promociones temporales
+
+G) manejar descuentos porcentuales o por monto
+
+H) definir disponibilidad temporal
+
+I) controlar stock mínimo
+
+J) subir imágenes
+
+K) activar/desactivar productos
+
+==================================================
+2. SIMPLIFICAR CAMPOS
+==================================================
+
+Del esquema actual tomar como relevantes:
+
+- SKU
+- Nombre
+- Publicado
+- Destacado
+- Visibilidad
+- Descripción corta
+- Descripción
+- Precio normal
+- Precio rebajado
+- Fecha inicio precio rebajado
+- Fecha fin precio rebajado
+- Categoría
+- Etiquetas
+- Imágenes
+- Inventario
+- Cantidad de bajo inventario
+- Permitir backorders
+- Vendido individualmente
+- Estado de impuesto
+
+Agregar estructura multi-sucursal.
+
+NO mostrar inicialmente campos como:
+
+- productos descargables
+- límite de descargas
+- días de descarga
+- producto agrupado
+- URL externa
+- texto botón externo
+- shipping class
+- peso/dimensiones
+- cross-sells
+- upsells
+- marca
+- posición
+
+salvo que sean realmente necesarios.
+
+Si algún campo técnico se mantiene:
+moverlo a una sección "Avanzado".
+
+==================================================
+3. NUEVA ESTRUCTURA DEL ALTA INDIVIDUAL
+==================================================
+
+Crear un flujo dividido en secciones claras.
+
+No una página interminable.
+
+Secciones:
+
+1. Información básica
+2. Precio y promociones
+3. Sucursales e inventario
+4. Imágenes
+5. Disponibilidad
+6. Información adicional
+7. Avanzado
+
+==================================================
+4. INFORMACIÓN BÁSICA
+==================================================
+
+Campos:
+
+Nombre del producto *
+
+SKU *
+
+Categoría *
+
+Descripción corta *
+
+Descripción completa
+
+Etiquetas
+
+Producto destacado
+[ toggle ]
+
+Estado:
+Borrador / Publicado / Inactivo
+
+Ejemplo:
+
+Nombre:
+Panettone Tradicional — colaboración con Ton Cortés
+
+SKU:
+PAN-TON-001
+
+Categoría:
+Panadería
+
+Descripción corta:
+máximo recomendado 160–200 caracteres.
+
+Descripción:
+texto más amplio.
+
+==================================================
+5. GENERACIÓN DE SKU
+==================================================
+
+Permitir:
+
+[ Generar SKU automáticamente ]
+
+Ejemplo:
+
+PAN-TON-001
+
+Pero también permitir edición manual.
+
+SKU debe ser único.
+
+Si ya existe:
+mostrar error inmediatamente.
+
+==================================================
+6. PRECIO
+==================================================
+
+Sección:
+
+PRECIO
+
+Precio normal *
+
+$ [ 350.00 ]
+
+Impuesto:
+[ incluido / no incluido / configurable ]
+
+No saturar con configuraciones fiscales complejas en la vista principal.
+
+==================================================
+7. PROMOCIONES Y DESCUENTOS
+==================================================
+
+Crear una sección mucho más potente que WooCommerce:
+
+PROMOCIÓN
+
+[ ] Activar promoción
+
+Cuando se active:
+
+TIPO DE DESCUENTO:
+
+○ Precio especial
+○ Porcentaje
+○ Monto fijo
+
+==================================================
+8. PRECIO ESPECIAL
+==================================================
+
+Ejemplo:
+
+Precio normal:
+$350
+
+Precio especial:
+$299
+
+Mostrar automáticamente:
+
+Ahorro:
+$51
+
+Descuento:
+14.6%
+
+==================================================
+9. DESCUENTO POR PORCENTAJE
+==================================================
+
+Ejemplo:
+
+Precio:
+$350
+
+Descuento:
+20%
+
+Calcular automáticamente:
+
+Precio final:
+$280
+
+Ahorro:
+$70
+
+No pedir que el administrador calcule manualmente.
+
+==================================================
+10. DESCUENTO POR MONTO
+==================================================
+
+Ejemplo:
+
+Precio:
+$350
+
+Descuento:
+$50
+
+Precio final:
+$300
+
+==================================================
+11. PROMOCIÓN POR TIEMPO
+==================================================
+
+Toda promoción puede tener:
+
+Fecha de inicio
+
+Fecha de término
+
+Hora de inicio
+
+Hora de término
+
+Ejemplo:
+
+Del:
+15 Sep 2026 · 00:00
+
+Al:
+20 Sep 2026 · 23:59
+
+Cuando llegue la fecha:
+
+activar automáticamente.
+
+Cuando termine:
+
+desactivar automáticamente.
+
+==================================================
+12. PREVIEW DE PROMOCIÓN
+==================================================
+
+Mostrar una vista previa:
+
+Precio normal:
+$350
+
+Promoción:
+20%
+
+Precio final:
+$280
+
+Vigencia:
+15–20 Sep
+
+No guardar hasta validar.
+
+==================================================
+13. PROMOCIÓN POR SUCURSAL
+==================================================
+
+Permitir que la promoción aplique:
+
+○ Todas las sucursales
+
+○ Sólo seleccionadas
+
+Ejemplo:
+
+☑ Reforma
+☐ Lomas
+
+Así Reforma puede tener una promoción que Lomas no tenga.
+
+==================================================
+14. REGLAS DE PROMOCIÓN
+==================================================
+
+Preparar arquitectura para:
+
+- porcentaje
+- monto
+- precio fijo
+- fecha inicio/fin
+- sucursal
+- categoría
+- producto
+- cantidad mínima
+
+No implementar promociones complejas tipo 3x2 si no son necesarias todavía.
+
+Pero dejar el modelo preparado.
+
+==================================================
+15. SUCURSALES
+==================================================
+
+Sección:
+
+DISPONIBLE EN
+
+[✓] Mallorca Reforma
+[✓] Mallorca Lomas
+
+Al activar sucursal:
+
+mostrar opciones específicas.
+
+==================================================
+16. INVENTARIO POR SUCURSAL
+==================================================
+
+Ejemplo:
+
+Mallorca Reforma
+
+Disponible:
+[✓]
+
+Stock:
+[ 10 ]
+
+Stock mínimo:
+[ 2 ]
+
+Permitir vender sin stock:
+[ no ]
+
+Pickup:
+[✓]
+
+Delivery:
+[✓]
+
+Mallorca Lomas
+
+Disponible:
+[✓]
+
+Stock:
+[ 6 ]
+
+Stock mínimo:
+[ 2 ]
+
+==================================================
+17. PRECIO POR SUCURSAL
+==================================================
+
+Por defecto:
+
+usar precio general.
+
+Agregar:
+
+[ Sobrescribir precio ]
+
+Ejemplo:
+
+Precio general:
+$350
+
+Reforma:
+$350
+
+Lomas:
+$370
+
+Sólo mostrar override si se activa.
+
+==================================================
+18. STOCK VISUAL
+==================================================
+
+Mostrar estado automáticamente:
+
+Stock 10
+● Disponible
+
+Stock 2
+● Stock bajo
+
+Stock 0
+● Agotado
+
+No obligar al usuario a interpretar números.
+
+==================================================
+19. IMÁGENES
+==================================================
+
+Sección visual.
+
+Imagen principal
+
+[ arrastrar archivo ]
+
+Galería
+
+[ + agregar imágenes ]
+
+Permitir drag & drop.
+
+Mostrar preview grande.
+
+No obligar a pegar URL.
+
+==================================================
+20. DISPONIBILIDAD TEMPORAL
+==================================================
+
+Crear opción:
+
+PRODUCTO TEMPORAL
+
+[ ] Este producto sólo estará disponible por tiempo limitado
+
+Si activa:
+
+Disponible desde
+
+Disponible hasta
+
+Ejemplo:
+
+Panettone:
+
+1 noviembre
+
+6 enero
+
+Al salir del rango:
+no debe estar disponible para compra.
+
+==================================================
+21. ANTICIPACIÓN
+==================================================
+
+Agregar:
+
+Tiempo mínimo de preparación
+
+Ejemplo:
+
+0 horas
+12 horas
+24 horas
+48 horas
+
+Esto debe conectarse con el calendario de pedidos.
+
+==================================================
+22. DÍAS DISPONIBLES
+==================================================
+
+Opcional:
+
+Disponible:
+
+☑ Lun
+☑ Mar
+☑ Mié
+☑ Jue
+☑ Vie
+☑ Sáb
+☑ Dom
+
+No mostrar si no es necesario.
+
+==================================================
+23. INFORMACIÓN DEL PRODUCTO
+==================================================
+
+Sección:
+
+Ingredientes
+
+Alérgenos
+
+Conservación
+
+Porciones
+
+Peso opcional
+
+Ejemplo:
+
+Alérgenos:
+
+☑ Gluten
+☑ Lácteos
+☑ Nueces
+☐ Huevo
+
+Preferir checkboxes donde sea posible.
+
+==================================================
+24. UX DEL FORMULARIO
+==================================================
+
+No utilizar 40 campos simultáneos.
+
+Mostrar progresivamente.
+
+Primer nivel:
+
+Información
+Precio
+Sucursales
+Imágenes
+
+Segundo nivel:
+
+Promoción
+Disponibilidad
+Detalles
+
+Tercer nivel:
+
+Avanzado
+
+==================================================
+25. BARRA DE ACCIONES STICKY
+==================================================
+
+En desktop:
+
+barra inferior o superior:
+
+[ Guardar borrador ]
+[ Vista previa ]
+[ Publicar ]
+
+Siempre visible.
+
+==================================================
+26. AUTOGUARDADO
+==================================================
+
+Implementar autosave de borrador.
+
+Ejemplo:
+
+Guardado hace 5 segundos.
+
+Evitar pérdida de información.
+
+==================================================
+27. VALIDACIÓN
+==================================================
+
+Antes de publicar:
+
+validar mínimo:
+
+- nombre
+- SKU
+- precio
+- categoría
+- al menos una sucursal
+- imagen principal
+- stock válido
+
+Si falta:
+
+mostrar error específico.
+
+No usar errores genéricos.
+
+==================================================
+28. RESUMEN ANTES DE PUBLICAR
+==================================================
+
+Mostrar:
+
+Panettone Tradicional
+
+$350
+
+Sucursales:
+Reforma · 10
+Lomas · 6
+
+Promoción:
+20% del 15 al 20 Sep
+
+Estado:
+Publicado
+
+[ Confirmar publicación ]
+
+==================================================
+29. EDICIÓN RÁPIDA
+==================================================
+
+Desde tabla de productos permitir editar rápidamente:
+
+- precio
+- stock
+- estado
+- sucursal
+- destacado
+
+sin abrir toda la ficha.
+
+==================================================
+30. LISTADO DE PRODUCTOS
+==================================================
+
+Crear tabla:
+
+Producto
+SKU
+Categoría
+Precio
+Reforma
+Lomas
+Promoción
+Estado
+
+Ejemplo:
+
+Panettone Trad.
+PAN001
+Panadería
+$350
+10
+6
+20%
+Activo
+
+==================================================
+31. CARGA MASIVA
+==================================================
+
+Crear:
+
+Admin
+→ Productos
+→ Importar
+
+Aceptar:
+
+CSV
+XLSX
+
+==================================================
+32. TEMPLATE DESCARGABLE
+==================================================
+
+Agregar:
+
+[ Descargar plantilla ]
+
+No obligar al usuario a conocer estructura de base de datos.
+
+Plantilla recomendada:
+
+sku
+name
+category
+short_description
+description
+price
+discount_type
+discount_value
+discount_start
+discount_end
+reforma_enabled
+reforma_stock
+reforma_min_stock
+lomas_enabled
+lomas_stock
+lomas_min_stock
+main_image
+status
+
+==================================================
+33. NO USAR 41 COLUMNAS
+==================================================
+
+El CSV actual tiene demasiados campos heredados de WooCommerce.
+
+Reducir el archivo masivo a aproximadamente:
+
+15–20 campos esenciales.
+
+Los campos avanzados pueden tener otra plantilla opcional.
+
+==================================================
+34. IMPORTACIÓN — PASO 1
+==================================================
+
+Subir archivo.
+
+[ Arrastra CSV/XLSX ]
+
+==================================================
+35. IMPORTACIÓN — PASO 2
+==================================================
+
+Mostrar preview.
+
+Ejemplo:
+
+50 productos encontrados.
+
+45 nuevos
+3 actualizaciones
+2 errores
+
+==================================================
+36. IMPORTACIÓN — PASO 3
+==================================================
+
+Mapeo de columnas.
+
+Ejemplo:
+
+Nombre archivo → Campo sistema
+
+"Precio" → price
+
+"Reforma stock" → reforma_stock
+
+Guardar mapeo para futuros imports.
+
+==================================================
+37. IMPORTACIÓN — PASO 4
+==================================================
+
+Validación.
+
+Mostrar errores por fila.
+
+Ejemplo:
+
+Fila 8:
+SKU duplicado
+
+Fila 14:
+Precio inválido
+
+Fila 22:
+Sucursal no reconocida
+
+==================================================
+38. IMPORTACIÓN — PASO 5
+==================================================
+
+Confirmación:
+
+Crear:
+42
+
+Actualizar:
+6
+
+Ignorar:
+2
+
+[ Importar ]
+
+==================================================
+39. ACTUALIZAR POR SKU
+==================================================
+
+SKU debe ser identificador principal de importación.
+
+Si existe:
+
+actualizar.
+
+Si no existe:
+
+crear.
+
+NO crear duplicados.
+
+==================================================
+40. IMPORTACIÓN DE INVENTARIO
+==================================================
+
+Permitir actualización simple:
+
+sku
+branch_code
+stock
+
+Ejemplo:
+
+PAN001,REF,12
+PAN001,LOM,6
+
+Esto debe servir para actualizaciones rápidas.
+
+==================================================
+41. IMPORTACIÓN DE PROMOCIONES
+==================================================
+
+Permitir:
+
+sku
+discount_type
+discount_value
+discount_start
+discount_end
+
+Ejemplo:
+
+PAN001
+percentage
+20
+2026-09-15
+2026-09-20
+
+==================================================
+42. PROMOCIONES MASIVAS
+==================================================
+
+Además del CSV:
+
+permitir selección múltiple desde admin.
+
+Ejemplo:
+
+Seleccionar:
+
+☑ Panettone tradicional
+☑ Panettone chocolate
+☑ Croissant
+
+Acción:
+
+[ Crear promoción ]
+
+20%
+
+15 Sep → 20 Sep
+
+Sucursal:
+Todas
+
+[ Aplicar ]
+
+==================================================
+43. MODIFICACIÓN MASIVA
+==================================================
+
+Permitir acciones múltiples:
+
+Activar
+Desactivar
+Cambiar categoría
+Asignar sucursal
+Desasignar sucursal
+Actualizar precio
+Crear promoción
+Eliminar promoción
+Marcar destacado
+
+==================================================
+44. IMPORTACIÓN DE IMÁGENES
+==================================================
+
+Permitir:
+
+URL de imagen
+
+y posteriormente asociarla al producto.
+
+Si imagen no carga:
+
+marcar error.
+
+No cancelar toda la importación por una imagen.
+
+==================================================
+45. PREVENCIÓN DE ERRORES
+==================================================
+
+No permitir:
+
+precio negativo
+
+stock negativo
+
+descuento >100%
+
+fecha fin < fecha inicio
+
+producto sin sucursal
+
+SKU duplicado
+
+==================================================
+46. PROMOCIONES CADUCADAS
+==================================================
+
+Cuando termina promoción:
+
+precio vuelve automáticamente al normal.
+
+Guardar historial.
+
+No borrar la promoción.
+
+Estado:
+
+PROGRAMADA
+ACTIVA
+FINALIZADA
+
+==================================================
+47. HISTORIAL
+==================================================
+
+Registrar:
+
+quién cambió:
+
+precio
+descuento
+stock
+estado
+
+Ejemplo:
+
+13 Sep
+Karim
+Precio:
+350 → 320
+
+==================================================
+48. DISEÑO
+==================================================
+
+El Admin debe sentirse:
+
+limpio
+rápido
+operativo
+moderno
+
+No usar estética pesada de ERP.
+
+Utilizar:
+
+tabs
+accordions
+drawers
+tables
+inline editing
+
+Evitar:
+
+modales gigantes
+formularios interminables
+campos técnicos visibles sin necesidad.
+
+==================================================
+49. MOBILE / TABLET
+==================================================
+
+Admin debe funcionar bien en tablet.
+
+Especialmente:
+
+- stock
+- precios
+- pedidos
+
+No necesariamente optimizar importación masiva para teléfono.
+
+==================================================
+50. CRITERIO FINAL
+==================================================
+
+Crear un producto simple debe poder hacerse en menos de 2 minutos.
+
+El flujo mínimo debe ser:
+
+Nombre
+↓
+Categoría
+↓
+Precio
+↓
+Sucursal
+↓
+Stock
+↓
+Imagen
+↓
+Publicar
+
+Todo lo demás debe ser opcional.
+
+El usuario nunca debería sentirse frente a una ficha técnica de 40 campos.
+
+El sistema debe esconder complejidad hasta que sea necesaria.
