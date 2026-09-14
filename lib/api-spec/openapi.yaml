@@ -524,6 +524,40 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CsvImportInput" } } } }
       responses:
         "200": { description: Import result, content: { application/json: { schema: { $ref: "#/components/schemas/ImportResult" } } } }
+  /admin/products/import/preview:
+    post:
+      operationId: previewProductImport
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductImportInput"
+      responses:
+        "200":
+          description: Product import preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductImportPreview"
+  /admin/products/import:
+    post:
+      operationId: importProducts
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductImportInput"
+      responses:
+        "200":
+          description: Product import result, including row-level errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductImportResult"
   /admin/orders/{id}:
     patch:
       operationId: updateAdminOrder
@@ -1078,6 +1112,44 @@ components:
         imported: { type: integer }
         errors: { type: array, items: { type: object } }
       required: [imported, errors]
+    ProductImportInput:
+      type: object
+      properties:
+        csv: { type: string }
+        mapping:
+          type: object
+          additionalProperties: { type: string }
+      required: [csv]
+    ProductImportRow:
+      type: object
+      properties:
+        row: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        branchCode: { type: string }
+        action: { type: string, enum: [new, update] }
+      required: [row, sku, name, branchCode, action]
+    ProductImportError:
+      type: object
+      properties:
+        row: { type: integer }
+        message: { type: string }
+      required: [row, message]
+    ProductImportPreview:
+      type: object
+      properties:
+        rows: { type: array, items: { $ref: "#/components/schemas/ProductImportRow" } }
+        errors: { type: array, items: { $ref: "#/components/schemas/ProductImportError" } }
+        valid: { type: boolean }
+      required: [rows, errors, valid]
+    ProductImportResult:
+      type: object
+      properties:
+        imported: { type: integer }
+        created: { type: integer }
+        updated: { type: integer }
+        errors: { type: array, items: { $ref: "#/components/schemas/ProductImportError" } }
+      required: [imported, created, updated, errors]
     AdminProduct:
       allOf:
         - $ref: "#/components/schemas/ProductCard"

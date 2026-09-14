@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { enteredAlertState, stockState, validateInventoryCsv } from "./inventory.ts";
+import {
+  enteredAlertState,
+  parseProductImportCsv,
+  stockState,
+  validateInventoryCsv,
+} from "./inventory.ts";
 
 test("stock state transitions follow minimum stock thresholds", () => {
   assert.equal(stockState(8, 5), "NORMAL");
@@ -16,5 +21,29 @@ test("CSV validation rejects duplicate and malformed rows", () => {
   );
   assert.equal(result.rows.length, 1);
   assert.equal(result.errors.length, 2);
+  assert.match(result.errors[0].message, /Duplicate/);
+});
+
+test("product CSV parser supports quoted values, branch rows and reusable mappings", () => {
+  const result = parseProductImportCsv(
+    [
+      "code,product_name,amount,category,store",
+      'PAN-001,"Pan, artesanal",95,1,CENTRO',
+      "PAN-001,,,1,REFORMA",
+    ].join("\n"),
+    { sku: "code", name: "product_name", price: "amount", categoryId: "category", branchCode: "store" },
+  );
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.rows.length, 2);
+  assert.equal(result.rows[0].name, "Pan, artesanal");
+  assert.equal(result.rows[1].branchCode, "REFORMA");
+});
+
+test("product CSV parser rejects duplicate SKU and branch rows without rejecting other rows", () => {
+  const result = parseProductImportCsv(
+    "sku,name,price,category_id,branch_code\nPAN-001,Pan,95,1,CENTRO\nPAN-001,Pan,95,1,CENTRO\nPAN-002,Concha,30,1,CENTRO",
+  );
+  assert.equal(result.rows.length, 2);
+  assert.equal(result.errors.length, 1);
   assert.match(result.errors[0].message, /Duplicate/);
 });

@@ -2,3 +2,4 @@
 - [Orval non-2xx responses](orval-non-2xx-responses.md) — Give every operation a typed 2xx response or Orval may generate a void response parser.
 - [Branch switching safety](branch-switching-safety.md) — Revalidate target inventory, keep only explicitly available cart lines, and clear empty sessions tied to the old branch.
 - [Product media storage](product-media-storage.md) — Keep storefront reads public while protecting presigned upload URL creation with the existing staff auth.
+- [Product import grouping](product-import-grouping.md) — Group product imports by SKU while applying each valid branch row independently.

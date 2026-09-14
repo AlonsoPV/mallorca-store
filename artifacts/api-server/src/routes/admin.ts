@@ -23,11 +23,134 @@ import {
   listProductCards,
 } from "../lib/catalog";
 import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
-import { stockState, enteredAlertState, validateInventoryCsv } from "../lib/inventory";
+import {
+  stockState,
+  enteredAlertState,
+  validateInventoryCsv,
+  parseProductImportCsv,
+  type ProductImportMapping,
+  type ProductImportRecord,
+} from "../lib/inventory";
 import { z } from "zod/v4";
 import { applyInventoryAlert } from "./commerce";
 
 const router: IRouter = Router();
+
+const productImportProductFields = [
+  "name",
+  "slug",
+  "shortDescription",
+  "description",
+  "price",
+  "salePrice",
+  "categoryId",
+  "imageUrl",
+  "featured",
+  "seasonal",
+  "status",
+  "minimumLeadTimeHours",
+] as const;
+
+type ProductImportPlanRow = {
+  record: ProductImportRecord;
+  action: "new" | "update";
+};
+
+type ProductImportPlan = {
+  rows: ProductImportPlanRow[];
+  errors: Array<{ row: number; message: string }>;
+  existing: Map<string, { id: number; sku: string }>;
+  branches: Array<{ id: number; code: string | null }>;
+  allRows: ProductImportRecord[];
+};
+
+function importSlug(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+async function makeProductImportPlan(
+  req: Parameters<typeof getRequestUser>[0],
+  csv: string,
+  mapping: ProductImportMapping,
+): Promise<ProductImportPlan> {
+  const parsed = parseProductImportCsv(csv, mapping);
+  const [products, branches, categories] = await Promise.all([
+    db.select({ id: productsTable.id, sku: productsTable.sku }).from(productsTable),
+    db.select({ id: branchesTable.id, code: branchesTable.branchCode }).from(branchesTable),
+    db.select({ id: categoriesTable.id }).from(categoriesTable),
+  ]);
+  const existing = new Map(products.map((product) => [product.sku, product]));
+  const branchMap = new Map(
+    branches
+      .filter((branch): branch is { id: number; code: string } => !!branch.code)
+      .map((branch) => [branch.code.toLowerCase(), branch.id]),
+  );
+  const categoryIds = new Set(categories.map((category) => category.id));
+  const accessibleBranchIds = await getAccessibleBranchIds(req);
+  const errors = [...parsed.errors];
+  const errorsByRow = new Set(errors.map((error) => error.row));
+  const recordsBySku = new Map<string, ProductImportRecord[]>();
+  for (const record of parsed.rows) {
+    const records = recordsBySku.get(record.sku) ?? [];
+    records.push(record);
+    recordsBySku.set(record.sku, records);
+  }
+
+  for (const record of parsed.rows) {
+    const isNew = !existing.has(record.sku);
+    const group = recordsBySku.get(record.sku) ?? [record];
+    if (isNew && (!group.some((item) => item.name) || !group.some((item) => item.price != null) || !group.some((item) => item.categoryId != null))) {
+      errors.push({ row: record.row, message: "New SKU requires name, price and categoryId" });
+      errorsByRow.add(record.row);
+    }
+    if (record.categoryId != null && (!Number.isInteger(record.categoryId) || !categoryIds.has(record.categoryId))) {
+      errors.push({ row: record.row, message: "Unknown categoryId" });
+      errorsByRow.add(record.row);
+    }
+    for (const field of ["inventory", "minStock", "preparationTimeMinutes"] as const) {
+      const value = record[field];
+      if (value != null && !Number.isInteger(value)) {
+        errors.push({ row: record.row, message: `${field} must be an integer` });
+        errorsByRow.add(record.row);
+      }
+    }
+    if (record.branchCode) {
+      const branchId = branchMap.get(record.branchCode.toLowerCase());
+      if (!branchId) {
+        errors.push({ row: record.row, message: "Unknown branchCode" });
+        errorsByRow.add(record.row);
+      } else if (accessibleBranchIds !== null && !accessibleBranchIds.includes(branchId)) {
+        errors.push({ row: record.row, message: "Branch access denied" });
+        errorsByRow.add(record.row);
+      }
+    }
+  }
+
+  return {
+    rows: parsed.rows
+      .filter((record) => !errorsByRow.has(record.row))
+      .map((record) => ({ record, action: existing.has(record.sku) ? "update" : "new" })),
+    errors,
+    existing,
+    branches,
+    allRows: parsed.rows,
+  };
+}
+
+function mergeProductImportFields(records: ProductImportRecord[]): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const field of productImportProductFields) {
+    const record = records.find((item) => item[field] !== undefined);
+    if (record) merged[field] = record[field];
+  }
+  return merged;
+}
 
 async function assignmentActor(req: Parameters<typeof getRequestUser>[0]) {
   const user = await getRequestUser(req);
@@ -453,6 +576,185 @@ router.get("/admin/products", async (req, res): Promise<void> => {
     branchIds: branchIds ?? undefined,
   });
   res.json(ListAdminProductsResponse.parse(products));
+});
+
+const productImportInput = z.object({
+  csv: z.string(),
+  mapping: z.record(z.string(), z.string()).optional(),
+});
+
+router.post("/admin/products/import/preview", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  const body = productImportInput.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const plan = await makeProductImportPlan(req, body.data.csv, body.data.mapping as ProductImportMapping | undefined ?? {});
+  res.json({
+    rows: plan.rows.map(({ record, action }) => ({
+      row: record.row,
+      sku: record.sku,
+      name: record.name ?? "",
+      branchCode: record.branchCode ?? "",
+      action,
+    })),
+    errors: plan.errors,
+    valid: plan.rows.length > 0,
+  });
+});
+
+router.post("/admin/products/import", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !hasGlobalBranchAccess(actor)) {
+    res.status(403).json({ error: "Global product access required" });
+    return;
+  }
+  const body = productImportInput.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const plan = await makeProductImportPlan(req, body.data.csv, body.data.mapping as ProductImportMapping | undefined ?? {});
+  const errors = [...plan.errors];
+  const validGroups = new Map<string, ProductImportRecord[]>();
+  for (const { record } of plan.rows) {
+    const records = validGroups.get(record.sku) ?? [];
+    records.push(record);
+    validGroups.set(record.sku, records);
+  }
+  const allGroups = new Map<string, ProductImportRecord[]>();
+  for (const record of plan.allRows) {
+    const records = allGroups.get(record.sku) ?? [];
+    records.push(record);
+    allGroups.set(record.sku, records);
+  }
+  const branchMap = new Map(
+    plan.branches
+      .filter((branch): branch is { id: number; code: string } => !!branch.code)
+      .map((branch) => [branch.code.toLowerCase(), branch.id]),
+  );
+  let created = 0;
+  let updated = 0;
+
+  for (const [sku, records] of validGroups) {
+    try {
+      const allProductRecords = allGroups.get(sku) ?? records;
+      const merged = mergeProductImportFields(allProductRecords);
+      const existing = plan.existing.get(sku);
+      let productId = existing?.id;
+      const productUpdate = Object.fromEntries(
+        Object.entries(merged).filter(([, value]) => value !== undefined),
+      );
+      let groupCreated = false;
+      let groupUpdated = false;
+
+      await db.transaction(async (tx) => {
+        if (existing) {
+          if (Object.keys(productUpdate).length) {
+            const [product] = await tx
+              .update(productsTable)
+              .set(productUpdate as any)
+              .where(eq(productsTable.id, existing.id))
+              .returning({ id: productsTable.id });
+            productId = product?.id ?? existing.id;
+          }
+          groupUpdated = true;
+        } else {
+          const name = String(merged.name ?? "");
+          const shortDescription = String(merged.shortDescription ?? name);
+          const description = String(merged.description ?? shortDescription);
+          const price = Number(merged.price);
+          const categoryId = Number(merged.categoryId);
+          const [product] = await tx
+            .insert(productsTable)
+            .values({
+              sku,
+              name,
+              slug: String(merged.slug ?? importSlug(name || sku)),
+              shortDescription,
+              description,
+              price,
+              salePrice: (merged.salePrice as number | undefined) ?? null,
+              categoryId,
+              imageUrl: (merged.imageUrl as string | undefined) ?? null,
+              featured: (merged.featured as boolean | undefined) ?? false,
+              seasonal: (merged.seasonal as boolean | undefined) ?? false,
+              status: (merged.status as "draft" | "active" | "inactive" | undefined) ?? "draft",
+              minimumLeadTimeHours: (merged.minimumLeadTimeHours as number | undefined) ?? 0,
+              gallery: [],
+              tags: [],
+            })
+            .onConflictDoUpdate({
+              target: productsTable.sku,
+              set: productUpdate as any,
+            })
+            .returning({ id: productsTable.id });
+          productId = product?.id;
+          groupCreated = true;
+        }
+
+        if (!productId) throw new Error("Product upsert did not return an id");
+        for (const record of records) {
+          if (!record.branchCode) continue;
+          const branchId = branchMap.get(record.branchCode.toLowerCase());
+          if (!branchId) throw new Error(`Unknown branchCode ${record.branchCode}`);
+          const branchValues = {
+            branchId,
+            productId,
+            available: record.available ?? true,
+            inventory: record.inventory ?? 0,
+            minStock: record.minStock ?? 0,
+            priceOverride: record.priceOverride ?? null,
+            salePriceOverride: record.salePriceOverride ?? null,
+            preparationTimeMinutes: record.preparationTimeMinutes ?? null,
+            pickupAvailable: record.pickupAvailable ?? true,
+            deliveryAvailable: record.deliveryAvailable ?? true,
+          };
+          const branchUpdate = Object.fromEntries([
+            ["updatedAt", new Date()],
+            ...([
+              ["available", record.available],
+              ["inventory", record.inventory],
+              ["minStock", record.minStock],
+              ["priceOverride", record.priceOverride],
+              ["salePriceOverride", record.salePriceOverride],
+              ["preparationTimeMinutes", record.preparationTimeMinutes],
+              ["pickupAvailable", record.pickupAvailable],
+              ["deliveryAvailable", record.deliveryAvailable],
+            ] as const).filter(([, value]) => value !== undefined),
+          ]);
+          await tx
+            .insert(branchProductsTable)
+            .values(branchValues)
+            .onConflictDoUpdate({
+              target: [branchProductsTable.branchId, branchProductsTable.productId],
+              set: branchUpdate as any,
+            });
+        }
+      });
+      if (groupCreated) created += 1;
+      if (groupUpdated) updated += 1;
+    } catch (error) {
+      const row = records[0]?.row ?? 0;
+      errors.push({
+        row,
+        message: error instanceof Error ? error.message : "Could not import SKU",
+      });
+    }
+  }
+
+  res.json({
+    imported: created + updated,
+    created,
+    updated,
+    errors,
+  });
 });
 
 router.post("/admin/products", async (req, res): Promise<void> => {

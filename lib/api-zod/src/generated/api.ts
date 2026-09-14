@@ -1671,6 +1671,43 @@ export const ImportInventoryResponse = zod.object({
 })
 
 
+export const PreviewProductImportBody = zod.object({
+  "csv": zod.string(),
+  "mapping": zod.record(zod.string(), zod.string()).optional()
+})
+
+export const PreviewProductImportResponse = zod.object({
+  "rows": zod.array(zod.object({
+  "row": zod.number().int(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "branchCode": zod.string(),
+  "action": zod.enum(['new', 'update'])
+})),
+  "errors": zod.array(zod.object({
+  "row": zod.number().int(),
+  "message": zod.string()
+})),
+  "valid": zod.boolean()
+})
+
+
+export const ImportProductsBody = zod.object({
+  "csv": zod.string(),
+  "mapping": zod.record(zod.string(), zod.string()).optional()
+})
+
+export const ImportProductsResponse = zod.object({
+  "imported": zod.number().int(),
+  "created": zod.number().int(),
+  "updated": zod.number().int(),
+  "errors": zod.array(zod.object({
+  "row": zod.number().int(),
+  "message": zod.string()
+}))
+})
+
+
 export const UpdateAdminOrderParams = zod.object({
   "id": zod.coerce.string()
 })

@@ -70,6 +70,9 @@ import type {
   PaymentStartInput,
   ProductCard,
   ProductDetail,
+  ProductImportInput,
+  ProductImportPreview,
+  ProductImportResult,
   ProductInput,
   ProductUpdate,
   SafeUser,
@@ -3106,6 +3109,170 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getImportInventoryMutationOptions(options));
+    }
+
+export const getPreviewProductImportUrl = () => {
+
+
+
+
+  return `/api/admin/products/import/preview`
+}
+
+export const previewProductImport = async (productImportInput: ProductImportInput, options?: Parameters<typeof customFetch>[1]): Promise<ProductImportPreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProductImportPreview>(getPreviewProductImportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(productImportInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewProductImportMutationKey = () => ['previewProductImport'] as const;
+
+export const getPreviewProductImportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewProductImport>>, TError,PreviewProductImportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewProductImport>>, TError,PreviewProductImportMutationVariables, TContext> => {
+
+const mutationKey = getPreviewProductImportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewProductImport>>, PreviewProductImportMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewProductImport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewProductImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewProductImport>>>
+    export type PreviewProductImportMutationBody = BodyType<ProductImportInput>
+    export type PreviewProductImportMutationError = ErrorType<unknown>
+    export type PreviewProductImportMutationVariables = {data: BodyType<ProductImportInput>}
+
+    export const usePreviewProductImport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewProductImport>>, TError,PreviewProductImportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewProductImport>>,
+        TError,
+        PreviewProductImportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPreviewProductImportMutationOptions(options));
+    }
+
+export const getImportProductsUrl = () => {
+
+
+
+
+  return `/api/admin/products/import`
+}
+
+export const importProducts = async (productImportInput: ProductImportInput, options?: Parameters<typeof customFetch>[1]): Promise<ProductImportResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProductImportResult>(getImportProductsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(productImportInput)
+  }
+);}
+
+
+
+
+
+export const getImportProductsMutationKey = () => ['importProducts'] as const;
+
+export const getImportProductsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProducts>>, TError,ImportProductsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importProducts>>, TError,ImportProductsMutationVariables, TContext> => {
+
+const mutationKey = getImportProductsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importProducts>>, ImportProductsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  importProducts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportProductsMutationResult = NonNullable<Awaited<ReturnType<typeof importProducts>>>
+    export type ImportProductsMutationBody = BodyType<ProductImportInput>
+    export type ImportProductsMutationError = ErrorType<unknown>
+    export type ImportProductsMutationVariables = {data: BodyType<ProductImportInput>}
+
+    export const useImportProducts = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProducts>>, TError,ImportProductsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importProducts>>,
+        TError,
+        ImportProductsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getImportProductsMutationOptions(options));
     }
 
 export const getUpdateAdminOrderUrl = (id: string,) => {

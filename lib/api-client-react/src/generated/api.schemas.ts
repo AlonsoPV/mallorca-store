@@ -352,6 +352,47 @@ export interface ImportResult {
   errors: ImportResultErrorsItem[];
 }
 
+export type ProductImportInputMapping = {[key: string]: string};
+
+export interface ProductImportInput {
+  csv: string;
+  mapping?: ProductImportInputMapping;
+}
+
+export type ProductImportRowAction = typeof ProductImportRowAction[keyof typeof ProductImportRowAction];
+
+
+export const ProductImportRowAction = {
+  new: 'new',
+  update: 'update',
+} as const;
+
+export interface ProductImportRow {
+  row: number;
+  sku: string;
+  name: string;
+  branchCode: string;
+  action: ProductImportRowAction;
+}
+
+export interface ProductImportError {
+  row: number;
+  message: string;
+}
+
+export interface ProductImportPreview {
+  rows: ProductImportRow[];
+  errors: ProductImportError[];
+  valid: boolean;
+}
+
+export interface ProductImportResult {
+  imported: number;
+  created: number;
+  updated: number;
+  errors: ProductImportError[];
+}
+
 export type AdminProductStatus = typeof AdminProductStatus[keyof typeof AdminProductStatus];
 
 
