@@ -1,7 +1,8 @@
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import type { NextFunction, Request, Response } from "express";
 import { db, usersTable, branchUserAssignmentsTable, type User } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { logger } from "../lib/logger";
 
 declare global {
   namespace Express {
@@ -16,17 +17,43 @@ function claimString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+async function resolveClerkProfile(userId: string): Promise<{
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+}> {
+  try {
+    const clerkUser = await clerkClient.users.getUser(userId);
+    return {
+      email:
+        clerkUser.primaryEmailAddress?.emailAddress ??
+        clerkUser.emailAddresses[0]?.emailAddress,
+      firstName: clerkUser.firstName ?? undefined,
+      lastName: clerkUser.lastName ?? undefined,
+    };
+  } catch (error) {
+    logger.warn({ userId, error }, "Unable to resolve authenticated Clerk profile");
+    return {};
+  }
+}
+
 export async function provisionUser(req: Request): Promise<User | undefined> {
   const auth = getAuth(req);
   const claims = (auth.sessionClaims ?? {}) as unknown as Record<string, unknown>;
   const userId = auth.userId ?? claimString(claims.userId);
   if (!userId) return undefined;
-  const email =
+  const claimEmail =
     claimString(claims.email) ??
     claimString(claims.email_address) ??
-    `${userId}@clerk.invalid`;
-  const firstName = claimString(claims.first_name) ?? claimString(claims.firstName);
-  const lastName = claimString(claims.last_name) ?? claimString(claims.lastName);
+    undefined;
+  const claimFirstName = claimString(claims.first_name) ?? claimString(claims.firstName);
+  const claimLastName = claimString(claims.last_name) ?? claimString(claims.lastName);
+  const clerkProfile = claimEmail && claimFirstName !== undefined && claimLastName !== undefined
+    ? {}
+    : await resolveClerkProfile(userId);
+  const email = claimEmail ?? clerkProfile.email ?? `${userId}@clerk.invalid`;
+  const firstName = claimFirstName ?? clerkProfile.firstName;
+  const lastName = claimLastName ?? clerkProfile.lastName;
   const initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
   const role = initialAdminEmail && email.toLowerCase() === initialAdminEmail ? "admin" : undefined;
   const [user] = await db
