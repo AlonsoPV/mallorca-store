@@ -42,6 +42,7 @@ import AdminAlerts from '@/pages/admin/alerts';
 import AdminBranchDetail from '@/pages/admin/branch-detail';
 import AdminReports from '@/pages/admin/reports';
 import AdminResponsibles from '@/pages/admin/responsibles';
+import AdminPaymentMethods from '@/pages/admin/payment-methods';
 import { AdminGuard } from '@/components/layout/admin-guard';
 
 import { CartProvider } from '@/lib/cart-context';
@@ -255,6 +256,9 @@ function AppRoutes() {
       </Route>
       <Route path="/admin/responsables">
         <AdminGuard><AdminResponsibles /></AdminGuard>
+      </Route>
+      <Route path="/admin/formas-de-pago">
+        <AdminGuard><AdminPaymentMethods /></AdminGuard>
       </Route>
       <Route path="/admin/alertas">
         <AdminGuard><AdminAlerts /></AdminGuard>

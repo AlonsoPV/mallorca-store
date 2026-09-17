@@ -30,6 +30,9 @@ import {
   type PromotionCandidate,
 } from "./catalog-promotions.ts";
 import { loadProductCategorySummaries, loadProductCrossSellIds } from "./product-aggregate";
+import { loadReservedByBranchProductIds, sellableUnits } from "./reserved-stock";
+import { serializeAdminBranchAvailability } from "./admin-product-serialize";
+import { filterCrossSellCards } from "./catalog-cross-sell.ts";
 
 export function serializeBranch(branch: Branch) {
   const status = (branch as Branch & { status?: string }).status;
@@ -96,6 +99,7 @@ type ProductFilters = {
   scheduledStart?: Date;
   includeUnavailable?: boolean;
   branchIds?: number[];
+  productIds?: number[];
   status?: "draft" | "active" | "inactive";
   publicOnly?: boolean;
 };
@@ -231,6 +235,10 @@ export async function listProductCards(filters: ProductFilters = {}) {
     conditions.push(eq(productsTable.featured, filters.featured));
   }
 
+  if (filters.productIds?.length) {
+    conditions.push(inArray(productsTable.id, filters.productIds));
+  }
+
   const productRows = await db
     .select({
       product: productsTable,
@@ -271,6 +279,10 @@ export async function listProductCards(filters: ProductFilters = {}) {
       ),
     );
 
+  const reservedByBp = await loadReservedByBranchProductIds(
+    availabilityRows.map(({ branchProduct }) => branchProduct.id),
+  );
+
   return productRows
     .map(({ product, categoryName, categorySlug }) => {
       const availability = availabilityRows
@@ -298,12 +310,16 @@ export async function listProductCards(filters: ProductFilters = {}) {
           const promotionView = promotion
             ? serializePromotion(promotion, basePrice)
             : null;
+          const inventory = sellableUnits(
+            branchProduct.inventory,
+            reservedByBp.get(branchProduct.id) ?? 0,
+          );
           return {
           branchId,
           branchSlug,
           branchName,
           available: branchProduct.available && scheduleReady,
-          inventory: branchProduct.inventory,
+          inventory,
           minStock: branchProduct.minStock,
           criticalStock: branchProduct.criticalStock ?? null,
           autoAlertEnabled: branchProduct.autoAlertEnabled !== false,
@@ -421,6 +437,7 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
   const inheritedSalePrice = branchAvailability?.salePrice ?? row.product.salePrice;
 
   const crossSellProductIds = await loadProductCrossSellIds(row.product.id);
+  const crossSellProducts = await loadFilteredCrossSellProducts(crossSellProductIds, branchId);
 
   return {
     ...card,
@@ -434,6 +451,7 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
     portions: row.product.portions,
     minimumLeadTimeHours: row.product.minimumLeadTimeHours,
     crossSellProductIds,
+    crossSellProducts,
     variants: variants.map((variant) => ({
       id: variant.id,
       name: variant.name,
@@ -445,6 +463,143 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
         variant.salePrice ?? inheritedSalePrice,
         promotion?.promotion,
       ).finalPrice,
+    })),
+  };
+}
+
+export async function loadFilteredCrossSellProducts(
+  productIds: number[],
+  branchId?: number,
+) {
+  if (!productIds.length) return [];
+  const cards = await listProductCards({
+    productIds,
+    publicOnly: true,
+    includeUnavailable: true,
+    branchIds: branchId != null ? [branchId] : undefined,
+  });
+  return filterCrossSellCards(productIds, cards, branchId);
+}
+
+export async function getAdminProductDetail(productId: number) {
+  const [row] = await db
+    .select({
+      product: productsTable,
+      categoryName: categoriesTable.name,
+      categorySlug: categoriesTable.slug,
+    })
+    .from(productsTable)
+    .innerJoin(categoriesTable, eq(productsTable.categoryId, categoriesTable.id))
+    .where(eq(productsTable.id, productId));
+  if (!row) return null;
+
+  const { product } = row;
+  const [card] = await listProductCards({
+    productIds: [product.id],
+    publicOnly: false,
+  });
+  const categoriesByProduct = await loadProductCategorySummaries([product.id]);
+  const promotionsByProduct = await activePromotionCandidates([product.id]);
+  const availabilityRows = await db
+    .select({
+      branchProduct: branchProductsTable,
+      branchId: branchesTable.id,
+      branchSlug: branchesTable.slug,
+      branchName: branchesTable.name,
+      branchPrep: branchesTable.preparationTimeMinutes,
+    })
+    .from(branchProductsTable)
+    .innerJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
+    .where(eq(branchProductsTable.productId, product.id));
+
+  const reservedByBp = await loadReservedByBranchProductIds(
+    availabilityRows.map(({ branchProduct }) => branchProduct.id),
+  );
+
+  const availability = availabilityRows.map(
+    ({ branchProduct, branchId, branchSlug, branchName, branchPrep }) =>
+      serializeAdminBranchAvailability({
+        branchId,
+        branchSlug,
+        branchName,
+        available: branchProduct.available,
+        inventory: branchProduct.inventory,
+        reserved: reservedByBp.get(branchProduct.id) ?? 0,
+        minStock: branchProduct.minStock,
+        criticalStock: branchProduct.criticalStock ?? null,
+        autoAlertEnabled: branchProduct.autoAlertEnabled !== false,
+        alertState: branchProduct.alertState,
+        priceOverride: branchProduct.priceOverride ?? null,
+        salePriceOverride: branchProduct.salePriceOverride ?? null,
+        basePrice: product.price,
+        baseSalePrice: product.salePrice,
+        preparationTimeMinutes:
+          branchProduct.preparationTimeMinutes ??
+          branchPrep ??
+          product.minimumLeadTimeHours * 60,
+        pickupAvailable: branchProduct.pickupAvailable,
+        deliveryAvailable: branchProduct.deliveryAvailable,
+        promotions: promotionsByProduct.get(product.id),
+      }),
+  );
+
+  const variants = await db
+    .select()
+    .from(productVariantsTable)
+    .where(
+      and(eq(productVariantsTable.productId, product.id), eq(productVariantsTable.active, true)),
+    )
+    .orderBy(asc(productVariantsTable.id));
+
+  const crossSellProductIds = await loadProductCrossSellIds(product.id);
+  const cats = categoriesByProduct.get(product.id) ?? [];
+
+  return {
+    ...(card ?? {
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      slug: product.slug,
+      shortDescription: product.shortDescription,
+      price: product.price,
+      salePrice: product.salePrice,
+      categoryName: row.categoryName,
+      categorySlug: row.categorySlug,
+      imageUrl: product.imageUrl,
+      featured: product.featured,
+      seasonal: product.seasonal,
+      minimumLeadTimeHours: product.minimumLeadTimeHours,
+      status: product.status,
+      updatedAt: product.updatedAt,
+    }),
+    categories: cats.length
+      ? cats.map((c) => ({ id: c.id, name: c.name, slug: c.slug, isPrimary: c.isPrimary }))
+      : [
+          {
+            id: product.categoryId,
+            name: row.categoryName,
+            slug: row.categorySlug,
+            isPrimary: true,
+          },
+        ],
+    availability,
+    description: product.description,
+    tags: product.tags,
+    gallery: product.gallery.filter((image) => image !== product.imageUrl),
+    ingredients: product.ingredients,
+    allergens: product.allergens,
+    conservation: product.conservation,
+    weight: product.weight,
+    portions: product.portions,
+    status: product.status,
+    crossSellProductIds,
+    variants: variants.map((variant) => ({
+      id: variant.id,
+      name: variant.name,
+      value: variant.value,
+      sku: variant.sku,
+      price: variant.price,
+      salePrice: variant.salePrice,
     })),
   };
 }

@@ -10,6 +10,13 @@ import {
   getListAdminBranchesQueryKey,
   type AdminBranch,
 } from "@workspace/api-client-react";
+import {
+  AdminEmptyState,
+  AdminError,
+  AdminLoading,
+  AdminPageHeader,
+  AdminPageShell,
+} from "@/components/admin";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,41 +140,42 @@ export default function AdminBranches() {
 
   return (
     <AdminLayout>
-      <div className="p-6 md:p-10 space-y-6 overflow-auto">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-serif font-bold">Sucursales</h1>
-            <p className="text-muted-foreground">
-              Unidades operativas independientes: identidad, equipo, pedidos e inventario.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
-              <a href="/api/admin/branches/export">Exportar</a>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/sucursales/nueva">
-                <Plus className="w-4 h-4 mr-2" /> Nueva sucursal
-              </Link>
-            </Button>
-          </div>
-        </div>
+      <AdminPageShell>
+        <AdminPageHeader
+          title="Sucursales"
+          description="Unidades operativas independientes: identidad, equipo, pedidos e inventario."
+          actions={
+            <>
+              <Button variant="outline" className="rounded-none" asChild>
+                <a href="/api/admin/branches/export">Exportar</a>
+              </Button>
+              <Button className="rounded-none" asChild>
+                <Link href="/admin/sucursales/nueva">
+                  <Plus className="mr-2 h-4 w-4" /> Nueva sucursal
+                </Link>
+              </Button>
+            </>
+          }
+        />
 
         {query.isLoading ? (
-          <p className="text-muted-foreground">Cargando sucursales…</p>
+          <AdminLoading label="Cargando sucursales…" />
         ) : query.error ? (
-          <p className="text-destructive">No se pudieron cargar las sucursales.</p>
+          <AdminError
+            title="No se pudieron cargar las sucursales"
+            onRetry={() => query.refetch()}
+          />
         ) : branches.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-12 text-center space-y-4">
-            <Store className="w-10 h-10 mx-auto text-muted-foreground" />
-            <div>
-              <h2 className="font-semibold text-lg">Aún no hay sucursales</h2>
-              <p className="text-muted-foreground text-sm">Crea la primera para operar pedidos e inventario.</p>
-            </div>
-            <Button asChild>
-              <Link href="/admin/sucursales/nueva">Crear sucursal</Link>
-            </Button>
-          </div>
+          <AdminEmptyState
+            icon={Store}
+            title="Aún no hay sucursales"
+            description="Crea la primera para operar pedidos e inventario."
+            action={
+              <Button className="rounded-none" asChild>
+                <Link href="/admin/sucursales/nueva">Crear sucursal</Link>
+              </Button>
+            }
+          />
         ) : (
           <div className="grid gap-4">
             {branches.map((branch) => {
@@ -275,7 +283,7 @@ export default function AdminBranches() {
             })}
           </div>
         )}
-      </div>
+      </AdminPageShell>
 
       <Dialog open={!!dupOpen} onOpenChange={(o) => !o && setDupOpen(null)}>
         <DialogContent>

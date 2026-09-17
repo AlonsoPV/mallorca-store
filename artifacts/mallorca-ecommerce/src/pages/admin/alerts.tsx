@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { useMemo } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { Bell } from "lucide-react";
 import {
   getListInventoryAlertsQueryKey,
   useGetMe,
@@ -9,9 +10,25 @@ import {
   useUpdateInventoryAlert,
   type ListInventoryAlertsParams,
 } from "@workspace/api-client-react";
+import {
+  AdminEmptyState,
+  AdminError,
+  AdminFilterBar,
+  AdminFilterSelect,
+  AdminLoading,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableHeader,
+  AdminTableRow,
+} from "@/components/admin";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { readSearchParam, withSearchParams } from "@/lib/admin-search-params";
 
 const TYPE_LABEL: Record<string, string> = {
   LOW_STOCK: "Stock bajo",
@@ -23,22 +40,54 @@ const TYPE_LABEL: Record<string, string> = {
   CUSTOM: "Personalizada",
 };
 
+type AlertsFilters = {
+  branchId: string;
+  status: string;
+  source: string;
+  type: string;
+};
+
+function parseAlertsSearch(search: string): AlertsFilters {
+  return {
+    branchId: readSearchParam(search, "branchId") || "all",
+    status: readSearchParam(search, "status") || "OPEN",
+    source: readSearchParam(search, "source") || "all",
+    type: readSearchParam(search, "type") || "all",
+  };
+}
+
 export default function AdminAlerts() {
-  const [branchId, setBranchId] = useState("");
-  const [status, setStatus] = useState("OPEN");
-  const [source, setSource] = useState("");
-  const [type, setType] = useState("");
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const filters = useMemo(() => parseAlertsSearch(search), [search]);
+
+  const patchFilters = (patch: Partial<AlertsFilters>) => {
+    const next = { ...filters, ...patch };
+    setLocation(
+      withSearchParams("/admin/alertas", search, {
+        branchId: next.branchId,
+        status: next.status === "OPEN" ? null : next.status,
+        source: next.source,
+        type: next.type,
+      }),
+      { replace: true },
+    );
+  };
+
   const params: ListInventoryAlertsParams = {
-    branchId: branchId ? Number(branchId) : undefined,
-    status: (status || undefined) as ListInventoryAlertsParams["status"],
-    source: (source || undefined) as ListInventoryAlertsParams["source"],
-    type: type || undefined,
+    branchId: filters.branchId !== "all" ? Number(filters.branchId) : undefined,
+    status: (filters.status !== "all"
+      ? filters.status
+      : undefined) as ListInventoryAlertsParams["status"],
+    source: (filters.source !== "all"
+      ? filters.source
+      : undefined) as ListInventoryAlertsParams["source"],
+    type: filters.type !== "all" ? filters.type : undefined,
   };
   const q = useListInventoryAlerts(params);
   const branches = useListAdminBranches();
   const me = useGetMe();
-  const canResolve =
-    me.data?.role !== "staff";
+  const canResolve = me.data?.role !== "staff";
   const update = useUpdateInventoryAlert();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -62,6 +111,15 @@ export default function AdminAlerts() {
     return { critical, attention, resolved };
   }, [q.data]);
 
+  const totalVisible =
+    grouped.critical.length +
+    grouped.attention.length +
+    (filters.status === "RESOLVED" ||
+    filters.status === "DISMISSED" ||
+    filters.status === "all"
+      ? grouped.resolved.length
+      : 0);
+
   const patch = async (
     id: number,
     body: { status?: "IN_PROGRESS" | "RESOLVED" | "DISMISSED"; resolutionNote?: string },
@@ -77,67 +135,108 @@ export default function AdminAlerts() {
 
   return (
     <AdminLayout>
-      <div className="space-y-6 overflow-auto p-6 md:p-10">
-        <div>
-          <h1 className="text-3xl font-bold">Alertas de inventario</h1>
-          <p className="text-muted-foreground">
-            Automáticas y manuales, con acciones de seguimiento.
-          </p>
+      <AdminPageShell>
+        <AdminPageHeader
+          title="Alertas de inventario"
+          description="Automáticas y manuales, con acciones de seguimiento."
+        />
+
+        <div className="sticky top-0 z-10 -mx-6 border-b border-border bg-background/95 px-6 py-3 backdrop-blur md:-mx-10 md:px-10">
+          <AdminFilterBar>
+            <AdminFilterSelect
+              value={filters.branchId}
+              onValueChange={(branchId) => patchFilters({ branchId })}
+              placeholder="Sucursal"
+              options={[
+                { value: "all", label: "Todas las sucursales" },
+                ...(branches.data?.map((branch) => ({
+                  value: String(branch.id),
+                  label: branch.name,
+                })) ?? []),
+              ]}
+            />
+            <AdminFilterSelect
+              value={filters.status}
+              onValueChange={(status) => patchFilters({ status })}
+              placeholder="Estado"
+              options={[
+                { value: "all", label: "Todos los estados" },
+                { value: "OPEN", label: "Abiertas" },
+                { value: "IN_PROGRESS", label: "En atención" },
+                { value: "RESOLVED", label: "Resueltas" },
+                { value: "DISMISSED", label: "Descartadas" },
+              ]}
+            />
+            <AdminFilterSelect
+              value={filters.source}
+              onValueChange={(source) => patchFilters({ source })}
+              placeholder="Origen"
+              options={[
+                { value: "all", label: "Origen" },
+                { value: "AUTOMATIC", label: "Automática" },
+                { value: "MANUAL", label: "Manual" },
+              ]}
+            />
+            <AdminFilterSelect
+              value={filters.type}
+              onValueChange={(type) => patchFilters({ type })}
+              placeholder="Tipo"
+              options={[
+                { value: "all", label: "Tipo" },
+                ...Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label })),
+              ]}
+            />
+          </AdminFilterBar>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <select
-            className="h-10 rounded-md border bg-background px-3 text-sm"
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-          >
-            <option value="">Todas las sucursales</option>
-            {branches.data?.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="h-10 rounded-md border bg-background px-3 text-sm"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">Todos los estados</option>
-            <option value="OPEN">Abiertas</option>
-            <option value="IN_PROGRESS">En atención</option>
-            <option value="RESOLVED">Resueltas</option>
-            <option value="DISMISSED">Descartadas</option>
-          </select>
-          <select
-            className="h-10 rounded-md border bg-background px-3 text-sm"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-          >
-            <option value="">Origen</option>
-            <option value="AUTOMATIC">Automática</option>
-            <option value="MANUAL">Manual</option>
-          </select>
-          <select
-            className="h-10 rounded-md border bg-background px-3 text-sm"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-          >
-            <option value="">Tipo</option>
-            {Object.entries(TYPE_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <AlertSection title="Críticas" rows={grouped.critical} onPatch={patch} canResolve={canResolve} />
-        <AlertSection title="Atención" rows={grouped.attention} onPatch={patch} canResolve={canResolve} />
-        {status === "RESOLVED" || status === "DISMISSED" || !status ? (
-          <AlertSection title="Resueltas / descartadas" rows={grouped.resolved} onPatch={patch} canResolve={canResolve} />
+        {q.isLoading ? <AdminLoading label="Cargando alertas…" /> : null}
+        {q.isError ? (
+          <AdminError
+            title="No se pudieron cargar las alertas"
+            onRetry={() => q.refetch()}
+          />
         ) : null}
-      </div>
+
+        {!q.isLoading && !q.isError && totalVisible === 0 ? (
+          <AdminEmptyState
+            icon={Bell}
+            title="No hay alertas abiertas"
+            description="Cuando el stock cruce umbrales o se generen alertas manuales, aparecerán aquí."
+            action={
+              <Button asChild className="rounded-none">
+                <Link href="/admin/inventario">Ir a inventario</Link>
+              </Button>
+            }
+          />
+        ) : null}
+
+        {!q.isLoading && !q.isError && totalVisible > 0 ? (
+          <>
+            <AlertSection
+              title="Críticas"
+              rows={grouped.critical}
+              onPatch={patch}
+              canResolve={canResolve}
+            />
+            <AlertSection
+              title="Atención"
+              rows={grouped.attention}
+              onPatch={patch}
+              canResolve={canResolve}
+            />
+            {filters.status === "RESOLVED" ||
+            filters.status === "DISMISSED" ||
+            filters.status === "all" ? (
+              <AlertSection
+                title="Resueltas / descartadas"
+                rows={grouped.resolved}
+                onPatch={patch}
+                canResolve={canResolve}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </AdminPageShell>
     </AdminLayout>
   );
 }
@@ -149,7 +248,11 @@ function AlertSection({
   canResolve,
 }: {
   title: string;
-  rows: NonNullable<ReturnType<typeof useListInventoryAlerts>["data"]>;
+  rows: Array<{
+    alert: any;
+    product?: { id?: number; name?: string; sku?: string } | null;
+    branch?: { id?: number; name?: string } | null;
+  }>;
   onPatch: (
     id: number,
     body: { status?: "IN_PROGRESS" | "RESOLVED" | "DISMISSED"; resolutionNote?: string },
@@ -163,108 +266,111 @@ function AlertSection({
         {title}{" "}
         <span className="text-sm font-normal text-muted-foreground">({rows.length})</span>
       </h2>
-      <div className="overflow-x-auto rounded-lg border bg-card">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50">
-            <tr>
-              {[
-                "Fecha",
-                "Producto",
-                "Sucursal",
-                "Tipo",
-                "Prioridad",
-                "Stock",
-                "Estado",
-                "Acciones",
-              ].map((heading) => (
-                <th className="p-3 text-left" key={heading}>
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const alert = row.alert as any;
-              return (
-                <tr className="border-t" key={alert.id}>
-                  <td className="p-3">
-                    {alert.createdAt
-                      ? new Date(alert.createdAt).toLocaleString("es-MX")
-                      : "—"}
-                  </td>
-                  <td className="p-3">
-                    <div className="font-medium">{row.product?.name}</div>
-                    <div className="font-mono text-xs text-muted-foreground">
-                      {row.product?.sku}
-                    </div>
-                  </td>
-                  <td className="p-3">{row.branch?.name}</td>
-                  <td className="p-3">
-                    {TYPE_LABEL[alert.type] ?? alert.type}
-                    <div className="text-xs text-muted-foreground">{alert.source}</div>
-                  </td>
-                  <td className="p-3">{alert.priority ?? "—"}</td>
-                  <td className="p-3">
-                    {alert.availableStock ?? alert.stock ?? "—"}
-                    {alert.minStock != null ? (
-                      <span className="text-muted-foreground"> / min {alert.minStock}</span>
+      <AdminTable>
+        <AdminTableHeader>
+          <AdminTableRow>
+            {[
+              "Fecha",
+              "Producto",
+              "Sucursal",
+              "Tipo",
+              "Prioridad",
+              "Stock",
+              "Estado",
+              "Acciones",
+            ].map((heading) => (
+              <AdminTableHead key={heading}>{heading}</AdminTableHead>
+            ))}
+          </AdminTableRow>
+        </AdminTableHeader>
+        <AdminTableBody>
+          {rows.map((row) => {
+            const alert = row.alert as any;
+            const branchId = row.branch?.id ?? alert?.branchId;
+            const stockHref = branchId
+              ? `/admin/inventario?branchId=${branchId}`
+              : "/admin/inventario";
+            return (
+              <AdminTableRow key={alert.id}>
+                <AdminTableCell>
+                  {alert.createdAt
+                    ? new Date(alert.createdAt).toLocaleString("es-MX")
+                    : "—"}
+                </AdminTableCell>
+                <AdminTableCell>
+                  <div className="font-medium">{row.product?.name}</div>
+                  <div className="font-mono text-xs text-muted-foreground">
+                    {row.product?.sku}
+                  </div>
+                </AdminTableCell>
+                <AdminTableCell>{row.branch?.name}</AdminTableCell>
+                <AdminTableCell>
+                  {TYPE_LABEL[alert.type] ?? alert.type}
+                  <div className="text-xs text-muted-foreground">{alert.source}</div>
+                </AdminTableCell>
+                <AdminTableCell>{alert.priority ?? "—"}</AdminTableCell>
+                <AdminTableCell>
+                  {alert.availableStock ?? alert.stock ?? "—"}
+                  {alert.minStock != null ? (
+                    <span className="text-muted-foreground"> / min {alert.minStock}</span>
+                  ) : null}
+                </AdminTableCell>
+                <AdminTableCell>{alert.status ?? "—"}</AdminTableCell>
+                <AdminTableCell>
+                  <div className="flex flex-wrap gap-1">
+                    <Button asChild size="sm" variant="outline" className="rounded-none">
+                      <Link href={`/admin/productos/${row.product?.id}`}>Ver producto</Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline" className="rounded-none">
+                      <Link href={stockHref}>Stock</Link>
+                    </Button>
+                    {alert.status === "OPEN" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-none"
+                        onClick={() => onPatch(alert.id, { status: "IN_PROGRESS" })}
+                      >
+                        En atención
+                      </Button>
                     ) : null}
-                  </td>
-                  <td className="p-3">{alert.status ?? "—"}</td>
-                  <td className="p-3">
-                    <div className="flex flex-wrap gap-1">
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={`/admin/productos/${row.product?.id}`}>Ver producto</Link>
-                      </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <Link href="/admin/inventario">Stock</Link>
-                      </Button>
-                      {alert.status === "OPEN" ? (
+                    {canResolve &&
+                    (alert.status === "OPEN" || alert.status === "IN_PROGRESS") ? (
+                      <>
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => onPatch(alert.id, { status: "IN_PROGRESS" })}
+                          className="rounded-none"
+                          onClick={() =>
+                            onPatch(alert.id, {
+                              status: "RESOLVED",
+                              resolutionNote: "Resuelto desde centro de alertas",
+                            })
+                          }
                         >
-                          En atención
+                          Resolver
                         </Button>
-                      ) : null}
-                      {canResolve &&
-                      (alert.status === "OPEN" || alert.status === "IN_PROGRESS") ? (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              onPatch(alert.id, {
-                                status: "RESOLVED",
-                                resolutionNote: "Resuelto desde centro de alertas",
-                              })
-                            }
-                          >
-                            Resolver
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              onPatch(alert.id, {
-                                status: "DISMISSED",
-                                resolutionNote: "Descartada",
-                              })
-                            }
-                          >
-                            Descartar
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-none"
+                          onClick={() =>
+                            onPatch(alert.id, {
+                              status: "DISMISSED",
+                              resolutionNote: "Descartada",
+                            })
+                          }
+                        >
+                          Descartar
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                </AdminTableCell>
+              </AdminTableRow>
+            );
+          })}
+        </AdminTableBody>
+      </AdminTable>
     </section>
   );
 }

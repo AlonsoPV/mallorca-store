@@ -14,10 +14,14 @@ import {
   branchLinksTable,
   branchSpecialHoursTable,
   couponsTable,
+  orderPaymentsTable,
+  paymentMethodConfigsTable,
+  paymentProviderSettingsTable,
 } from "@workspace/db";
 import {
   CreateProductBody,
   CreateProductResponse,
+  GetAdminProductResponse,
   GetAdminSummaryResponse,
   ListAdminProductsQueryParams,
   ListAdminProductsResponse,
@@ -60,6 +64,15 @@ import {
   ListAdminCouponsResponse,
   CreateAdminCouponBody,
   CreateAdminCouponResponse,
+  ListAdminPaymentMethodsResponse,
+  UpdateAdminPaymentMethodParams,
+  UpdateAdminPaymentMethodBody,
+  UpdateAdminPaymentMethodResponse,
+  GetAdminPaymentProviderParams,
+  GetAdminPaymentProviderResponse,
+  UpdateAdminPaymentProviderParams,
+  UpdateAdminPaymentProviderBody,
+  UpdateAdminPaymentProviderResponse,
 } from "@workspace/api-zod";
 import {
   applyInventoryAlert,
@@ -70,13 +83,25 @@ import {
 import { createOrder, OrderCreateError } from "../lib/order-create";
 import { writeOrderAudit } from "../lib/order-audit";
 import { loadAdminOrder } from "../lib/admin-order-serialize";
+import { canOverrideAvailability } from "../lib/order-permissions";
+import {
+  decideCancelPayment,
+  decideCompleteUnpaid,
+  decideRecordPayment,
+  encryptSecret,
+  loadMercadoPagoConfigured,
+  loadPaymentMethodConfigs,
+  maskSecret,
+  setMercadoPagoConfigured,
+} from "../lib/payments";
 import { fulfillmentSchedule, isValidSlotTime, mexicoDate } from "../lib/fulfillment-schedule";
 import {
   calculatePromotionPrice,
-  getProductDetailBySlug,
+  getAdminProductDetail,
   listProductCards,
   promotionStatus,
 } from "../lib/catalog";
+import { commitOrderReservations, releaseOrderReservations, reserveBranchProduct } from "../lib/inventory-hold";
 import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
 import { DEFAULT_NOTIFICATION_PREFERENCES, normalizeNotificationPreferences } from "../lib/notification-prefs";
 import {
@@ -122,7 +147,7 @@ import {
 } from "@workspace/api-zod";
 import {
   branchDependencyCounts,
-  buildFormattedAddress,
+  resolveBranchFormattedAddress,
   countFutureOrders,
   enrichBranchesList,
   loadBranchSatellite,
@@ -444,6 +469,8 @@ const branchConfigurationSchema = z.object({
   available: z.boolean().optional(),
   inventory: z.number().int().min(0).optional(),
   minStock: z.number().int().min(0).optional(),
+  criticalStock: z.number().int().min(0).nullable().optional(),
+  autoAlertEnabled: z.boolean().optional(),
   priceOverride: z.number().min(0).nullable().optional(),
   salePriceOverride: z.number().min(0).nullable().optional(),
   preparationTimeMinutes: z.number().int().min(0).nullable().optional(),
@@ -573,6 +600,8 @@ router.get("/admin/orders", async (req, res): Promise<void> => {
     status: ordersTable.status,
     orderSource: ordersTable.orderSource,
     paymentStatus: ordersTable.paymentStatus,
+    paymentMethod: ordersTable.paymentMethod,
+    amountPaid: ordersTable.amountPaid,
     total: ordersTable.total,
     createdAt: ordersTable.createdAt,
     scheduledStart: ordersTable.scheduledStart,
@@ -804,6 +833,151 @@ router.post("/admin/coupons", async (req, res): Promise<void> => {
   }));
 });
 
+router.get("/admin/payment-methods", async (_req, res): Promise<void> => {
+  const configs = await loadPaymentMethodConfigs();
+  res.json(ListAdminPaymentMethodsResponse.parse(configs));
+});
+
+router.patch("/admin/payment-methods/:code", async (req, res): Promise<void> => {
+  const user = await getRequestUser(req);
+  if (!user || !hasGlobalBranchAccess(user)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const p = UpdateAdminPaymentMethodParams.safeParse(req.params);
+  const b = UpdateAdminPaymentMethodBody.safeParse(req.body);
+  if (!p.success || !b.success) { res.status(400).json({ error: "Invalid payment method" }); return; }
+  if (p.data.code === "CASH_ON_PICKUP" && b.data.allowDelivery === true) {
+    res.status(400).json({ error: "Cash on pickup cannot be enabled for delivery", code: "DELIVERY_NOT_ALLOWED" });
+    return;
+  }
+  const configs = await loadPaymentMethodConfigs();
+  const current = configs.find((row) => row.code === p.data.code);
+  if (!current) { res.status(404).json({ error: "Payment method not found" }); return; }
+  const next = {
+    ...current,
+    enabled: b.data.enabled ?? current.enabled,
+    allowPickup: b.data.allowPickup ?? current.allowPickup,
+    allowDelivery: p.data.code === "CASH_ON_PICKUP" ? false : (b.data.allowDelivery ?? current.allowDelivery),
+    customerLabel: b.data.customerLabel ?? current.customerLabel,
+    customerDescription: b.data.customerDescription === undefined ? current.customerDescription : b.data.customerDescription,
+    sortOrder: b.data.sortOrder ?? current.sortOrder,
+  };
+  const [row] = await db
+    .insert(paymentMethodConfigsTable)
+    .values({
+      code: next.code,
+      name: next.name,
+      provider: next.provider,
+      enabled: next.enabled,
+      sortOrder: next.sortOrder,
+      allowPickup: next.allowPickup,
+      allowDelivery: next.allowDelivery,
+      configurationStatus: next.configurationStatus,
+      customerLabel: next.customerLabel,
+      customerDescription: next.customerDescription,
+    })
+    .onConflictDoUpdate({
+      target: paymentMethodConfigsTable.code,
+      set: {
+        enabled: next.enabled,
+        sortOrder: next.sortOrder,
+        allowPickup: next.allowPickup,
+        allowDelivery: next.allowDelivery,
+        customerLabel: next.customerLabel,
+        customerDescription: next.customerDescription,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  res.json(UpdateAdminPaymentMethodResponse.parse({
+    code: row.code,
+    name: row.name,
+    provider: row.provider,
+    enabled: row.enabled,
+    sortOrder: row.sortOrder,
+    allowPickup: row.allowPickup,
+    allowDelivery: row.allowDelivery,
+    configurationStatus: row.configurationStatus === "configured" ? "configured" : "not_configured",
+    customerLabel: row.customerLabel,
+    customerDescription: row.customerDescription ?? null,
+  }));
+});
+
+async function paymentProviderPayload(provider: string) {
+  const [row] = await db
+    .select()
+    .from(paymentProviderSettingsTable)
+    .where(eq(paymentProviderSettingsTable.provider, provider));
+  const configured = provider === "MERCADO_PAGO"
+    ? await loadMercadoPagoConfigured()
+    : Boolean(row?.accessTokenEncrypted);
+  return {
+    provider,
+    sandbox: row?.sandbox ?? true,
+    configured,
+    publicKeyMasked: maskSecret(row?.publicKey ?? null),
+    accessTokenConfigured: Boolean(row?.accessTokenEncrypted),
+    webhookSecretConfigured: Boolean(row?.webhookSecretEncrypted),
+  };
+}
+
+router.get("/admin/payment-providers/:provider", async (req, res): Promise<void> => {
+  const user = await getRequestUser(req);
+  if (!user || !hasGlobalBranchAccess(user)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const p = GetAdminPaymentProviderParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: "Invalid provider" }); return; }
+  const provider = p.data.provider.toUpperCase();
+  if (provider !== "MERCADO_PAGO") { res.status(404).json({ error: "Unknown provider" }); return; }
+  res.json(GetAdminPaymentProviderResponse.parse(await paymentProviderPayload(provider)));
+});
+
+router.put("/admin/payment-providers/:provider", async (req, res): Promise<void> => {
+  const user = await getRequestUser(req);
+  if (!user || !hasGlobalBranchAccess(user)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const p = UpdateAdminPaymentProviderParams.safeParse(req.params);
+  const b = UpdateAdminPaymentProviderBody.safeParse(req.body);
+  if (!p.success || !b.success) { res.status(400).json({ error: "Invalid provider settings" }); return; }
+  const provider = p.data.provider.toUpperCase();
+  if (provider !== "MERCADO_PAGO") { res.status(404).json({ error: "Unknown provider" }); return; }
+  const [existing] = await db
+    .select()
+    .from(paymentProviderSettingsTable)
+    .where(eq(paymentProviderSettingsTable.provider, provider));
+  const accessTokenEncrypted = b.data.accessToken
+    ? encryptSecret(b.data.accessToken)
+    : existing?.accessTokenEncrypted ?? null;
+  const webhookSecretEncrypted = b.data.webhookSecret
+    ? encryptSecret(b.data.webhookSecret)
+    : existing?.webhookSecretEncrypted ?? null;
+  const publicKey = b.data.publicKey === undefined ? existing?.publicKey ?? null : (b.data.publicKey || null);
+  await db
+    .insert(paymentProviderSettingsTable)
+    .values({
+      provider,
+      sandbox: b.data.sandbox ?? existing?.sandbox ?? true,
+      publicKey,
+      accessTokenEncrypted,
+      webhookSecretEncrypted,
+    })
+    .onConflictDoUpdate({
+      target: paymentProviderSettingsTable.provider,
+      set: {
+        sandbox: b.data.sandbox ?? existing?.sandbox ?? true,
+        publicKey,
+        accessTokenEncrypted,
+        webhookSecretEncrypted,
+        updatedAt: new Date(),
+      },
+    });
+  const configured = Boolean(accessTokenEncrypted);
+  setMercadoPagoConfigured(configured);
+  if (configured) {
+    await db
+      .update(paymentMethodConfigsTable)
+      .set({ configurationStatus: "configured", updatedAt: new Date() })
+      .where(eq(paymentMethodConfigsTable.provider, "MERCADO_PAGO"));
+  }
+  res.json(UpdateAdminPaymentProviderResponse.parse(await paymentProviderPayload(provider)));
+});
+
 router.get("/admin/orders/:id", async (req, res): Promise<void> => {
   const p = GetAdminOrderParams.safeParse(req.params);
   if (!p.success) { res.status(400).json({ error: "Invalid order id" }); return; }
@@ -825,28 +999,41 @@ router.post("/admin/orders/:id/payment", async (req, res): Promise<void> => {
       const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, p.data.id)).for("update");
       if (!order) throw new Error("ORDER_NOT_FOUND");
       if (!(await canAccessBranch(req, order.branchId))) throw new Error("FORBIDDEN_BRANCH");
-      const markPaid = b.data.markPaid !== false;
-      const amountPaid = b.data.amountPaid ?? (markPaid ? order.total : order.amountPaid);
-      const paymentStatus = markPaid
-        ? (amountPaid < order.total ? "partially_paid" : "paid")
-        : order.paymentStatus;
-      const status = markPaid && order.status === "pending_payment" && paymentStatus === "paid"
-        ? "paid"
-        : order.status;
-      if (status === "paid" && order.status !== "paid") {
-        await tx.update(inventoryReservationsTable)
-          .set({ status: "committed" })
-          .where(and(eq(inventoryReservationsTable.orderId, order.id), eq(inventoryReservationsTable.status, "active")));
+      const decision = decideRecordPayment({
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        total: order.total,
+        amountPaid: order.amountPaid ?? 0,
+        markPaid: b.data.markPaid,
+        recordedAmount: b.data.amountPaid,
+      });
+      if (!decision.ok) throw Object.assign(new Error(decision.code), { httpStatus: decision.status, publicMessage: decision.error, code: decision.code });
+      if (decision.commitInventory) {
+        await commitOrderReservations(tx, order.id, user?.id);
       }
+      const now = new Date();
       const [o] = await tx.update(ordersTable).set({
         paymentMethod: b.data.paymentMethod,
         paymentReference: b.data.paymentReference ?? null,
         paymentNote: b.data.paymentNote ?? null,
-        amountPaid,
-        paymentStatus,
-        status,
-        inventoryCommittedAt: status === "paid" ? new Date() : order.inventoryCommittedAt,
+        amountPaid: decision.amountPaid,
+        paymentStatus: decision.paymentStatus,
+        status: decision.orderStatus as typeof order.status,
+        paidAt: decision.paidAt ? now : order.paidAt,
+        paidByUserId: decision.paidAt ? user?.id ?? null : order.paidByUserId,
+        inventoryCommittedAt: decision.commitInventory ? now : order.inventoryCommittedAt,
       }).where(eq(ordersTable.id, order.id)).returning();
+      await tx.insert(orderPaymentsTable).values({
+        orderId: order.id,
+        method: b.data.paymentMethod,
+        provider: b.data.paymentMethod === "CASH_ON_PICKUP" || b.data.paymentMethod === "CASH" ? "CASH_ON_PICKUP" : "MANUAL",
+        amount: decision.amountPaid,
+        currency: "MXN",
+        status: decision.paymentStatus === "paid" ? "paid" : "partially_paid",
+        recordedByUserId: user?.id ?? null,
+        note: b.data.paymentNote ?? null,
+        paidAt: decision.paidAt ? now : null,
+      });
       await writeOrderAudit({
         tx,
         orderId: order.id,
@@ -860,6 +1047,11 @@ router.post("/admin/orders/:id/payment", async (req, res): Promise<void> => {
   } catch (error) {
     if (error instanceof Error && error.message === "ORDER_NOT_FOUND") { res.status(404).json({ error: "Order not found" }); return; }
     if (error instanceof Error && error.message === "FORBIDDEN_BRANCH") { res.status(403).json({ error: "Branch access denied" }); return; }
+    const coded = error as Error & { httpStatus?: number; publicMessage?: string; code?: string };
+    if (coded.httpStatus) {
+      res.status(coded.httpStatus).json({ error: coded.publicMessage ?? coded.message, code: coded.code });
+      return;
+    }
     throw error;
   }
   res.json(RecordAdminOrderPaymentResponse.parse(await loadAdminOrder(updated.id)));
@@ -903,6 +1095,7 @@ router.post("/admin/orders/:id/duplicate", async (req, res): Promise<void> => {
     userId: order.userId,
     fulfillmentMethod: order.fulfillmentMethod,
     deliveryAddress: order.deliveryAddress,
+    deliveryAddressSnapshot: order.deliveryAddressSnapshot ?? null,
     deliveryLatitude: order.deliveryLatitude,
     deliveryLongitude: order.deliveryLongitude,
     customerNotes: order.customerNotes,
@@ -930,7 +1123,7 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     if (!order) throw new Error("ORDER_NOT_FOUND");
     if (!(await canAccessBranch(req, order.branchId))) throw new Error("FORBIDDEN_BRANCH");
 
-    const editable = order.status === "pending_payment" || order.status === "paid";
+    const editable = order.status === "pending_payment" || order.status === "confirmed" || order.status === "paid";
     const patch: Partial<typeof ordersTable.$inferInsert> = {};
 
     if (b.data.customerEmail != null) patch.customerEmail = b.data.customerEmail;
@@ -958,25 +1151,18 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     if (b.data.lines && editable) {
       // Release existing reservations then recreate via createOrder is too heavy;
       // for MVP edit of lines: cancel-style release + re-reserve priced lines.
-      const oldReservations = await tx.update(inventoryReservationsTable)
-        .set({ status: "released" })
-        .where(and(eq(inventoryReservationsTable.orderId, order.id), sql`${inventoryReservationsTable.status} in ('active','committed')`))
-        .returning();
-      for (const r of oldReservations) {
-        const [bp] = await tx.update(branchProductsTable)
-          .set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` })
-          .where(eq(branchProductsTable.id, r.branchProductId))
-          .returning({ inventory: branchProductsTable.inventory });
-        const [fullBp] = await tx.select().from(branchProductsTable).where(eq(branchProductsTable.id, r.branchProductId));
-        if (fullBp) await applyInventoryAlert(tx, fullBp, bp.inventory);
-        await tx.insert(inventoryLedgerTable).values({
-          branchProductId: r.branchProductId,
-          orderId: order.id,
-          movement: "release",
-          quantityDelta: r.quantity,
-          balanceAfter: bp.inventory,
-          reason: "Order lines edited",
-        });
+      const oldReservations = await tx
+        .select()
+        .from(inventoryReservationsTable)
+        .where(eq(inventoryReservationsTable.orderId, order.id));
+      await releaseOrderReservations(tx, order.id, "Order lines edited");
+      if (oldReservations.length) {
+        await tx.delete(inventoryReservationsTable).where(
+          and(
+            eq(inventoryReservationsTable.orderId, order.id),
+            eq(inventoryReservationsTable.status, "released"),
+          ),
+        );
       }
       await tx.delete(orderItemsTable).where(eq(orderItemsTable.orderId, order.id));
 
@@ -1024,25 +1210,13 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
         if (line.manualLineItem || line.productId == null) continue;
         const [bp] = await tx.select().from(branchProductsTable).where(and(eq(branchProductsTable.branchId, order.branchId), eq(branchProductsTable.productId, line.productId)));
         if (!bp) throw new Error("OUT_OF_STOCK");
-        const updatedInv = await tx.update(branchProductsTable)
-          .set({ inventory: sql`${branchProductsTable.inventory} - ${line.quantity}` })
-          .where(and(eq(branchProductsTable.id, bp.id), sql`${branchProductsTable.inventory} >= ${line.quantity}`))
-          .returning({ inventory: branchProductsTable.inventory });
-        if (!updatedInv.length) throw new Error("OUT_OF_STOCK");
-        await applyInventoryAlert(tx, { ...bp, inventory: updatedInv[0].inventory }, updatedInv[0].inventory);
-        await tx.insert(inventoryReservationsTable).values({
-          orderId: order.id,
-          branchProductId: bp.id,
+        await reserveBranchProduct(tx, {
+          branchProduct: bp,
           quantity: line.quantity,
-          status: order.status === "paid" ? "committed" : "active",
-          expiresAt: new Date(Date.now() + 15 * 60_000),
-        });
-        await tx.insert(inventoryLedgerTable).values({
-          branchProductId: bp.id,
           orderId: order.id,
-          movement: "reserve",
-          quantityDelta: -line.quantity,
-          balanceAfter: updatedInv[0].inventory,
+          immediatePaid: order.status === "paid",
+          expiresAt: new Date(Date.now() + 15 * 60_000),
+          actorUserId: user?.id,
           reason: "Order lines edited",
         });
       }
@@ -1056,26 +1230,44 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     }
 
     if (b.data.status) {
-      const valid: Record<string, string[]> = { pending_payment: ["paid", "cancelled"], paid: ["preparing", "cancelled"], preparing: ["ready", "cancelled"], ready: ["completed", "cancelled"], completed: [], cancelled: [] };
+      const valid: Record<string, string[]> = {
+        pending_payment: ["paid", "cancelled"],
+        confirmed: ["preparing", "cancelled"],
+        paid: ["preparing", "cancelled"],
+        preparing: ["ready", "cancelled"],
+        ready: ["completed", "cancelled"],
+        completed: [],
+        cancelled: [],
+      };
       if (!valid[order.status].includes(b.data.status) && order.status !== b.data.status) throw new Error("INVALID_TRANSITION");
       if (b.data.status === "paid" && order.status !== "paid") {
-        await tx.update(inventoryReservationsTable)
-          .set({ status: "committed" })
-          .where(and(eq(inventoryReservationsTable.orderId, order.id), eq(inventoryReservationsTable.status, "active")));
+        await commitOrderReservations(tx, order.id, user?.id);
         patch.paymentStatus = "paid";
         patch.inventoryCommittedAt = new Date();
+        patch.paidAt = new Date();
+        patch.paidByUserId = user?.id ?? null;
+      }
+      if (b.data.status === "completed") {
+        const complete = decideCompleteUnpaid({
+          paymentStatus: order.paymentStatus,
+          confirmUnpaidComplete: b.data.confirmUnpaidComplete,
+          canOverride: canOverrideAvailability(user?.role ?? "staff"),
+          reason: b.data.cancelReason,
+        });
+        if (!complete.ok) {
+          throw Object.assign(new Error(complete.code), { httpStatus: complete.status, publicMessage: complete.error, code: complete.code });
+        }
       }
       if (b.data.status === "cancelled" && order.status !== "cancelled") {
         if (!b.data.cancelReason?.trim() && order.orderSource !== "STOREFRONT") {
           // require reason for manual cancels when provided path; soft require
         }
-        const reservations = await tx.update(inventoryReservationsTable).set({ status: "released" }).where(and(eq(inventoryReservationsTable.orderId, order.id), sql`${inventoryReservationsTable.status} in ('active','committed')`)).returning();
-        for (const r of reservations) {
-          const [bp] = await tx.update(branchProductsTable).set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` }).where(eq(branchProductsTable.id, r.branchProductId)).returning({ inventory: branchProductsTable.inventory });
-          const [fullBp] = await tx.select().from(branchProductsTable).where(eq(branchProductsTable.id, r.branchProductId));
-          if (fullBp) await applyInventoryAlert(tx, fullBp, bp.inventory);
-          await tx.insert(inventoryLedgerTable).values({ branchProductId: r.branchProductId, orderId: order.id, movement: "release", quantityDelta: r.quantity, balanceAfter: bp.inventory, reason: b.data.cancelReason ?? "Order cancelled" });
-        }
+        const cancel = decideCancelPayment({
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+        });
+        await releaseOrderReservations(tx, order.id, b.data.cancelReason ?? "Order cancelled");
+        patch.paymentStatus = cancel.paymentStatus;
         await writeOrderAudit({
           tx,
           orderId: order.id,
@@ -1109,6 +1301,11 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     return o;
     });
   } catch (error) {
+    const coded = error as Error & { httpStatus?: number; publicMessage?: string; code?: string };
+    if (coded.httpStatus) {
+      res.status(coded.httpStatus).json({ error: coded.publicMessage ?? coded.message, code: coded.code });
+      return;
+    }
     if (error instanceof Error && error.message === "ORDER_NOT_FOUND") { res.status(404).json({ error: "Order not found" }); return; }
     if (error instanceof Error && error.message === "FORBIDDEN_BRANCH") { res.status(403).json({ error: "Branch access denied" }); return; }
     if (error instanceof Error && error.message === "INVALID_TRANSITION") { res.status(409).json({ error: "Invalid status transition" }); return; }
@@ -1325,7 +1522,7 @@ router.post("/admin/branches", async (req, res): Promise<void> => {
   const shortName = data.shortName || data.name.split(" ").slice(-1)[0] || data.name;
   const slug = data.slug || slugifyBranch(shortName);
   const street = data.street ?? data.address ?? "";
-  const address = data.address || buildFormattedAddress({
+  const address = resolveBranchFormattedAddress({
     street,
     externalNumber: data.externalNumber,
     internalNumber: data.internalNumber,
@@ -1335,6 +1532,7 @@ router.post("/admin/branches", async (req, res): Promise<void> => {
     state: data.state,
     postalCode: data.postalCode,
     country: data.country,
+    address: data.address,
   });
   try {
     const [branch] = await db.insert(branchesTable).values({
@@ -1393,19 +1591,32 @@ router.post("/admin/branches", async (req, res): Promise<void> => {
       active: statusFields.active,
     }).returning();
 
-    if (data.hours?.length) {
+    if (data.hours !== undefined) {
       const hoursJson = await replaceBranchHours(branch.id, data.hours);
       await db.update(branchesTable).set({ hours: hoursJson }).where(eq(branchesTable.id, branch.id));
     }
     if (data.specialHours) await replaceSpecialHours(branch.id, data.specialHours);
     if (data.links) await replaceBranchLinks(branch.id, data.links);
     if (data.images) await replaceBranchImages(branch.id, data.images);
-    await syncLegacyProjections(branch.id);
+    if (
+      data.hours !== undefined ||
+      data.specialHours ||
+      data.links ||
+      data.images
+    ) {
+      await syncLegacyProjections(branch.id);
+    }
 
     const actor = await getRequestUser(req);
     await writeBranchAudit({ branchId: branch.id, actorUserId: actor?.id, action: "branch_created", after: { id: branch.id, name: branch.name, code: branch.branchCode } });
     const [fresh] = await db.select().from(branchesTable).where(eq(branchesTable.id, branch.id));
-    res.status(201).json((await enrichBranchesList([fresh]))[0]);
+    const sat = await loadBranchSatellite(branch.id);
+    res.status(201).json(serializeAdminBranch(fresh, {
+      links: sat.links,
+      images: sat.images,
+      specialHours: sat.specialHours,
+      primaryResponsible: sat.primaryResponsible,
+    }));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not create branch";
     if (message.includes("unique") || message.includes("duplicate")) {
@@ -1564,19 +1775,22 @@ router.patch("/admin/branches/:id", async (req, res): Promise<void> => {
   } = data;
 
   const statusFields = status != null || active != null ? syncStatusFields({ status, active }) : null;
-  const nextStreet = street ?? before.street;
-  const formatted = address ?? buildFormattedAddress({
-    street: nextStreet,
-    externalNumber: externalNumber ?? before.externalNumber,
-    internalNumber: internalNumber ?? before.internalNumber,
-    neighborhood: neighborhood ?? before.neighborhood,
-    borough: borough ?? before.borough,
-    city: city ?? before.city,
-    state: state ?? before.state,
-    postalCode: postalCode ?? before.postalCode,
-    country: country ?? before.country,
-    fallback: before.address,
-  });
+  // Structured fields win over a stale client `address` (list/display is derived).
+  const formatted = resolveBranchFormattedAddress(
+    {
+      street,
+      externalNumber,
+      internalNumber,
+      neighborhood,
+      borough,
+      city,
+      state,
+      postalCode,
+      country,
+      address,
+    },
+    before,
+  );
 
   const patch: Record<string, unknown> = {
     ...rest,
@@ -1605,14 +1819,14 @@ router.patch("/admin/branches/:id", async (req, res): Promise<void> => {
 
   try {
     const [branch] = await db.update(branchesTable).set(patch).where(eq(branchesTable.id, id)).returning();
-    if (hours) {
+    if (hours !== undefined) {
       const hoursJson = await replaceBranchHours(id, hours);
       await db.update(branchesTable).set({ hours: hoursJson }).where(eq(branchesTable.id, id));
     }
     if (specialHours) await replaceSpecialHours(id, specialHours);
     if (links) await replaceBranchLinks(id, links);
     if (images) await replaceBranchImages(id, images);
-    if (hours || specialHours || links || images) await syncLegacyProjections(id);
+    if (hours !== undefined || specialHours || links || images) await syncLegacyProjections(id);
 
     await writeBranchAudit({
       branchId: id,
@@ -2308,7 +2522,7 @@ router.get("/admin/summary", async (_req, res): Promise<void> => {
   const [orderCounts] = await db
     .select({
       ordersToday: sql<number>`count(*) filter (where ${ordersTable.scheduledStart} >= ${startOfToday} and ${ordersTable.scheduledStart} < ${startOfTomorrow} and ${ordersTable.status} <> 'cancelled')::int`,
-      ordersPending: sql<number>`count(*) filter (where ${ordersTable.status} in ('pending_payment','paid','preparing','ready'))::int`,
+      ordersPending: sql<number>`count(*) filter (where ${ordersTable.status} in ('pending_payment','confirmed','paid','preparing','ready'))::int`,
       ordersNextHour: sql<number>`count(*) filter (where ${ordersTable.scheduledStart} >= ${now} and ${ordersTable.scheduledStart} < ${inOneHour} and ${ordersTable.status} <> 'cancelled' and ${ordersTable.status} <> 'completed')::int`,
       salesToday: sql<string>`coalesce(sum(${ordersTable.total}) filter (where ${ordersTable.scheduledStart} >= ${startOfToday} and ${ordersTable.scheduledStart} < ${startOfTomorrow} and ${ordersTable.status} <> 'cancelled'), 0)::numeric`,
     })
@@ -2763,7 +2977,7 @@ router.post("/admin/products/:id/duplicate", async (req, res): Promise<void> => 
     res.status(404).json({ error: "Product not found" });
     return;
   }
-  const detail = await getProductDetailBySlug(created.slug);
+  const detail = await getAdminProductDetail(created.id);
   publishCatalogChange(created.id, "product");
   res.status(201).json(DuplicateProductResponse.parse(detail));
 });
@@ -3223,9 +3437,36 @@ router.post("/admin/products", async (req, res): Promise<void> => {
     throw error;
   }
 
-  const detail = await getProductDetailBySlug(product.slug);
+  const detail = await getAdminProductDetail(product.id);
   publishCatalogChange(product.id, "product");
   res.status(201).json(CreateProductResponse.parse(detail));
+});
+
+router.get("/admin/products/:id", async (req, res): Promise<void> => {
+  const params = UpdateProductParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [row] = await db
+    .select({ id: productsTable.id })
+    .from(productsTable)
+    .where(eq(productsTable.id, params.data.id))
+    .limit(1);
+
+  if (!row) {
+    res.status(404).json({ error: "Producto no encontrado" });
+    return;
+  }
+
+  const detail = await getAdminProductDetail(row.id);
+  if (!detail) {
+    res.status(404).json({ error: "Producto no encontrado" });
+    return;
+  }
+
+  res.json(GetAdminProductResponse.parse(detail));
 });
 
 router.patch("/admin/products/:id", async (req, res): Promise<void> => {
@@ -3331,7 +3572,7 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
     throw error;
   }
 
-  const detail = await getProductDetailBySlug(product.slug);
+  const detail = await getAdminProductDetail(product.id);
   publishCatalogChange(product.id, "product");
   res.json(UpdateProductResponse.parse(detail));
 });

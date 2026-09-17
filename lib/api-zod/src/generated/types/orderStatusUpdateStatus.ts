@@ -11,6 +11,7 @@ export type OrderStatusUpdateStatus = typeof OrderStatusUpdateStatus[keyof typeo
 
 export const OrderStatusUpdateStatus = {
   pending_payment: 'pending_payment',
+  confirmed: 'confirmed',
   paid: 'paid',
   preparing: 'preparing',
   ready: 'ready',

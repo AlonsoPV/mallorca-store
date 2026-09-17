@@ -7,6 +7,7 @@
  */
 import type { AdminOrderDuplicatePrefillFulfillmentMethod } from './adminOrderDuplicatePrefillFulfillmentMethod';
 import type { AdminOrderLineInput } from './adminOrderLineInput';
+import type { DeliveryAddressSnapshot } from './deliveryAddressSnapshot';
 
 export interface AdminOrderDuplicatePrefill {
   branchId: number;
@@ -18,6 +19,7 @@ export interface AdminOrderDuplicatePrefill {
   fulfillmentMethod: AdminOrderDuplicatePrefillFulfillmentMethod;
   /** @nullable */
   deliveryAddress?: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   deliveryLatitude?: number | null;
   /** @nullable */

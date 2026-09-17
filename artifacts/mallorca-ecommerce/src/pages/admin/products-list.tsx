@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AdminLayout } from "@/components/layout/admin-layout";
+import { Link, useLocation, useSearch } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListAdminProducts,
   useListAdminBranches,
@@ -13,9 +14,6 @@ import {
   type ListAdminProductsStatus,
   type ProductBulkInputAction,
 } from "@workspace/api-client-react";
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Search,
   Plus,
@@ -25,24 +23,161 @@ import {
   Copy,
   Archive,
   MoreHorizontal,
+  Package,
+  Pencil,
+  X,
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import {
+  AdminEmptyState,
+  AdminError,
+  AdminFilterBar,
+  AdminFilterSelect,
+  AdminLoading,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableHeader,
+  AdminTableRow,
+} from "@/components/admin";
+import { AdminLayout } from "@/components/layout/admin-layout";
 import { ImageWithFallback } from "@/components/image-with-fallback";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { ProductQuickEdit } from "@/pages/admin/product-quick-edit";
-import * as XLSX from "xlsx";
 
 type ViewChip = "all" | "active" | "draft" | "low" | "out";
+
+const VIEW_CHIPS: { id: ViewChip; label: string }[] = [
+  { id: "all", label: "Todos" },
+  { id: "active", label: "Activos" },
+  { id: "draft", label: "Borradores" },
+  { id: "low", label: "Stock bajo" },
+  { id: "out", label: "Agotados" },
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Activo",
+  draft: "Borrador",
+  inactive: "Inactivo",
+};
+
+const PRODUCTS_LIST_QUERY_KEY = "admin.productos.search";
+
+function parseView(value: string | null): ViewChip {
+  if (value === "active" || value === "draft" || value === "low" || value === "out") {
+    return value;
+  }
+  return "all";
+}
+
+function filtersFromSearch(search: string) {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  return {
+    view: parseView(params.get("view")),
+    q: params.get("q") ?? "",
+    categoryId: params.get("categoryId") ?? "all",
+    branchId: params.get("branchId") ?? "all",
+  };
+}
+
+function buildSearchString(filters: {
+  view: ViewChip;
+  q: string;
+  categoryId: string;
+  branchId: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters.view !== "all") params.set("view", filters.view);
+  if (filters.q.trim()) params.set("q", filters.q.trim());
+  if (filters.categoryId !== "all") params.set("categoryId", filters.categoryId);
+  if (filters.branchId !== "all") params.set("branchId", filters.branchId);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(price);
 }
 
-function stockForBranch(product: AdminProduct, branchId: number) {
+function isLowStock(avail: NonNullable<AdminProduct["availability"]>[number]) {
+  if (!avail.available || avail.inventory <= 0) return false;
+  const threshold = avail.minStock ?? 5;
+  return avail.inventory <= threshold;
+}
+
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case "active":
+      return "border-transparent bg-emerald-100 text-emerald-800";
+    case "draft":
+      return "border-transparent bg-amber-100 text-amber-900";
+    case "inactive":
+      return "border-transparent bg-muted text-muted-foreground";
+    default:
+      return "border-transparent bg-muted text-muted-foreground";
+  }
+}
+
+function inventoryHref(opts: {
+  branchId: number;
+  state: "LOW_STOCK" | "OUT_OF_STOCK";
+  sku?: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("branchId", String(opts.branchId));
+  params.set("state", opts.state);
+  if (opts.sku) params.set("search", opts.sku);
+  return `/admin/inventario?${params.toString()}`;
+}
+
+function StockCell({
+  product,
+  branchId,
+}: {
+  product: AdminProduct;
+  branchId: number;
+}) {
   const avail = product.availability?.find((a) => a.branchId === branchId);
-  if (!avail || !avail.available) return null;
-  return avail.inventory;
+  if (!avail || !avail.available) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  if (avail.inventory === 0) {
+    return (
+      <Link
+        href={inventoryHref({ branchId, state: "OUT_OF_STOCK", sku: product.sku })}
+        className="font-medium text-destructive hover:underline"
+      >
+        Agotado
+      </Link>
+    );
+  }
+  if (isLowStock(avail)) {
+    return (
+      <Link
+        href={inventoryHref({ branchId, state: "LOW_STOCK", sku: product.sku })}
+        className="font-medium text-amber-800 hover:underline"
+        title="Stock bajo"
+      >
+        {avail.inventory}
+        <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide">Bajo</span>
+      </Link>
+    );
+  }
+  return <span>{avail.inventory}</span>;
 }
 
 function promoLabel(product: AdminProduct) {
@@ -63,14 +198,27 @@ function downloadText(filename: string, content: string, type = "text/csv;charse
   URL.revokeObjectURL(url);
 }
 
+function productMatchesCategory(product: AdminProduct, categoryId: number, categories: { id: number; slug: string }[]) {
+  const cats = (product as { categories?: Array<{ id: number }> }).categories;
+  if (cats?.length) return cats.some((c) => c.id === categoryId);
+  const slug = categories.find((c) => c.id === categoryId)?.slug;
+  return slug ? product.categorySlug === slug : false;
+}
+
 export default function AdminProductsList() {
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [view, setView] = useState<ViewChip>("all");
+  const urlSearch = useSearch();
+  const [, setLocation] = useLocation();
+  const initial = filtersFromSearch(urlSearch);
+
+  const [search, setSearch] = useState(initial.q);
+  const [debouncedSearch, setDebouncedSearch] = useState(initial.q);
+  const [view, setView] = useState<ViewChip>(initial.view);
+  const [categoryId, setCategoryId] = useState(initial.categoryId);
+  const [branchId, setBranchId] = useState(initial.branchId);
   const [selected, setSelected] = useState<number[]>([]);
   const [quickEditId, setQuickEditId] = useState<number | null>(null);
-  const [bulkAction, setBulkAction] = useState<string>("");
-  const [bulkValue, setBulkValue] = useState("");
+  const [bulkAction, setBulkAction] = useState("none");
+  const [bulkValue, setBulkValue] = useState("none");
   const [bulkTagValue, setBulkTagValue] = useState("");
   const [bulkPromo, setBulkPromo] = useState({
     name: "Promo masiva",
@@ -79,7 +227,7 @@ export default function AdminProductsList() {
     startsAt: "",
     endsAt: "",
   });
-  const [bulkCrossSellId, setBulkCrossSellId] = useState("");
+  const [bulkCrossSellId, setBulkCrossSellId] = useState("none");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -88,10 +236,28 @@ export default function AdminProductsList() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  useEffect(() => {
+    const next = buildSearchString({
+      view,
+      q: debouncedSearch,
+      categoryId,
+      branchId,
+    });
+    const current = urlSearch.startsWith("?") ? urlSearch : urlSearch ? `?${urlSearch}` : "";
+    if (next !== current) {
+      setLocation(`/admin/productos${next}`, { replace: true });
+    }
+    try {
+      sessionStorage.setItem(PRODUCTS_LIST_QUERY_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }, [view, debouncedSearch, categoryId, branchId, setLocation, urlSearch]);
+
   const statusFilter: ListAdminProductsStatus | undefined =
     view === "active" ? "active" : view === "draft" ? "draft" : undefined;
 
-  const { data: products, isLoading } = useListAdminProducts({
+  const { data: products, isLoading, isError, refetch } = useListAdminProducts({
     search: debouncedSearch || undefined,
     status: statusFilter,
   });
@@ -102,20 +268,83 @@ export default function AdminProductsList() {
   const exportProducts = useExportProducts();
   const bulk = useBulkUpdateProducts();
 
+  const categoryList = categories.data ?? [];
+  const branchList = branches.data ?? [];
+
   const filtered = useMemo(() => {
-    const list = products ?? [];
+    let list = products ?? [];
+    const catId = categoryId !== "all" ? Number(categoryId) : null;
+    const brId = branchId !== "all" ? Number(branchId) : null;
+
+    if (catId != null && Number.isFinite(catId)) {
+      list = list.filter((p) => productMatchesCategory(p, catId, categoryList));
+    }
+    if (brId != null && Number.isFinite(brId)) {
+      list = list.filter((p) =>
+        (p.availability ?? []).some((a) => a.branchId === brId && a.available),
+      );
+    }
     if (view === "low") {
-      return list.filter((p) =>
-        (p.availability ?? []).some((a) => a.available && a.inventory > 0 && a.inventory <= 5),
+      list = list.filter((p) =>
+        (p.availability ?? []).some((a) => {
+          if (brId != null && a.branchId !== brId) return false;
+          return isLowStock(a);
+        }),
       );
     }
     if (view === "out") {
-      return list.filter((p) =>
-        (p.availability ?? []).some((a) => a.available && a.inventory === 0),
+      list = list.filter((p) =>
+        (p.availability ?? []).some((a) => {
+          if (brId != null && a.branchId !== brId) return false;
+          return a.available && a.inventory === 0;
+        }),
       );
     }
     return list;
-  }, [products, view]);
+  }, [products, view, categoryId, branchId, categoryList]);
+
+  const activeFilterChips = useMemo(() => {
+    const chips: { key: string; label: string; clear: () => void }[] = [];
+    if (view !== "all") {
+      const label = VIEW_CHIPS.find((c) => c.id === view)?.label ?? view;
+      chips.push({ key: "view", label: `Vista: ${label}`, clear: () => setView("all") });
+    }
+    if (debouncedSearch.trim()) {
+      chips.push({
+        key: "q",
+        label: `Buscar: ${debouncedSearch.trim()}`,
+        clear: () => {
+          setSearch("");
+          setDebouncedSearch("");
+        },
+      });
+    }
+    if (categoryId !== "all") {
+      const name = categoryList.find((c) => String(c.id) === categoryId)?.name ?? categoryId;
+      chips.push({
+        key: "category",
+        label: `Categoría: ${name}`,
+        clear: () => setCategoryId("all"),
+      });
+    }
+    if (branchId !== "all") {
+      const name = branchList.find((b) => String(b.id) === branchId)?.name ?? branchId;
+      chips.push({
+        key: "branch",
+        label: `Sucursal: ${name}`,
+        clear: () => setBranchId("all"),
+      });
+    }
+    return chips;
+  }, [view, debouncedSearch, categoryId, branchId, categoryList, branchList]);
+
+  const clearAllFilters = () => {
+    setView("all");
+    setSearch("");
+    setDebouncedSearch("");
+    setCategoryId("all");
+    setBranchId("all");
+  };
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
@@ -128,7 +357,9 @@ export default function AdminProductsList() {
     setSelected((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
   };
 
-  const archive = async (id: number) => {
+  const archive = async (id: number, name?: string) => {
+    const label = name ? `“${name}”` : "este producto";
+    if (!window.confirm(`¿Archivar ${label}? Dejará de mostrarse en el catálogo.`)) return;
     try {
       await updateProduct.mutateAsync({ id, data: { status: "inactive" } as any });
       toast({ title: "Producto archivado" });
@@ -173,10 +404,10 @@ export default function AdminProductsList() {
   };
 
   const runBulk = async () => {
-    if (!selected.length || !bulkAction) return;
+    if (!selected.length || bulkAction === "none") return;
     const action = bulkAction as ProductBulkInputAction;
     const data: any = { ids: selected, action };
-    if (action === "set_status") data.status = bulkValue || "active";
+    if (action === "set_status") data.status = bulkValue !== "none" ? bulkValue : "active";
     if (
       action === "set_category" ||
       action === "add_categories" ||
@@ -218,41 +449,126 @@ export default function AdminProductsList() {
         description: result.errors.length ? `${result.errors.length} con error` : undefined,
       });
       setSelected([]);
-      setBulkAction("");
+      setBulkAction("none");
       invalidate();
     } catch {
       toast({ title: "Error en acción masiva", variant: "destructive" });
     }
   };
 
-  const chips: { id: ViewChip; label: string }[] = [
-    { id: "all", label: "Todos" },
-    { id: "active", label: "Activos" },
-    { id: "draft", label: "Borradores" },
-    { id: "low", label: "Stock bajo" },
-    { id: "out", label: "Agotados" },
-  ];
-
-  const branchList = branches.data ?? [];
   const quickProduct = filtered.find((p) => p.id === quickEditId) ?? null;
+  const stockBranches =
+    branchId !== "all"
+      ? branchList.filter((b) => String(b.id) === branchId)
+      : branchList;
+
+  const emptyCopy = (() => {
+    if (debouncedSearch.trim()) {
+      return {
+        title: `Ningún resultado para “${debouncedSearch.trim()}”`,
+        description: "Prueba otro término o limpia la búsqueda.",
+        action: (
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-none"
+            onClick={() => {
+              setSearch("");
+              setDebouncedSearch("");
+            }}
+          >
+            Limpiar búsqueda
+          </Button>
+        ),
+      };
+    }
+    if (view === "draft") {
+      return {
+        title: "No hay borradores",
+        description: "Los productos en borrador aparecerán aquí hasta publicarlos.",
+        action: (
+          <Button asChild className="rounded-none">
+            <Link href="/admin/productos/nuevo">Añadir producto</Link>
+          </Button>
+        ),
+      };
+    }
+    if (view === "low") {
+      return {
+        title: "No hay productos con stock bajo",
+        description: "Cuando el inventario cruce el mínimo por sucursal, los verás aquí.",
+        action: (
+          <Button asChild variant="outline" className="rounded-none">
+            <Link
+              href={
+                branchId !== "all"
+                  ? `/admin/inventario?state=LOW_STOCK&branchId=${branchId}`
+                  : "/admin/inventario?state=LOW_STOCK"
+              }
+            >
+              Ir a Inventario
+            </Link>
+          </Button>
+        ),
+      };
+    }
+    if (view === "out") {
+      return {
+        title: "No hay productos agotados",
+        description: "Los productos con stock 0 en alguna sucursal aparecerán aquí.",
+        action: (
+          <Button asChild variant="outline" className="rounded-none">
+            <Link
+              href={
+                branchId !== "all"
+                  ? `/admin/inventario?state=OUT_OF_STOCK&branchId=${branchId}`
+                  : "/admin/inventario?state=OUT_OF_STOCK"
+              }
+            >
+              Ir a Inventario
+            </Link>
+          </Button>
+        ),
+      };
+    }
+    if (view === "active") {
+      return {
+        title: "No hay productos activos",
+        description: "Publica un borrador o añade un producto nuevo al catálogo.",
+        action: (
+          <Button asChild className="rounded-none">
+            <Link href="/admin/productos/nuevo">Añadir producto</Link>
+          </Button>
+        ),
+      };
+    }
+    return {
+      title: "No se encontraron productos",
+      description: "Prueba otro filtro, importa un catálogo o añade un producto nuevo.",
+      action: (
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button asChild className="rounded-none">
+            <Link href="/admin/productos/nuevo">Añadir producto</Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-none">
+            <Link href="/admin/importar">Importar</Link>
+          </Button>
+        </div>
+      ),
+    };
+  })();
 
   return (
     <AdminLayout>
-      <div className="flex-1 flex flex-col h-full bg-[#FBFAF7] dark:bg-background">
-        <div className="px-8 py-6 border-b border-[#E8DED0] dark:border-border flex flex-col gap-4 bg-white dark:bg-card">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-serif text-[#25211E] dark:text-foreground tracking-tight">
-                Productos
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Catálogo multi-sucursal con edición rápida, importación y exportación.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
+      <AdminPageShell>
+        <AdminPageHeader
+          title="Productos"
+          description="Catálogo multi-sucursal con edición rápida, importación y exportación."
+          actions={
+            <>
               <Button asChild variant="outline" className="rounded-none">
                 <Link href="/admin/importar">
-                  <Upload className="h-4 w-4 mr-2" />
+                  <Upload className="mr-2 h-4 w-4" />
                   Importar
                 </Link>
               </Button>
@@ -262,348 +578,404 @@ export default function AdminProductsList() {
                 onClick={() => handleExport("csv")}
                 disabled={exportProducts.isPending}
               >
-                <Download className="h-4 w-4 mr-2" />
+                <Download className="mr-2 h-4 w-4" />
                 Exportar
               </Button>
-              <Button asChild className="rounded-none bg-[#D43B2B] hover:bg-[#B83225] text-white">
+              <Button asChild className="rounded-none">
                 <Link href="/admin/productos/nuevo">
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="mr-2 h-4 w-4" />
                   Añadir producto
                 </Link>
               </Button>
-            </div>
-          </div>
+            </>
+          }
+        />
 
-          <div className="flex flex-wrap gap-2">
-            {chips.map((chip) => (
+        <div className="sticky top-0 z-10 -mx-6 space-y-3 border-b border-border bg-background/95 px-6 py-3 backdrop-blur md:-mx-10 md:px-10">
+          <AdminFilterBar>
+            {VIEW_CHIPS.map((chip) => (
               <button
                 key={chip.id}
                 type="button"
                 onClick={() => setView(chip.id)}
                 className={cn(
-                  "px-3 py-1.5 text-sm border",
+                  "border px-3 py-1.5 text-sm transition-colors",
                   view === chip.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border",
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-foreground hover:bg-muted",
                 )}
               >
                 {chip.label}
               </button>
             ))}
-          </div>
-
-          <div className="relative max-w-md w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre o SKU..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 rounded-none h-10"
+            <AdminFilterSelect
+              value={categoryId}
+              onValueChange={setCategoryId}
+              placeholder="Categoría"
+              triggerClassName="min-w-[10rem]"
+              options={[
+                { value: "all", label: "Todas las categorías" },
+                ...categoryList.map((c) => ({ value: String(c.id), label: c.name })),
+              ]}
             />
-          </div>
+            <AdminFilterSelect
+              value={branchId}
+              onValueChange={setBranchId}
+              placeholder="Sucursal"
+              triggerClassName="min-w-[10rem]"
+              options={[
+                { value: "all", label: "Todas las sucursales" },
+                ...branchList.map((b) => ({ value: String(b.id), label: b.name })),
+              ]}
+            />
+            <div className="relative min-w-[12rem] flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nombre o SKU..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 rounded-none bg-background pl-9"
+                aria-label="Buscar productos"
+              />
+            </div>
+          </AdminFilterBar>
 
-          {selected.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 border border-border p-3 bg-muted/20">
-              <span className="text-sm font-medium">{selected.length} seleccionados</span>
-              <select
-                className="h-9 border border-border bg-background px-2 text-sm"
-                value={bulkAction}
-                onChange={(e) => setBulkAction(e.target.value)}
+          {activeFilterChips.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {activeFilterChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={chip.clear}
+                  className="inline-flex items-center gap-1 border border-border bg-muted/30 px-2.5 py-1 text-xs hover:bg-muted"
+                >
+                  {chip.label}
+                  <X className="h-3 w-3" />
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
               >
-                <option value="">Acción masiva...</option>
-                <option value="set_status">Cambiar estado</option>
-                <option value="add_categories">Añadir categoría</option>
-                <option value="remove_categories">Quitar categoría</option>
-                <option value="replace_categories">Reemplazar categorías</option>
-                <option value="add_tags">Añadir etiquetas</option>
-                <option value="remove_tags">Quitar etiquetas</option>
-                <option value="replace_tags">Reemplazar etiquetas</option>
-                <option value="assign_branch">Asignar sucursal</option>
-                <option value="unassign_branch">Quitar sucursal</option>
-                <option value="set_min_stock">Actualizar stock mínimo</option>
-                <option value="set_price">Modificar precio</option>
-                <option value="set_featured">Destacar</option>
-                <option value="create_promotion">Crear promoción</option>
-                <option value="add_cross_sell">Añadir cross-sell</option>
-                <option value="replace_cross_sell">Reemplazar cross-sell</option>
-                <option value="archive">Archivar</option>
-                <option value="cancel_promotions">Eliminar promociones</option>
-              </select>
-              {bulkAction === "set_status" ? (
-                <select
-                  className="h-9 border border-border bg-background px-2 text-sm"
-                  value={bulkValue}
-                  onChange={(e) => setBulkValue(e.target.value)}
-                >
-                  <option value="active">Activo</option>
-                  <option value="draft">Borrador</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              ) : null}
-              {["set_category", "add_categories", "remove_categories", "replace_categories"].includes(
-                bulkAction,
-              ) ? (
-                <select
-                  className="h-9 border border-border bg-background px-2 text-sm"
-                  value={bulkValue}
-                  onChange={(e) => setBulkValue(e.target.value)}
-                >
-                  <option value="">Categoría...</option>
-                  {categories.data?.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              {["add_tags", "remove_tags", "replace_tags"].includes(bulkAction) ? (
-                <Input
-                  className="h-9 w-56 rounded-none"
-                  value={bulkTagValue}
-                  onChange={(e) => setBulkTagValue(e.target.value)}
-                  placeholder="Etiquetas con |"
-                />
-              ) : null}
-              {bulkAction === "assign_branch" ||
-              bulkAction === "unassign_branch" ||
-              bulkAction === "set_min_stock" ? (
-                <select
-                  className="h-9 border border-border bg-background px-2 text-sm"
-                  value={bulkValue}
-                  onChange={(e) => setBulkValue(e.target.value)}
-                >
-                  <option value="">Sucursal...</option>
-                  {branchList.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              {bulkAction === "set_min_stock" ? (
-                <Input
-                  type="number"
-                  className="h-9 w-28 rounded-none"
-                  value={bulkTagValue}
-                  onChange={(e) => setBulkTagValue(e.target.value)}
-                  placeholder="Mín."
-                />
-              ) : null}
-              {bulkAction === "set_price" ? (
-                <Input
-                  type="number"
-                  className="h-9 w-28 rounded-none"
-                  value={bulkValue}
-                  onChange={(e) => setBulkValue(e.target.value)}
-                  placeholder="Precio"
-                />
-              ) : null}
-              {bulkAction === "set_featured" ? (
-                <select
-                  className="h-9 border border-border bg-background px-2 text-sm"
-                  value={bulkValue || "true"}
-                  onChange={(e) => setBulkValue(e.target.value)}
-                >
-                  <option value="true">Sí</option>
-                  <option value="false">No</option>
-                </select>
-              ) : null}
-              {bulkAction === "create_promotion" ? (
-                <div className="flex flex-wrap gap-2 items-center">
-                  <Input
-                    className="h-9 w-28 rounded-none"
-                    value={bulkPromo.value}
-                    onChange={(e) => setBulkPromo((p) => ({ ...p, value: e.target.value }))}
-                    placeholder="% o monto"
-                  />
-                  <select
-                    className="h-9 border px-2 text-sm"
-                    value={bulkPromo.type}
-                    onChange={(e) => setBulkPromo((p) => ({ ...p, type: e.target.value }))}
-                  >
-                    <option value="percentage">%</option>
-                    <option value="amount">Monto</option>
-                    <option value="fixed">Precio fijo</option>
-                  </select>
-                  <Input
-                    type="datetime-local"
-                    className="h-9 rounded-none"
-                    value={bulkPromo.startsAt}
-                    onChange={(e) => setBulkPromo((p) => ({ ...p, startsAt: e.target.value }))}
-                  />
-                  <Input
-                    type="datetime-local"
-                    className="h-9 rounded-none"
-                    value={bulkPromo.endsAt}
-                    onChange={(e) => setBulkPromo((p) => ({ ...p, endsAt: e.target.value }))}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    Preview: {selected.length} productos
-                  </span>
-                </div>
-              ) : null}
-              {bulkAction === "add_cross_sell" || bulkAction === "replace_cross_sell" ? (
-                <select
-                  className="h-9 border border-border bg-background px-2 text-sm"
-                  value={bulkCrossSellId}
-                  onChange={(e) => setBulkCrossSellId(e.target.value)}
-                >
-                  <option value="">Producto recomendado...</option>
-                  {filtered.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.sku})
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              <Button size="sm" className="rounded-none" onClick={runBulk} disabled={bulk.isPending}>
-                Aplicar
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-none"
-                onClick={() => handleExport("xlsx", true)}
-              >
-                Exportar selección
-              </Button>
+                Limpiar todo
+              </button>
             </div>
           ) : null}
         </div>
 
-        <div className="flex-1 overflow-auto p-8">
-          <div className="bg-white dark:bg-card border border-[#E8DED0] dark:border-border overflow-x-auto">
-            <table className="w-full text-sm text-left min-w-[900px]">
-              <thead className="text-xs text-muted-foreground bg-[#FBFAF7] dark:bg-muted/30 border-b">
-                <tr>
-                  <th className="px-4 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={filtered.length > 0 && selected.length === filtered.length}
-                      onChange={(e) => toggleAll(e.target.checked)}
+        {selected.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/20 p-3">
+            <span className="text-sm font-medium">{selected.length} seleccionados</span>
+            <AdminFilterSelect
+              value={bulkAction}
+              onValueChange={setBulkAction}
+              placeholder="Acción masiva"
+              triggerClassName="min-w-[12rem]"
+              options={[
+                { value: "none", label: "Acción masiva..." },
+                { value: "set_status", label: "Cambiar estado" },
+                { value: "add_categories", label: "Añadir categoría" },
+                { value: "remove_categories", label: "Quitar categoría" },
+                { value: "replace_categories", label: "Reemplazar categorías" },
+                { value: "add_tags", label: "Añadir etiquetas" },
+                { value: "remove_tags", label: "Quitar etiquetas" },
+                { value: "replace_tags", label: "Reemplazar etiquetas" },
+                { value: "assign_branch", label: "Asignar sucursal" },
+                { value: "unassign_branch", label: "Quitar sucursal" },
+                { value: "set_min_stock", label: "Actualizar stock mínimo" },
+                { value: "set_price", label: "Modificar precio" },
+                { value: "set_featured", label: "Destacar" },
+                { value: "create_promotion", label: "Crear promoción" },
+                { value: "add_cross_sell", label: "Añadir cross-sell" },
+                { value: "replace_cross_sell", label: "Reemplazar cross-sell" },
+                { value: "archive", label: "Archivar" },
+                { value: "cancel_promotions", label: "Eliminar promociones" },
+              ]}
+            />
+            {bulkAction === "set_status" ? (
+              <AdminFilterSelect
+                value={bulkValue === "none" ? "active" : bulkValue}
+                onValueChange={setBulkValue}
+                options={[
+                  { value: "active", label: "Activo" },
+                  { value: "draft", label: "Borrador" },
+                  { value: "inactive", label: "Inactivo" },
+                ]}
+              />
+            ) : null}
+            {["set_category", "add_categories", "remove_categories", "replace_categories"].includes(
+              bulkAction,
+            ) ? (
+              <AdminFilterSelect
+                value={bulkValue}
+                onValueChange={setBulkValue}
+                placeholder="Categoría"
+                options={[
+                  { value: "none", label: "Categoría..." },
+                  ...categoryList.map((c) => ({
+                    value: String(c.id),
+                    label: c.name,
+                  })),
+                ]}
+              />
+            ) : null}
+            {["add_tags", "remove_tags", "replace_tags"].includes(bulkAction) ? (
+              <Input
+                className="h-10 w-56 rounded-none"
+                value={bulkTagValue}
+                onChange={(e) => setBulkTagValue(e.target.value)}
+                placeholder="Etiquetas con |"
+              />
+            ) : null}
+            {bulkAction === "assign_branch" ||
+            bulkAction === "unassign_branch" ||
+            bulkAction === "set_min_stock" ? (
+              <AdminFilterSelect
+                value={bulkValue}
+                onValueChange={setBulkValue}
+                placeholder="Sucursal"
+                options={[
+                  { value: "none", label: "Sucursal..." },
+                  ...branchList.map((b) => ({ value: String(b.id), label: b.name })),
+                ]}
+              />
+            ) : null}
+            {bulkAction === "set_min_stock" ? (
+              <Input
+                type="number"
+                className="h-10 w-28 rounded-none"
+                value={bulkTagValue}
+                onChange={(e) => setBulkTagValue(e.target.value)}
+                placeholder="Mín."
+              />
+            ) : null}
+            {bulkAction === "set_price" ? (
+              <Input
+                type="number"
+                className="h-10 w-28 rounded-none"
+                value={bulkValue === "none" ? "" : bulkValue}
+                onChange={(e) => setBulkValue(e.target.value || "none")}
+                placeholder="Precio"
+              />
+            ) : null}
+            {bulkAction === "set_featured" ? (
+              <AdminFilterSelect
+                value={bulkValue === "none" ? "true" : bulkValue}
+                onValueChange={setBulkValue}
+                options={[
+                  { value: "true", label: "Sí" },
+                  { value: "false", label: "No" },
+                ]}
+              />
+            ) : null}
+            {bulkAction === "create_promotion" ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  className="h-10 w-28 rounded-none"
+                  value={bulkPromo.value}
+                  onChange={(e) => setBulkPromo((p) => ({ ...p, value: e.target.value }))}
+                  placeholder="% o monto"
+                />
+                <AdminFilterSelect
+                  value={bulkPromo.type}
+                  onValueChange={(type) => setBulkPromo((p) => ({ ...p, type }))}
+                  options={[
+                    { value: "percentage", label: "%" },
+                    { value: "amount", label: "Monto" },
+                    { value: "fixed", label: "Precio fijo" },
+                  ]}
+                />
+                <Input
+                  type="datetime-local"
+                  className="h-10 rounded-none"
+                  value={bulkPromo.startsAt}
+                  onChange={(e) => setBulkPromo((p) => ({ ...p, startsAt: e.target.value }))}
+                />
+                <Input
+                  type="datetime-local"
+                  className="h-10 rounded-none"
+                  value={bulkPromo.endsAt}
+                  onChange={(e) => setBulkPromo((p) => ({ ...p, endsAt: e.target.value }))}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Preview: {selected.length} productos
+                </span>
+              </div>
+            ) : null}
+            {bulkAction === "add_cross_sell" || bulkAction === "replace_cross_sell" ? (
+              <AdminFilterSelect
+                value={bulkCrossSellId}
+                onValueChange={setBulkCrossSellId}
+                placeholder="Producto"
+                triggerClassName="min-w-[14rem]"
+                options={[
+                  { value: "none", label: "Producto recomendado..." },
+                  ...filtered.map((p) => ({
+                    value: String(p.id),
+                    label: `${p.name} (${p.sku})`,
+                  })),
+                ]}
+              />
+            ) : null}
+            <Button size="sm" className="rounded-none" onClick={runBulk} disabled={bulk.isPending}>
+              Aplicar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-none"
+              onClick={() => handleExport("xlsx", true)}
+            >
+              Exportar selección
+            </Button>
+          </div>
+        ) : null}
+
+        {isLoading ? <AdminLoading label="Cargando productos…" /> : null}
+        {isError ? (
+          <AdminError title="No se pudieron cargar los productos" onRetry={() => refetch()} />
+        ) : null}
+        {!isLoading && !isError && filtered.length === 0 ? (
+          <AdminEmptyState
+            icon={Package}
+            title={emptyCopy.title}
+            description={emptyCopy.description}
+            action={emptyCopy.action}
+          />
+        ) : null}
+
+        {!isLoading && !isError && filtered.length > 0 ? (
+          <AdminTable>
+            <AdminTableHeader>
+              <AdminTableRow>
+                <AdminTableHead className="w-10">
+                  <Checkbox
+                    checked={filtered.length > 0 && selected.length === filtered.length}
+                    onCheckedChange={(checked) => toggleAll(checked === true)}
+                    className="rounded-none"
+                    aria-label="Seleccionar todos"
+                  />
+                </AdminTableHead>
+                <AdminTableHead>Producto</AdminTableHead>
+                <AdminTableHead>SKU</AdminTableHead>
+                <AdminTableHead>Categoría</AdminTableHead>
+                <AdminTableHead className="text-right">Precio</AdminTableHead>
+                {stockBranches.map((b) => (
+                  <AdminTableHead key={b.id} className="text-center">
+                    {b.shortName || b.name}
+                  </AdminTableHead>
+                ))}
+                <AdminTableHead className="text-center">Promo</AdminTableHead>
+                <AdminTableHead className="text-center">Estado</AdminTableHead>
+                <AdminTableHead className="text-right">Acciones</AdminTableHead>
+              </AdminTableRow>
+            </AdminTableHeader>
+            <AdminTableBody>
+              {filtered.map((product) => (
+                <AdminTableRow key={product.id} className="h-[52px]">
+                  <AdminTableCell>
+                    <Checkbox
+                      checked={selected.includes(product.id)}
+                      onCheckedChange={(checked) => toggleOne(product.id, checked === true)}
+                      className="rounded-none"
+                      aria-label={`Seleccionar ${product.name}`}
                     />
-                  </th>
-                  <th className="px-4 py-3">Producto</th>
-                  <th className="px-4 py-3">SKU</th>
-                  <th className="px-4 py-3">Categoría</th>
-                  <th className="px-4 py-3 text-right">Precio</th>
-                  {branchList.map((b) => (
-                    <th key={b.id} className="px-4 py-3 text-center">
-                      {b.shortName || b.name}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-center">Promo</th>
-                  <th className="px-4 py-3 text-center">Estado</th>
-                  <th className="px-4 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i}>
-                      <td colSpan={8 + branchList.length} className="px-4 py-6">
-                        <div className="h-8 bg-muted animate-pulse" />
-                      </td>
-                    </tr>
-                  ))
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={8 + branchList.length} className="px-6 py-16 text-center text-muted-foreground">
-                      No se encontraron productos.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((product) => (
-                    <tr key={product.id} className="hover:bg-muted/20">
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(product.id)}
-                          onChange={(e) => toggleOne(product.id, e.target.checked)}
+                  </AdminTableCell>
+                  <AdminTableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 shrink-0 overflow-hidden bg-muted">
+                        <ImageWithFallback
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="h-full w-full object-cover"
+                          fallback={<div className="h-full w-full bg-muted" />}
                         />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 bg-muted overflow-hidden shrink-0">
-                            <ImageWithFallback
-                              src={product.imageUrl}
-                              alt={product.name}
-                              className="h-full w-full object-cover"
-                              fallback={<div className="h-full w-full bg-muted" />}
-                            />
-                          </div>
-                          <div className="font-medium">{product.name}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">{product.sku}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{product.categoryName || "—"}</td>
-                      <td className="px-4 py-3 text-right">{formatPrice(product.price)}</td>
-                      {branchList.map((b) => {
-                        const stock = stockForBranch(product, b.id);
-                        return (
-                          <td key={b.id} className="px-4 py-3 text-center">
-                            {stock == null ? (
-                              <span className="text-muted-foreground">—</span>
-                            ) : stock === 0 ? (
-                              <span className="text-destructive font-medium">Agotado</span>
-                            ) : (
-                              stock
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-3 text-center">{promoLabel(product)}</td>
-                      <td className="px-4 py-3 text-center capitalize text-xs">{product.status}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button asChild variant="ghost" size="sm" className="h-8 px-2 rounded-none">
-                            <Link href={`/admin/productos/${product.id}`}>
-                              <Edit className="h-4 w-4" />
-                            </Link>
-                          </Button>
+                      </div>
+                      <div className="font-medium">{product.name}</div>
+                    </div>
+                  </AdminTableCell>
+                  <AdminTableCell className="font-mono text-xs">{product.sku}</AdminTableCell>
+                  <AdminTableCell className="text-muted-foreground">
+                    {product.categoryName || "—"}
+                  </AdminTableCell>
+                  <AdminTableCell className="text-right">
+                    {formatPrice(product.price)}
+                  </AdminTableCell>
+                  {stockBranches.map((b) => (
+                    <AdminTableCell key={b.id} className="text-center">
+                      <StockCell product={product} branchId={b.id} />
+                    </AdminTableCell>
+                  ))}
+                  <AdminTableCell className="text-center">{promoLabel(product)}</AdminTableCell>
+                  <AdminTableCell className="text-center">
+                    <Badge
+                      className={cn(
+                        "rounded-none font-medium shadow-none",
+                        statusBadgeClass(product.status),
+                      )}
+                    >
+                      {STATUS_LABEL[product.status] ?? product.status}
+                    </Badge>
+                  </AdminTableCell>
+                  <AdminTableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button asChild variant="ghost" size="sm" className="h-8 rounded-none px-2">
+                        <Link href={`/admin/productos/${product.id}`} title="Editar">
+                          <Edit className="h-4 w-4" />
+                          <span className="sr-only">Editar</span>
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-none px-2"
+                        onClick={() => setQuickEditId(product.id)}
+                        title="Edición rápida"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">Edición rápida</span>
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 px-2 rounded-none"
-                            onClick={() => setQuickEditId(product.id)}
-                            title="Edición rápida"
+                            className="h-8 rounded-none px-2"
+                            title="Más acciones"
                           >
                             <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Más acciones</span>
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2 rounded-none"
-                            onClick={() => handleDuplicate(product.id)}
-                            title="Duplicar"
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-none">
+                          <DropdownMenuItem onClick={() => handleDuplicate(product.id)}>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Duplicar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => archive(product.id, product.name)}
                           >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2 rounded-none"
-                            onClick={() => archive(product.id)}
-                            title="Archivar"
-                          >
-                            <Archive className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+                            <Archive className="mr-2 h-4 w-4" />
+                            Archivar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </AdminTableCell>
+                </AdminTableRow>
+              ))}
+            </AdminTableBody>
+          </AdminTable>
+        ) : null}
+      </AdminPageShell>
 
       {quickProduct ? (
         <ProductQuickEdit
           product={quickProduct}
           branches={branchList}
-          categories={categories.data ?? []}
+          categories={categoryList}
           onClose={() => setQuickEditId(null)}
           onSaved={() => {
             setQuickEditId(null);

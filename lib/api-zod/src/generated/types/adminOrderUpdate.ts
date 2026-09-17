@@ -12,6 +12,7 @@ export interface AdminOrderUpdate {
   status?: AdminOrderUpdateStatus;
   /** @nullable */
   cancelReason?: string | null;
+  confirmUnpaidComplete?: boolean;
   customerEmail?: string;
   customerName?: string;
   customerPhone?: string;

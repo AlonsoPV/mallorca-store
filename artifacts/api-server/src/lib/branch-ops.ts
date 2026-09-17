@@ -17,25 +17,27 @@ import {
   type BranchHour,
 } from "@workspace/db";
 
-export const WEEKDAY_LABELS = [
-  "Domingo",
-  "Lunes",
-  "Martes",
-  "Miércoles",
-  "Jueves",
-  "Viernes",
-  "Sábado",
-] as const;
+export {
+  buildFormattedAddress,
+  resolveBranchFormattedAddress,
+  type BranchAddressParts,
+} from "./branch-address.ts";
 
-export const WEEKDAY_KEYS = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-] as const;
+import {
+  WEEKDAY_LABELS,
+  WEEKDAY_KEYS,
+  hoursJsonFromRows,
+  weekdayFromHour,
+  projectLegacyFromSatellites,
+} from "./branch-legacy.ts";
+
+export {
+  WEEKDAY_LABELS,
+  WEEKDAY_KEYS,
+  hoursJsonFromRows,
+  weekdayFromHour,
+  projectLegacyFromSatellites,
+};
 
 export function statusToActive(status: "active" | "inactive" | "archived"): boolean {
   return status === "active";
@@ -55,39 +57,6 @@ export function syncStatusFields(input: {
     return { status: "active", active: true };
   }
   return { status: "active", active: true };
-}
-
-export function buildFormattedAddress(parts: {
-  street?: string | null;
-  externalNumber?: string | null;
-  internalNumber?: string | null;
-  neighborhood?: string | null;
-  borough?: string | null;
-  city?: string | null;
-  state?: string | null;
-  postalCode?: string | null;
-  country?: string | null;
-  fallback?: string | null;
-}): string {
-  const line1 = [
-    parts.street,
-    parts.externalNumber,
-    parts.internalNumber ? `Int. ${parts.internalNumber}` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const rest = [
-    parts.neighborhood,
-    parts.borough,
-    parts.city,
-    parts.state,
-    parts.postalCode,
-    parts.country,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  const built = [line1, rest].filter(Boolean).join(", ");
-  return built || parts.fallback || "";
 }
 
 export function normalizeWhatsapp(value?: string | null): string | null {
@@ -119,38 +88,10 @@ export function slugifyBranch(input: string): string {
     .slice(0, 64);
 }
 
-export function hoursJsonFromRows(
-  rows: Array<{
-    weekday: number;
-    openTime: string | null;
-    closeTime: string | null;
-    closed: boolean;
-    slotOrder: number;
-  }>,
-): BranchHour[] {
-  return [...rows]
-    .sort((a, b) => a.weekday - b.weekday || a.slotOrder - b.slotOrder)
-    .map((row) => ({
-      day: WEEKDAY_KEYS[row.weekday] ?? String(row.weekday),
-      label: WEEKDAY_LABELS[row.weekday] ?? String(row.weekday),
-      open: row.openTime ?? "",
-      close: row.closeTime ?? "",
-      closed: row.closed,
-      slotOrder: row.slotOrder,
-    }));
-}
-
-export function weekdayFromHour(hour: BranchHour): number | null {
-  const key = (hour.day || hour.label || "").toLowerCase();
-  const idx = WEEKDAY_KEYS.findIndex((d) => d === key);
-  if (idx >= 0) return idx;
-  const labelIdx = WEEKDAY_LABELS.findIndex((d) => d.toLowerCase() === key);
-  return labelIdx >= 0 ? labelIdx : null;
-}
-
 export async function replaceBranchHours(branchId: number, hours: BranchHour[]) {
   await db.delete(branchHoursTable).where(eq(branchHoursTable.branchId, branchId));
-  await db.delete(branchSpecialHoursTable).where(eq(branchSpecialHoursTable.branchId, branchId));
+  // Special hours live in branch_special_hours and are replaced only via replaceSpecialHours.
+  // Do not delete them here — weekly saves must not wipe date-specific hours.
 
   const weekly: Array<{
     branchId: number;
@@ -160,27 +101,10 @@ export async function replaceBranchHours(branchId: number, hours: BranchHour[]) 
     closed: boolean;
     slotOrder: number;
   }> = [];
-  const special: Array<{
-    branchId: number;
-    date: string;
-    openTime: string | null;
-    closeTime: string | null;
-    closed: boolean;
-    label: string | null;
-  }> = [];
 
   for (const hour of hours) {
-    if (hour.date) {
-      special.push({
-        branchId,
-        date: hour.date,
-        openTime: hour.closed ? null : hour.open || null,
-        closeTime: hour.closed ? null : hour.close || null,
-        closed: hour.closed,
-        label: hour.label || null,
-      });
-      continue;
-    }
+    // Entries with `date` belong to special hours; ignore in the weekly path.
+    if (hour.date) continue;
     const weekday = weekdayFromHour(hour);
     if (weekday == null) continue;
     weekly.push({
@@ -194,20 +118,7 @@ export async function replaceBranchHours(branchId: number, hours: BranchHour[]) 
   }
 
   if (weekly.length) await db.insert(branchHoursTable).values(weekly);
-  if (special.length) await db.insert(branchSpecialHoursTable).values(special);
-
-  const json = hoursJsonFromRows(weekly);
-  for (const s of special) {
-    json.push({
-      day: s.date,
-      label: s.label || s.date,
-      open: s.openTime || "",
-      close: s.closeTime || "",
-      closed: s.closed,
-      date: s.date,
-    });
-  }
-  return json;
+  return hoursJsonFromRows(weekly);
 }
 
 export async function loadBranchSatellite(branchId: number) {
@@ -445,21 +356,9 @@ export async function syncLegacyProjections(branchId: number) {
       .orderBy(asc(branchHoursTable.weekday), asc(branchHoursTable.slotOrder)),
   ]);
 
-  const maps = links.find((l) => l.type === "maps" && l.active);
-  const openTable = links.find((l) => l.type === "opentable" && l.active);
-  const instagram = links.find((l) => l.type === "instagram" && l.active);
-  const hero = images.find((i) => i.type === "hero") ?? images[0];
-  const gallery = images.filter((i) => i.type === "gallery").map((i) => i.url);
-
+  const projection = projectLegacyFromSatellites(links, images, hours);
   await db
     .update(branchesTable)
-    .set({
-      mapsUrl: maps?.url ?? undefined,
-      openTableUrl: openTable?.url ?? null,
-      instagramUrl: instagram?.url ?? null,
-      imageUrl: hero?.url ?? null,
-      gallery,
-      hours: hoursJsonFromRows(hours),
-    })
+    .set(projection)
     .where(eq(branchesTable.id, branchId));
 }

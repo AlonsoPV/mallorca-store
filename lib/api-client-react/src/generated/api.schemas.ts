@@ -211,6 +211,13 @@ export interface BranchAvailability {
   preparationTimeMinutes: number;
   pickupAvailable: boolean;
   deliveryAvailable: boolean;
+  physicalStock?: number;
+  reservedStock?: number;
+  availableStock?: number;
+  /** @nullable */
+  priceOverride?: number | null;
+  /** @nullable */
+  salePriceOverride?: number | null;
   promotion: Promotion | null;
 }
 
@@ -297,6 +304,15 @@ export type PromotionHistoryItem = Promotion & ({
   cancelledBy: string | null;
 });
 
+export type ProductDetailStatus = typeof ProductDetailStatus[keyof typeof ProductDetailStatus];
+
+
+export const ProductDetailStatus = {
+  draft: 'draft',
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
 export type ProductDetail = ProductCard & ({
   description: string;
   tags: string[];
@@ -312,8 +328,10 @@ export type ProductDetail = ProductCard & ({
   /** @nullable */
   portions: string | null;
   minimumLeadTimeHours: number;
+  status?: ProductDetailStatus;
   /** @maxItems 6 */
   crossSellProductIds?: number[];
+  crossSellProducts?: ProductCard[];
   variants: ProductVariant[];
 });
 
@@ -987,7 +1005,15 @@ export interface CartLineItem {
   variantLabel: string | null;
   quantity: number;
   unitPrice: number;
+  listUnitPrice?: number;
   lineTotal: number;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  promotionId?: number | null;
+  /** @nullable */
+  promotionName?: string | null;
+  savings?: number;
 }
 
 export interface OrderLineItem {
@@ -1008,6 +1034,27 @@ export interface OrderLineItem {
   /** @nullable */
   promotionId?: number | null;
   manualLineItem?: boolean;
+  /** @nullable */
+  imageUrl?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type OrderAuditEventPayload = { [key: string]: unknown } | null;
+
+export interface OrderAuditEvent {
+  id: number;
+  action: string;
+  /** @nullable */
+  reason?: string | null;
+  /** @nullable */
+  actorUserId?: string | null;
+  /** @nullable */
+  actorName?: string | null;
+  createdAt: string;
+  /** @nullable */
+  payload?: OrderAuditEventPayload;
 }
 
 export type OrderSource = typeof OrderSource[keyof typeof OrderSource];
@@ -1034,7 +1081,71 @@ export const PaymentMethod = {
   PAYMENT_LINK: 'PAYMENT_LINK',
   PENDING: 'PENDING',
   COURTESY: 'COURTESY',
+  CASH_ON_PICKUP: 'CASH_ON_PICKUP',
 } as const;
+
+export interface CheckoutPaymentMethod {
+  code: string;
+  name: string;
+  provider: string;
+  customerLabel: string;
+  /** @nullable */
+  customerDescription?: string | null;
+  allowPickup: boolean;
+  allowDelivery: boolean;
+}
+
+export type PaymentMethodConfigConfigurationStatus = typeof PaymentMethodConfigConfigurationStatus[keyof typeof PaymentMethodConfigConfigurationStatus];
+
+
+export const PaymentMethodConfigConfigurationStatus = {
+  configured: 'configured',
+  not_configured: 'not_configured',
+} as const;
+
+export interface PaymentMethodConfig {
+  code: string;
+  name: string;
+  provider: string;
+  enabled: boolean;
+  sortOrder: number;
+  allowPickup: boolean;
+  allowDelivery: boolean;
+  configurationStatus: PaymentMethodConfigConfigurationStatus;
+  customerLabel: string;
+  /** @nullable */
+  customerDescription?: string | null;
+}
+
+export interface PaymentMethodConfigUpdate {
+  enabled?: boolean;
+  allowPickup?: boolean;
+  allowDelivery?: boolean;
+  customerLabel?: string;
+  /** @nullable */
+  customerDescription?: string | null;
+  sortOrder?: number;
+}
+
+export interface PaymentProviderSettings {
+  provider: string;
+  sandbox: boolean;
+  configured: boolean;
+  /** @nullable */
+  publicKeyMasked?: string | null;
+  accessTokenConfigured: boolean;
+  webhookSecretConfigured: boolean;
+}
+
+export interface PaymentProviderSettingsInput {
+  sandbox?: boolean;
+  /** @nullable */
+  publicKey?: string | null;
+  /** @nullable */
+  accessToken?: string | null;
+  /** @nullable */
+  webhookSecret?: string | null;
+}
 
 export interface AdminOrderLineInput {
   /** @nullable */
@@ -1080,6 +1191,27 @@ export const AdminOrderInputFulfillmentMethod = {
   delivery: 'delivery',
 } as const;
 
+export interface DeliveryAddressSnapshot {
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  externalNumber?: string | null;
+  /** @nullable */
+  internalNumber?: string | null;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  municipality?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  postalCode?: string | null;
+  /** @nullable */
+  references?: string | null;
+}
+
 export interface AdminOrderInput {
   orderSource: OrderSource;
   branchId: number;
@@ -1092,6 +1224,7 @@ export interface AdminOrderInput {
   customerPhone: string;
   /** @nullable */
   deliveryAddress?: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   deliveryLatitude?: number | null;
   /** @nullable */
@@ -1201,6 +1334,7 @@ export interface AdminOrderDuplicatePrefill {
   fulfillmentMethod: AdminOrderDuplicatePrefillFulfillmentMethod;
   /** @nullable */
   deliveryAddress?: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   deliveryLatitude?: number | null;
   /** @nullable */
@@ -1269,6 +1403,7 @@ export type AdminOrderUpdateStatus = typeof AdminOrderUpdateStatus[keyof typeof 
 
 export const AdminOrderUpdateStatus = {
   pending_payment: 'pending_payment',
+  confirmed: 'confirmed',
   paid: 'paid',
   preparing: 'preparing',
   ready: 'ready',
@@ -1280,6 +1415,7 @@ export interface AdminOrderUpdate {
   status?: AdminOrderUpdateStatus;
   /** @nullable */
   cancelReason?: string | null;
+  confirmUnpaidComplete?: boolean;
   customerEmail?: string;
   customerName?: string;
   customerPhone?: string;
@@ -1310,8 +1446,10 @@ export interface OrderInput {
   customerPhone: string;
   /** @nullable */
   notes?: string | null;
+  paymentMethod?: PaymentMethod;
   /** @nullable */
   deliveryAddress?: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   deliveryLatitude?: number | null;
   /** @nullable */
@@ -1342,6 +1480,10 @@ export interface Order {
   /** @nullable */
   paymentLinkUrl?: string | null;
   amountPaid?: number;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  paidByUserId?: string | null;
   fulfillmentMethod: OrderFulfillmentMethod;
   scheduledStart: string;
   scheduledEnd: string;
@@ -1350,6 +1492,7 @@ export interface Order {
   customerPhone: string;
   /** @nullable */
   deliveryAddress: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   customerNotes?: string | null;
   /** @nullable */
@@ -1375,7 +1518,9 @@ export interface Order {
   branchName?: string;
   /** @nullable */
   createdByUserId?: string | null;
+  createdAt?: string;
   items: OrderLineItem[];
+  audit?: OrderAuditEvent[];
 }
 
 export interface OrderSummaryItem {
@@ -1406,6 +1551,9 @@ export interface OrderSummary {
   customerPhone?: string;
   fulfillmentMethod: OrderSummaryFulfillmentMethod;
   paymentStatus?: string;
+  /** @nullable */
+  paymentMethod?: string | null;
+  amountPaid?: number;
   itemCount?: number;
   items?: OrderSummaryItem[];
 }
@@ -1553,6 +1701,7 @@ export type OrderStatusUpdateStatus = typeof OrderStatusUpdateStatus[keyof typeo
 
 export const OrderStatusUpdateStatus = {
   pending_payment: 'pending_payment',
+  confirmed: 'confirmed',
   paid: 'paid',
   preparing: 'preparing',
   ready: 'ready',
@@ -1702,6 +1851,19 @@ export type ListFulfillmentSlotsMethod = typeof ListFulfillmentSlotsMethod[keyof
 
 
 export const ListFulfillmentSlotsMethod = {
+  pickup: 'pickup',
+  delivery: 'delivery',
+} as const;
+
+export type ListCheckoutPaymentMethodsParams = {
+branchId: number;
+fulfillmentMethod: ListCheckoutPaymentMethodsFulfillmentMethod;
+};
+
+export type ListCheckoutPaymentMethodsFulfillmentMethod = typeof ListCheckoutPaymentMethodsFulfillmentMethod[keyof typeof ListCheckoutPaymentMethodsFulfillmentMethod];
+
+
+export const ListCheckoutPaymentMethodsFulfillmentMethod = {
   pickup: 'pickup',
   delivery: 'delivery',
 } as const;

@@ -284,7 +284,7 @@ export default function AdminBranchDetail() {
                 }
                 rows={agendaOrders.map((o: any) => [
                   formatOrderTime(o.scheduledStart),
-                  `#${o.id}`,
+                  `#${o.orderNumber ?? o.id}`,
                   ORDER_STATUS_LABELS[o.status as keyof typeof ORDER_STATUS_LABELS] || o.status,
                   <Link key="l" href={`/admin/pedidos/${o.id}`} className="text-primary text-xs">
                     Ver

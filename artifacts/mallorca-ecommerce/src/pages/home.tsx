@@ -25,7 +25,6 @@ export default function Home() {
     includeUnavailable: true,
   }, {
     query: {
-      enabled: Boolean(selectedBranch && selectedTime),
       queryKey: getListProductsQueryKey({ featured: true, branchSlug: selectedBranch?.slug, scheduledStart: selectedTime || undefined, includeUnavailable: true }),
     },
   });

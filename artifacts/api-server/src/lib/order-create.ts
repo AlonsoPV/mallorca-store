@@ -10,17 +10,26 @@ import {
   branchProductsTable,
   ordersTable,
   orderItemsTable,
+  orderPaymentsTable,
   inventoryReservationsTable,
-  inventoryLedgerTable,
   couponsTable,
   type User,
 } from "@workspace/db";
-import { applyInventoryAlert } from "./inventory-alerts";
 import { validateDeliveryCoverage, computeDeliveryFee } from "./delivery-validation";
+import {
+  resolveDeliveryAddress,
+  type DeliveryAddressSnapshot,
+} from "./delivery-address";
+import {
+  releaseOrderReservations,
+  reserveBranchProduct,
+} from "./inventory-hold";
+import { logger } from "./logger";
 import {
   fulfillmentSchedule,
   isValidSlotTime,
   mexicoDate,
+  reservationTtlMinutesUntil,
 } from "./fulfillment-schedule";
 import { writeOrderAudit } from "./order-audit";
 import {
@@ -36,6 +45,7 @@ import {
   type OrderTotals,
 } from "./order-pricing";
 import { getActivePromotion, resolveCatalogPrice } from "./catalog";
+import { resolveAvailableMethods, resolveCreateOrderPaymentState } from "./payments";
 
 const id = () => crypto.randomUUID();
 
@@ -68,41 +78,13 @@ export async function releaseExpiredReservations(): Promise<void> {
         .where(eq(ordersTable.id, candidate.orderId))
         .for("update");
       if (!order || order.status !== "pending_payment") continue;
-      const expired = await tx
-        .update(inventoryReservationsTable)
-        .set({ status: "released" })
+      await releaseOrderReservations(tx, order.id, "Reservation expired");
+      await tx
+        .update(ordersTable)
+        .set({ status: "cancelled" })
         .where(
-          and(
-            eq(inventoryReservationsTable.orderId, order.id),
-            eq(inventoryReservationsTable.status, "active"),
-          ),
-        )
-        .returning();
-      for (const r of expired) {
-        const [bp] = await tx
-          .update(branchProductsTable)
-          .set({ inventory: sql`${branchProductsTable.inventory} + ${r.quantity}` })
-          .where(eq(branchProductsTable.id, r.branchProductId))
-          .returning();
-        if (!bp) continue;
-        await applyInventoryAlert(tx, bp, bp.inventory);
-        await tx.insert(inventoryLedgerTable).values({
-          branchProductId: r.branchProductId,
-          orderId: r.orderId,
-          movement: "release",
-          quantityDelta: r.quantity,
-          balanceAfter: bp.inventory,
-          reason: "Reservation expired",
-        });
-      }
-      if (expired.length) {
-        await tx
-          .update(ordersTable)
-          .set({ status: "cancelled" })
-          .where(
-            and(eq(ordersTable.id, order.id), eq(ordersTable.status, "pending_payment")),
-          );
-      }
+          and(eq(ordersTable.id, order.id), eq(ordersTable.status, "pending_payment")),
+        );
     }
   });
 }
@@ -127,6 +109,7 @@ export type CreateOrderInput = {
   customerName: string;
   customerPhone: string;
   deliveryAddress?: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot | null;
   deliveryLatitude?: number | null;
   deliveryLongitude?: number | null;
   customerNotes?: string | null;
@@ -143,6 +126,7 @@ export type CreateOrderInput = {
     | "PAYMENT_LINK"
     | "PENDING"
     | "COURTESY"
+    | "CASH_ON_PICKUP"
     | null;
   markPaid?: boolean;
   paymentReference?: string | null;
@@ -323,6 +307,12 @@ export async function createOrder(
     return { ...priced, errors: priced.errors };
   }
 
+  const deliveryResolved = resolveDeliveryAddress({
+    fulfillmentMethod: input.fulfillmentMethod,
+    snapshot: input.deliveryAddressSnapshot,
+    deliveryAddress: input.deliveryAddress,
+  });
+
   if (
     input.fulfillmentMethod === "pickup" && !branch.pickupAvailable
   ) {
@@ -331,7 +321,7 @@ export async function createOrder(
   if (input.fulfillmentMethod === "delivery") {
     if (!branch.deliveryAvailable) throw new OrderCreateError("Invalid fulfillment");
     if (
-      !input.deliveryAddress ||
+      !deliveryResolved.formatted ||
       input.deliveryLatitude == null ||
       input.deliveryLongitude == null
     ) {
@@ -382,26 +372,60 @@ export async function createOrder(
     throw new OrderCreateError("Fulfillment slot unavailable");
   }
 
+  if (input.orderSource === "STOREFRONT") {
+    const available = await resolveAvailableMethods({
+      branchId: branch.id,
+      fulfillmentMethod: input.fulfillmentMethod,
+      audience: "storefront",
+    });
+    const requested =
+      input.paymentMethod ??
+      (input.fulfillmentMethod === "pickup" ? "CASH_ON_PICKUP" : "PENDING");
+    if (available.length === 0) {
+      if (requested !== "PENDING") {
+        throw new OrderCreateError("Payment method not available", 400, "PAYMENT_METHOD_NOT_ALLOWED");
+      }
+    } else if (!available.some((method) => method.code === requested)) {
+      throw new OrderCreateError("Payment method not available", 400, "PAYMENT_METHOD_NOT_ALLOWED");
+    }
+  }
+
+  let paymentState;
+  try {
+    paymentState = resolveCreateOrderPaymentState({
+      orderSource: input.orderSource,
+      fulfillmentMethod: input.fulfillmentMethod,
+      paymentMethod: input.paymentMethod,
+      markPaid: input.markPaid,
+      amountPaid: input.amountPaid,
+      total: priced.total,
+    });
+  } catch (error) {
+    const coded = error as Error & { status?: number; code?: string };
+    if (coded.code === "PAYMENT_METHOD_NOT_ALLOWED") {
+      throw new OrderCreateError(coded.message, coded.status ?? 400, coded.code);
+    }
+    throw error;
+  }
+
   if (input.previewOnly) {
     return { ...priced, maxLeadTimeMinutes, errors: [] };
   }
 
-  const autoPaidMethods = new Set(["CASH", "TERMINAL", "COURTESY"]);
-  const immediatePaid =
-    input.orderSource !== "STOREFRONT" &&
-    input.paymentMethod != null &&
-    input.paymentMethod !== "PENDING" &&
-    input.paymentMethod !== "ONLINE" &&
-    input.paymentMethod !== "PAYMENT_LINK" &&
-    (input.markPaid === true ||
-      (input.markPaid !== false && autoPaidMethods.has(input.paymentMethod)));
+  const immediatePaid = paymentState.immediatePaid;
 
   const orderId = id();
   const guestAccessToken = crypto.randomBytes(24).toString("hex");
-  const ttl = (input.reservationTtlMinutes ?? 15) * 60_000;
-  const reservationExpiresAt = new Date(Date.now() + ttl);
   const intervalMs = schedule!.intervalMs;
   const scheduledEnd = new Date(scheduled.getTime() + intervalMs);
+  const ttlMinutes =
+    input.reservationTtlMinutes ??
+    (input.orderSource === "STOREFRONT"
+      ? reservationTtlMinutesUntil(scheduledEnd)
+      : 15);
+  const reservationExpiresAt = paymentState.skipTtlCancel
+    ? new Date("2099-12-31T00:00:00.000Z")
+    : new Date(Date.now() + ttlMinutes * 60_000);
 
   try {
     const created = await db.transaction(async (tx) => {
@@ -433,11 +457,10 @@ export async function createOrder(
         if (booked >= schedule!.capacity) throw new Error("SLOT_FULL");
       }
 
-      const status = immediatePaid ? "paid" : "pending_payment";
-      const paymentStatus = immediatePaid ? "paid" : "unpaid";
-      const amountPaid = immediatePaid
-        ? (input.amountPaid != null ? input.amountPaid : priced.total)
-        : (input.amountPaid ?? 0);
+      const status = paymentState.status;
+      const paymentStatus = paymentState.paymentStatus;
+      const amountPaid = paymentState.amountPaid;
+      const now = new Date();
 
       const inserted = await tx
         .insert(ordersTable)
@@ -452,17 +475,20 @@ export async function createOrder(
           orderSource: input.orderSource,
           status,
           paymentStatus,
-          paymentMethod: input.paymentMethod ?? (input.orderSource === "STOREFRONT" ? "ONLINE" : "PENDING"),
+          paymentMethod: paymentState.paymentMethod,
           paymentReference: input.paymentReference ?? null,
           paymentNote: input.paymentNote ?? null,
           amountPaid,
+          paidAt: immediatePaid ? now : null,
+          paidByUserId: immediatePaid ? input.createdByUserId ?? null : null,
           fulfillmentMethod: input.fulfillmentMethod,
           scheduledStart: scheduled,
           scheduledEnd,
           customerEmail: input.customerEmail,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
-          deliveryAddress: input.deliveryAddress ?? null,
+          deliveryAddress: deliveryResolved.formatted,
+          deliveryAddressSnapshot: deliveryResolved.snapshot,
           deliveryLatitude: input.deliveryLatitude ?? null,
           deliveryLongitude: input.deliveryLongitude ?? null,
           customerNotes: input.customerNotes ?? null,
@@ -487,6 +513,18 @@ export async function createOrder(
         .returning();
 
       const order = inserted[0];
+
+      await tx.insert(orderPaymentsTable).values({
+        orderId,
+        method: paymentState.paymentMethod,
+        provider: paymentState.paymentMethod === "CASH_ON_PICKUP" ? "CASH_ON_PICKUP" : "MANUAL",
+        amount: priced.total,
+        currency: "MXN",
+        status: immediatePaid ? "paid" : "unpaid",
+        recordedByUserId: immediatePaid ? input.createdByUserId ?? null : null,
+        note: input.paymentNote ?? null,
+        paidAt: immediatePaid ? now : null,
+      });
 
       for (const line of priced.lines) {
         await tx.insert(orderItemsTable).values({
@@ -517,71 +555,15 @@ export async function createOrder(
           );
         if (!bp) throw new Error("OUT_OF_STOCK");
 
-        if (input.overrides?.stock && line.quantity > bp.inventory) {
-          // Force path: clamp reservation to available stock of 0 delta if none left,
-          // but still record the line. Prefer decrementing what exists.
-          const qty = Math.min(line.quantity, Math.max(0, bp.inventory));
-          if (qty > 0) {
-            const updated = await tx
-              .update(branchProductsTable)
-              .set({ inventory: sql`${branchProductsTable.inventory} - ${qty}` })
-              .where(
-                and(
-                  eq(branchProductsTable.id, bp.id),
-                  sql`${branchProductsTable.inventory} >= ${qty}`,
-                ),
-              )
-              .returning({ inventory: branchProductsTable.inventory });
-            if (updated.length) {
-              await applyInventoryAlert(tx, { ...bp, inventory: updated[0].inventory }, updated[0].inventory);
-              await tx.insert(inventoryReservationsTable).values({
-                orderId,
-                branchProductId: bp.id,
-                quantity: qty,
-                status: immediatePaid ? "committed" : "active",
-                expiresAt: reservationExpiresAt,
-              });
-              await tx.insert(inventoryLedgerTable).values({
-                branchProductId: bp.id,
-                orderId,
-                movement: "reserve",
-                quantityDelta: -qty,
-                balanceAfter: updated[0].inventory,
-                actorUserId: input.createdByUserId ?? null,
-                reason: "Order reservation (override)",
-              });
-            }
-          }
-          continue;
-        }
-
-        const updated = await tx
-          .update(branchProductsTable)
-          .set({ inventory: sql`${branchProductsTable.inventory} - ${line.quantity}` })
-          .where(
-            and(
-              eq(branchProductsTable.id, bp.id),
-              sql`${branchProductsTable.inventory} >= ${line.quantity}`,
-            ),
-          )
-          .returning({ inventory: branchProductsTable.inventory });
-        if (!updated.length) throw new Error("OUT_OF_STOCK");
-        await applyInventoryAlert(tx, { ...bp, inventory: updated[0].inventory }, updated[0].inventory);
-        await tx.insert(inventoryReservationsTable).values({
-          orderId,
-          branchProductId: bp.id,
+        await reserveBranchProduct(tx, {
+          branchProduct: bp,
           quantity: line.quantity,
-          status: immediatePaid ? "committed" : "active",
-          expiresAt: reservationExpiresAt,
-        });
-        await tx.insert(inventoryLedgerTable).values({
-          branchProductId: bp.id,
           orderId,
-          movement: "reserve",
-          quantityDelta: -line.quantity,
-          balanceAfter: updated[0].inventory,
-          actorUserId: input.createdByUserId ?? null,
-          reason: "Order reservation",
+          immediatePaid,
+          expiresAt: reservationExpiresAt,
+          actorUserId: input.createdByUserId,
+          reason: input.overrides?.stock ? "Order reservation (override)" : "Order reservation",
+          allowOverride: Boolean(input.overrides?.stock),
         });
       }
 
@@ -652,6 +634,16 @@ export async function createOrder(
       .select()
       .from(orderItemsTable)
       .where(eq(orderItemsTable.orderId, created.id));
+
+    logger.info({
+      event: "order_created",
+      orderId: created.id,
+      branchId: branch.id,
+      total: priced.total,
+      paymentStatus: created.paymentStatus,
+      fulfillmentMethod: created.fulfillmentMethod,
+      lineCount: items.length,
+    }, "Order created");
 
     return { ...priced, maxLeadTimeMinutes, order: created, items, errors: [] };
   } catch (error) {

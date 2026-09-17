@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProductCard } from './productCard';
+import type { ProductDetailStatus } from './productDetailStatus';
 import type { ProductVariant } from './productVariant';
 
 export type ProductDetail = ProductCard & ({
@@ -23,7 +24,9 @@ export type ProductDetail = ProductCard & ({
   /** @nullable */
   portions: string | null;
   minimumLeadTimeHours: number;
+  status?: ProductDetailStatus;
   /** @maxItems 6 */
   crossSellProductIds?: number[];
+  crossSellProducts?: ProductCard[];
   variants: ProductVariant[];
 });

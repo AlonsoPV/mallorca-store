@@ -17,16 +17,18 @@ import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { ProductCard } from "@/components/product-card";
+import { formatMxn, productAvailabilityCopy } from "@/lib/availability-copy";
+import { track } from "@/lib/analytics";
 
 const PRODUCT_PRICE_REFRESH_INTERVAL_MS = 30_000;
 
 export default function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { branchId, selectedDate, selectedTime } = useCart();
+  const { branchId, selectedTime, cartId, setCartSession, openBranchPicker, openMiniCart } = useCart();
   const productParams = branchId ? { branchId } : undefined;
   const { data: product, isLoading, isError } = useGetProduct(slug || "", productParams, {
     query: {
-      enabled: Boolean(slug && branchId && selectedDate && selectedTime),
+      enabled: Boolean(slug),
       queryKey: getGetProductQueryKey(slug || "", productParams),
       staleTime: PRODUCT_PRICE_REFRESH_INTERVAL_MS,
       refetchInterval: PRODUCT_PRICE_REFRESH_INTERVAL_MS,
@@ -36,8 +38,6 @@ export default function ProductDetail() {
   });
   const [quantity, setQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
-  
-  const { cartId, setCartSession } = useCart();
   
   const addCartItem = useAddCartItem();
   const createSession = useCreateCartSession();
@@ -76,11 +76,15 @@ export default function ProductDetail() {
   const crossSellIds = (product as any)?.crossSellProductIds as number[] | undefined;
   const { data: catalogProducts } = useListProducts(undefined, {
     query: {
-      enabled: Boolean(crossSellIds?.length),
+      enabled: Boolean(crossSellIds?.length) && !(product as { crossSellProducts?: unknown[] } | undefined)?.crossSellProducts?.length,
       queryKey: ["/api/products", "cross-sell"],
     },
   });
   const crossSellProducts = useMemo(() => {
+    const fromApi = (product as { crossSellProducts?: typeof catalogProducts })?.crossSellProducts;
+    if (fromApi?.length) {
+      return fromApi.filter((item) => item.id !== product?.id).slice(0, 3);
+    }
     if (!catalogProducts?.length || !crossSellIds?.length || !product) return [];
     return crossSellIds
       .map((id) => catalogProducts.find((item) => item.id === id))
@@ -92,8 +96,13 @@ export default function ProductDetail() {
             avail.branchId === branchId && avail.available && avail.inventory > 0,
         );
       })
-      .slice(0, 6);
+      .slice(0, 3);
   }, [branchId, catalogProducts, crossSellIds, product]);
+
+  useEffect(() => {
+    if (!product) return;
+    track("view_item", { productId: product.id, name: product.name, value: product.salePrice ?? product.price });
+  }, [product?.id, product?.name, product?.price, product?.salePrice]);
 
   if (isLoading) {
     return (
@@ -127,13 +136,6 @@ export default function ProductDetail() {
     );
   }
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(price);
-  };
-
   const selectedVariantData = selectedVariant
     ? product.variants.find((variant) => variant.id === selectedVariant)
     : undefined;
@@ -146,37 +148,50 @@ export default function ProductDetail() {
   const currentSavings = currentSalePrice == null
     ? 0
     : Math.round((currentBasePrice - currentSalePrice) * 100) / 100;
+  const leadHours = Math.max(
+    product.minimumLeadTimeHours,
+    Math.ceil((currentBranchAvailability?.preparationTimeMinutes ?? 0) / 60),
+  );
   const scheduleAvailable = Boolean(
-    selectedTime &&
-    currentBranchAvailability &&
-    new Date(selectedTime).getTime() >=
-      Date.now() +
-        Math.max(
-          product.minimumLeadTimeHours * 60,
-          currentBranchAvailability.preparationTimeMinutes,
-        ) *
-        60_000,
+    !selectedTime ||
+    (currentBranchAvailability &&
+      new Date(selectedTime).getTime() >=
+        Date.now() +
+          Math.max(
+            product.minimumLeadTimeHours * 60,
+            currentBranchAvailability.preparationTimeMinutes,
+          ) *
+          60_000),
+  );
+  const availabilityLabel = productAvailabilityCopy({
+    branchName: currentBranchAvailability?.branchName,
+    available: currentBranchAvailability?.available,
+    inventory: currentBranchAvailability?.inventory,
+    leadHours,
+    scheduleOk: scheduleAvailable,
+    hasSchedule: Boolean(selectedTime),
+  });
+  const canAdd = Boolean(
+    (!branchId || (currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) >= quantity)) &&
+    (!selectedTime || scheduleAvailable),
   );
 
   const handleAddToCart = async () => {
-    if (!branchId) {
-      toast({
-        title: "Selecciona una sucursal",
-        description: "Necesitamos saber en qué sucursal recogerás o desde dónde enviaremos tu pedido.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     try {
+      let activeBranchId = branchId;
+      if (!activeBranchId) {
+        activeBranchId = await openBranchPicker();
+        if (!activeBranchId) return;
+      }
+
       let activeCartId = cartId;
       
       if (!activeCartId) {
         const session = await createSession.mutateAsync({
-          data: { branchId },
+          data: { branchId: activeBranchId },
         });
         activeCartId = session.id;
-        setCartSession(session.id, branchId);
+        setCartSession(session.id, activeBranchId);
       }
 
       await addCartItem.mutateAsync({
@@ -189,11 +204,8 @@ export default function ProductDetail() {
       });
 
       queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(activeCartId) });
-
-      toast({
-        title: "Agregado al carrito",
-        description: `${quantity}x ${product.name} agregado exitosamente.`,
-      });
+      track("add_to_cart", { productId: product.id, name: product.name, quantity, value: currentPrice * quantity });
+      openMiniCart();
       
     } catch (err: any) {
       toast({
@@ -255,7 +267,7 @@ export default function ProductDetail() {
             <div className="mb-8 mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-foreground">
               {currentSalePrice != null && currentSavings > 0 && (
                 <span className="font-serif text-3xl text-primary">
-                  {formatPrice(currentSalePrice)}
+                  {formatMxn(currentSalePrice)}
                 </span>
               )}
               <span className={cn(
@@ -264,11 +276,11 @@ export default function ProductDetail() {
                   ? "text-xl text-muted-foreground line-through"
                   : "text-3xl text-primary",
               )}>
-                {formatPrice(currentBasePrice)}
+                {formatMxn(currentBasePrice)}
               </span>
               {currentSalePrice != null && currentSavings > 0 && (
                 <span className="text-sm font-medium text-primary">
-                  Ahorras {formatPrice(currentSavings)}
+                  Ahorras {formatMxn(currentSavings)}
                 </span>
               )}
             </div>
@@ -282,11 +294,13 @@ export default function ProductDetail() {
                 <ShoppingBag className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div>
                   <span className="mallorca-kicker text-primary">Tu Mallorca</span>
-                  <p className="mt-1 font-serif text-xl">{currentBranchAvailability?.branchName || "Sucursal seleccionada"}</p>
+                  <p className="mt-1 font-serif text-xl">{currentBranchAvailability?.branchName || "Elige tu Mallorca al añadir"}</p>
                   <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                    {currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) > 0 && scheduleAvailable
-                      ? `Disponible · ${currentBranchAvailability.inventory} piezas`
-                      : selectedTime ? "No disponible para este horario" : "Selecciona fecha y hora"}
+                    {availabilityLabel
+                      ? availabilityLabel
+                      : currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) > 0
+                        ? `Disponible · ${currentBranchAvailability.inventory} piezas`
+                        : "Precios e inventario se confirman con tu sucursal."}
                   </p>
                 </div>
               </div>
@@ -346,7 +360,7 @@ export default function ProductDetail() {
               
               <Button 
                 onClick={handleAddToCart}
-                disabled={!branchId || !selectedDate || !selectedTime || !scheduleAvailable || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
+                disabled={!canAdd || addCartItem.isPending || createSession.isPending}
                 size="lg" 
                 className="h-12 flex-1 rounded-none bg-primary text-base text-primary-foreground hover:bg-primary/90"
               >
@@ -357,11 +371,11 @@ export default function ProductDetail() {
             <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-[var(--mallorca-white)]/95 p-3 backdrop-blur-md md:hidden">
               <div className="min-w-0 flex-1">
                 <span className="mallorca-kicker text-[var(--mallorca-red)]">Tu selección</span>
-                <p className="truncate font-serif text-lg">{formatPrice(currentPrice * quantity)}</p>
+                <p className="truncate font-serif text-lg">{formatMxn(currentPrice * quantity)}</p>
               </div>
               <Button
                 onClick={handleAddToCart}
-                disabled={!branchId || !selectedDate || !selectedTime || !scheduleAvailable || !currentBranchAvailability?.available || (currentBranchAvailability.inventory ?? 0) < quantity || addCartItem.isPending || createSession.isPending}
+                disabled={!canAdd || addCartItem.isPending || createSession.isPending}
                 className="h-12 rounded-md bg-[var(--mallorca-red)] px-5 text-white hover:bg-[var(--mallorca-red-dark)]"
               >
                 {addCartItem.isPending || createSession.isPending ? "Añadiendo" : "Añadir"}

@@ -4,6 +4,7 @@ export type OrderStatus = OrderStatusUpdateStatus;
 
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending_payment: ["paid", "cancelled"],
+  confirmed: ["preparing", "cancelled"],
   paid: ["preparing", "cancelled"],
   preparing: ["ready", "cancelled"],
   ready: ["completed", "cancelled"],
@@ -13,21 +14,52 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending_payment: "Pago pendiente",
-  paid: "Confirmado",
+  confirmed: "Confirmado",
+  paid: "Pagado",
   preparing: "Preparando",
   ready: "Listo",
   completed: "Entregado",
   cancelled: "Cancelado",
 };
 
-/** Preferred primary action label for the main CTA (non-cancel next step). */
+/** Preferred primary action label for the main CTA (keyed by target status). */
 export const ORDER_STATUS_ACTION_LABELS: Partial<Record<OrderStatus, string>> = {
   paid: "Confirmar pago",
-  preparing: "Pasar a preparación",
+  preparing: "Comenzar preparación",
   ready: "Marcar como listo",
-  completed: "Marcar entregado",
-  cancelled: "Cancelar",
+  completed: "Entregar pedido",
+  cancelled: "Cancelar pedido",
 };
+
+/** Operational pipeline shown on order detail (excludes payment/cancel). */
+export const ORDER_STATUS_PIPELINE: OrderStatus[] = [
+  "confirmed",
+  "preparing",
+  "ready",
+  "completed",
+];
+
+export function formatRelativeShort(value?: string | Date | null) {
+  if (!value) return "";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "";
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "Ahora";
+  if (mins < 60) return `Hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `Hace ${days} d`;
+  return formatOrderDate(d);
+}
+
+export function formatOrderDateTime(value?: string | Date | null) {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${formatOrderDate(d)} · ${formatOrderTime(d)}`;
+}
 
 export function getValidNextStatuses(status: string): OrderStatus[] {
   return ORDER_STATUS_TRANSITIONS[status as OrderStatus] ?? [];

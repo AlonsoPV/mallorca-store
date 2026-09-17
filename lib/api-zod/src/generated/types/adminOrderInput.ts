@@ -9,6 +9,7 @@ import type { AdminOrderInputFulfillmentMethod } from './adminOrderInputFulfillm
 import type { AdminOrderLineInput } from './adminOrderLineInput';
 import type { AdminOrderManualDiscount } from './adminOrderManualDiscount';
 import type { AdminOrderOverrides } from './adminOrderOverrides';
+import type { DeliveryAddressSnapshot } from './deliveryAddressSnapshot';
 import type { OrderSource } from './orderSource';
 import type { PaymentMethod } from './paymentMethod';
 
@@ -24,6 +25,7 @@ export interface AdminOrderInput {
   customerPhone: string;
   /** @nullable */
   deliveryAddress?: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   deliveryLatitude?: number | null;
   /** @nullable */

@@ -12,6 +12,7 @@ import {
 import type { Branch, BranchPreview } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart-context";
 import { trackBranchEvent } from "@/lib/analytics";
+import { formatMxn } from "@/lib/availability-copy";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getCampaignBranchId, keepAvailableCartItems, shouldPreviewBranchChange } from "@/lib/branch-flow";
@@ -26,7 +27,16 @@ function branchShortName(branch: Branch) {
 
 export function BranchSelector({ required = false }: BranchSelectorProps) {
   const [location] = useLocation();
-  const { branchId, cartId, setBranchId, setCartSession, clearCartSession } = useCart();
+  const {
+    branchId,
+    cartId,
+    setBranchId,
+    setCartSession,
+    clearCartSession,
+    branchPickerOpen,
+    setBranchPickerOpen,
+    notifyBranchPicked,
+  } = useCart();
   const { data: branchesData, isLoading } = useListBranches();
   const branches = Array.isArray(branchesData) ? branchesData : undefined;
   const { data: cart } = useGetCart(cartId || "", {
@@ -47,7 +57,8 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
 
   useEffect(() => {
     if (required && !branchId) setIsOpen(true);
-  }, [required, branchId]);
+    if (branchPickerOpen) setIsOpen(true);
+  }, [required, branchId, branchPickerOpen]);
 
   useEffect(() => {
     if (branchId || !branches?.length) return;
@@ -55,6 +66,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
     if (campaignBranchId) {
       const campaignBranch = branches.find((branch) => branch.id === campaignBranchId);
       setBranchId(campaignBranchId);
+      notifyBranchPicked(campaignBranchId);
       if (campaignBranch) {
         trackBranchEvent("branch_selected", {
           branchId: campaignBranch.id,
@@ -75,6 +87,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
 
     if (!branchId || !cartId) {
       setBranchId(branch.id);
+      notifyBranchPicked(branch.id);
       trackBranchEvent(branchId ? "branch_changed" : "branch_selected", {
         branchId: branch.id,
         branchSlug: branch.slug,
@@ -142,6 +155,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
       }
 
       setCartSession(session.id, pendingBranch.id);
+      notifyBranchPicked(pendingBranch.id);
       trackBranchEvent("branch_changed", {
         branchId: pendingBranch.id,
         branchSlug: pendingBranch.slug,
@@ -164,6 +178,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
 
   const selectWithoutCart = (branch: Branch) => {
     setBranchId(branch.id);
+    notifyBranchPicked(branch.id);
     trackBranchEvent(branchId ? "branch_changed" : "branch_selected", {
       branchId: branch.id,
       branchSlug: branch.slug,
@@ -174,46 +189,40 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
 
   const shouldBlockClose = required && !branchId;
 
+  const handleOpenChange = (open: boolean) => {
+    if (shouldBlockClose && !open) return;
+    setIsOpen(open);
+    setBranchPickerOpen(open);
+    if (!open) notifyBranchPicked(branchId);
+  };
+
   return (
     <>
       {!required && currentBranch && (
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="group hidden items-center gap-2 border-l border-border/70 pl-4 text-left md:flex"
+          className="group flex min-w-0 max-w-[9.5rem] items-center gap-1.5 text-left sm:max-w-[12rem] lg:max-w-none lg:gap-2 lg:border-l lg:border-border/70 lg:pl-4"
           aria-label={`Cambiar sucursal. Actualmente ${currentBranch.name}`}
         >
-          <MapPin className="h-4 w-4 text-primary" />
-          <span>
-            <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Tu Mallorca</span>
-            <span className="flex items-center gap-1 text-xs font-semibold group-hover:text-primary">
-              {branchShortName(currentBranch)}
-              <ChevronRight className="h-3 w-3 rotate-90" />
+          <MapPin className="h-3.5 w-3.5 shrink-0 text-primary lg:h-4 lg:w-4" />
+          <span className="min-w-0">
+            <span className="hidden text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground lg:block">Tu Mallorca</span>
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] group-hover:text-primary sm:text-xs sm:normal-case sm:tracking-normal lg:font-semibold">
+              <span className="truncate">{branchShortName(currentBranch)}</span>
+              <ChevronRight className="h-3 w-3 shrink-0 rotate-90" />
             </span>
           </span>
         </button>
       )}
 
-      {!required && currentBranch && (
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          className="flex items-center gap-1 border-t border-border/60 px-1 pt-2 text-left md:hidden"
-          aria-label={`Cambiar sucursal. Actualmente ${currentBranch.name}`}
-        >
-          <MapPin className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em]">{branchShortName(currentBranch)}</span>
-          <ChevronRight className="h-3 w-3 rotate-90" />
-        </button>
-      )}
-
       {!required && !currentBranch && (
-        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-bold text-primary underline underline-offset-4">
+        <button type="button" onClick={() => setIsOpen(true)} className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-primary underline underline-offset-4 sm:text-xs sm:normal-case sm:tracking-normal">
           Elegir sucursal
         </button>
       )}
 
-      <Dialog open={isOpen} onOpenChange={(open) => !shouldBlockClose && setIsOpen(open)}>
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent
           className={`max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-none border-border bg-[var(--mallorca-ivory)] p-0 sm:max-w-3xl ${shouldBlockClose ? "[&>button]:hidden" : ""}`}
           onPointerDownOutside={(event) => shouldBlockClose && event.preventDefault()}
@@ -245,15 +254,32 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
                 </div>
 
                 <div className="space-y-3">
-                  {preview.items.map((item) => (
+                  {preview.items.map((item) => {
+                    const current = cart?.items.find(
+                      (line) => line.productId === item.productId && (line.variantId ?? null) === (item.variantId ?? null),
+                    );
+                    const targetPrice = item.salePrice ?? item.price;
+                    const priceChanged = current != null && Math.abs(current.unitPrice - targetPrice) > 0.009;
+                    return (
                     <div key={`${item.productId}-${item.variantId ?? "standard"}`} className="flex items-center justify-between gap-4 border-b border-border/70 py-3 text-sm">
                       <span>{item.quantity} × {item.name}</span>
-                      <span className={item.available ? "flex items-center gap-1 text-green-700" : "flex items-center gap-1 text-destructive"}>
-                        {item.available ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                        {item.available ? "Disponible" : "No disponible"}
+                      <span className={item.available ? "flex flex-col items-end gap-0.5 text-green-700" : "flex items-center gap-1 text-destructive"}>
+                        {item.available ? (
+                          <>
+                            <span className="flex items-center gap-1"><Check className="h-4 w-4" /> Disponible</span>
+                            {priceChanged ? (
+                              <span className="text-xs font-medium text-foreground">
+                                Precio diferente {formatMxn(current.unitPrice)} → {formatMxn(targetPrice)}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <><AlertCircle className="h-4 w-4" /> No disponible</>
+                        )}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {preview.unavailableItems.length > 0 && (

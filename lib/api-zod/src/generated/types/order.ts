@@ -5,6 +5,8 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { DeliveryAddressSnapshot } from './deliveryAddressSnapshot';
+import type { OrderAuditEvent } from './orderAuditEvent';
 import type { OrderFulfillmentMethod } from './orderFulfillmentMethod';
 import type { OrderLineItem } from './orderLineItem';
 import type { OrderSource } from './orderSource';
@@ -25,6 +27,10 @@ export interface Order {
   /** @nullable */
   paymentLinkUrl?: string | null;
   amountPaid?: number;
+  /** @nullable */
+  paidAt?: Date | null;
+  /** @nullable */
+  paidByUserId?: string | null;
   fulfillmentMethod: OrderFulfillmentMethod;
   scheduledStart: Date;
   scheduledEnd: Date;
@@ -33,6 +39,7 @@ export interface Order {
   customerPhone: string;
   /** @nullable */
   deliveryAddress: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   customerNotes?: string | null;
   /** @nullable */
@@ -58,5 +65,7 @@ export interface Order {
   branchName?: string;
   /** @nullable */
   createdByUserId?: string | null;
+  createdAt?: Date;
   items: OrderLineItem[];
+  audit?: OrderAuditEvent[];
 }

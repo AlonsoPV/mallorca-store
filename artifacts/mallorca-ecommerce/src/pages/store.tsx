@@ -4,13 +4,14 @@ import { useListProducts, useListCategories, useListBranches, getListProductsQue
 import { ProductCard } from "@/components/product-card";
 import { Input } from "@/components/ui/input";
 import { Search, Filter, X } from "lucide-react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 
 export default function Store() {
-  const [location, setLocation] = useLocation();
-  const searchParams = new URLSearchParams(window.location.search);
+  const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString.startsWith("?") ? searchString.slice(1) : searchString);
   const categorySlug = searchParams.get('categorySlug') || "";
   const initialSearch = searchParams.get('search') || "";
   
@@ -18,7 +19,12 @@ export default function Store() {
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [showUnavailable, setShowUnavailable] = useState(false);
-  const { branchId, selectedDate, selectedTime } = useCart();
+  const { branchId, selectedTime } = useCart();
+
+  useEffect(() => {
+    setSearch(initialSearch);
+    setDebouncedSearch(initialSearch);
+  }, [initialSearch]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -39,7 +45,7 @@ export default function Store() {
     includeUnavailable: showUnavailable,
   }, {
     query: {
-      enabled: Boolean(selectedBranch && selectedTime),
+      enabled: true,
       queryKey: getListProductsQueryKey({
         branchSlug: selectedBranch?.slug,
         scheduledStart: selectedTime || undefined,
@@ -182,7 +188,7 @@ export default function Store() {
                />
                <span>
                  Mostrar productos no disponibles
-                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground/70">Aparecen deshabilitados para tu fecha y horario.</span>
+                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground/70">Aparecen deshabilitados si tu sucursal no los tiene.</span>
                </span>
              </label>
           </aside>

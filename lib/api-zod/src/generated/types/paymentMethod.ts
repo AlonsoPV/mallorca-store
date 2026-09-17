@@ -17,4 +17,5 @@ export const PaymentMethod = {
   PAYMENT_LINK: 'PAYMENT_LINK',
   PENDING: 'PENDING',
   COURTESY: 'COURTESY',
+  CASH_ON_PICKUP: 'CASH_ON_PICKUP',
 } as const;

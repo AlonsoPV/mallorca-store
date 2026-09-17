@@ -9,6 +9,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { ImageWithFallback } from "@/components/image-with-fallback";
+import { formatMxn, productAvailabilityCopy } from "@/lib/availability-copy";
+import { track } from "@/lib/analytics";
 
 interface ProductCardProps {
   product: ProductCardType;
@@ -17,46 +19,48 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, className, showBranchAvailability = false }: ProductCardProps) {
-  const { cartId, branchId, setCartSession } = useCart();
+  const { cartId, branchId, setCartSession, openBranchPicker, openMiniCart } = useCart();
   const addCartItem = useAddCartItem();
   const createSession = useCreateCartSession();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(price);
-  };
 
   const activeAvailability = branchId
     ? product.availability?.find((availability) => availability.branchId === branchId)
     : undefined;
-  const isAvailable = Boolean(
-    branchId &&
-    activeAvailability?.available &&
-    (activeAvailability.inventory ?? 0) > 0,
-  );
-  const canQuickAdd = Boolean(branchId && activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0);
+  const availabilityLabel = branchId
+    ? productAvailabilityCopy({
+        branchName: activeAvailability?.branchName,
+        available: activeAvailability?.available,
+        inventory: activeAvailability?.inventory,
+      })
+    : null;
+  const canQuickAdd = !branchId || Boolean(activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0);
   const currentPrice = activeAvailability?.price ?? product.price;
   const currentSalePrice = activeAvailability?.salePrice ?? product.salePrice;
 
   const handleQuickAdd = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!branchId || !canQuickAdd) return;
+    if (branchId && !canQuickAdd) return;
     setIsAdding(true);
     try {
+      let activeBranchId = branchId;
+      if (!activeBranchId) {
+        activeBranchId = await openBranchPicker();
+        if (!activeBranchId) return;
+      }
       let activeCartId = cartId;
       if (!activeCartId) {
-        const session = await createSession.mutateAsync({ data: { branchId } });
+        const session = await createSession.mutateAsync({ data: { branchId: activeBranchId } });
         activeCartId = session.id;
-        setCartSession(session.id, branchId);
+        setCartSession(session.id, activeBranchId);
       }
       await addCartItem.mutateAsync({ id: activeCartId, data: { productId: product.id, quantity: 1, variantId: null } });
       queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(activeCartId) });
-      toast({ title: "Añadido a tu bolsa", description: product.name });
+      track("add_to_cart", { productId: product.id, name: product.name, quantity: 1, value: currentSalePrice ?? currentPrice });
+      openMiniCart();
     } catch (error: any) {
       toast({ title: "No pudimos añadirlo", description: error?.message || "Intenta de nuevo.", variant: "destructive" });
     } finally {
@@ -87,9 +91,9 @@ export function ProductCard({ product, className, showBranchAvailability = false
                 Temporada
               </span>
             )}
-            {branchId && !isAvailable && (
+            {availabilityLabel && (
               <span className="bg-background/90 text-foreground text-[10px] uppercase tracking-widest px-2 py-1 backdrop-blur-sm">
-                Agotado
+                {availabilityLabel}
               </span>
             )}
           </div>
@@ -115,14 +119,14 @@ export function ProductCard({ product, className, showBranchAvailability = false
         <div className="mt-auto flex items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2">
             {!branchId ? (
-              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-xs">Elige sucursal</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-xs">Desde {formatMxn(product.salePrice ?? product.price)}</span>
             ) : currentSalePrice ? (
               <>
-                <span className="text-xs font-medium text-primary sm:text-base">{formatPrice(currentSalePrice)}</span>
-                <span className="hidden text-sm text-muted-foreground line-through sm:inline">{formatPrice(currentPrice)}</span>
+                <span className="text-xs font-medium text-primary sm:text-base">{formatMxn(currentSalePrice)}</span>
+                <span className="hidden text-sm text-muted-foreground line-through sm:inline">{formatMxn(currentPrice)}</span>
               </>
             ) : (
-               <span className="text-xs font-medium text-foreground sm:text-base">{formatPrice(currentPrice)}</span>
+               <span className="text-xs font-medium text-foreground sm:text-base">{formatMxn(currentPrice)}</span>
             )}
           </div>
           {canQuickAdd ? (

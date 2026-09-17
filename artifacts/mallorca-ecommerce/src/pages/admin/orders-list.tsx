@@ -1,4 +1,7 @@
-import { AdminLayout } from "@/components/layout/admin-layout";
+import { useMemo, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { MoreHorizontal, Package, Search } from "lucide-react";
 import {
   useListAdminOrders,
   useUpdateAdminOrder,
@@ -6,47 +9,115 @@ import {
   useListAdminBranches,
   type OrderStatusUpdateStatus,
 } from "@workspace/api-client-react";
-import { useMemo, useState } from "react";
-import { Link, useSearch } from "wouter";
-import { useToast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Package } from "lucide-react";
+import {
+  AdminEmptyState,
+  AdminError,
+  AdminFilterBar,
+  AdminFilterSelect,
+  AdminLoading,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableHeader,
+  AdminTableRow,
+} from "@/components/admin";
+import { AdminLayout } from "@/components/layout/admin-layout";
 import { Button } from "@/components/ui/button";
-import { ORDER_SOURCE_LABELS } from "@/lib/order-source";
-import { useQueryClient } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { normalizeSearch, readSearchParam, withSearchParams } from "@/lib/admin-search-params";
+import {
+  fulfillmentLabel,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_STATUS_LABELS,
+} from "@/lib/order-source";
 import {
   dayRange,
   formatOrderTime,
   formatPriceMx,
+  formatRelativeShort,
+  getPrimaryNextStatus,
   getValidNextStatuses,
+  ORDER_STATUS_ACTION_LABELS,
   ORDER_STATUS_LABELS,
 } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
 
 type DayChip = "today" | "tomorrow" | "week" | "all";
 
-function parseDayFromSearch(search: string): DayChip {
-  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const day = params.get("day");
-  if (day === "today" || day === "tomorrow" || day === "week") return day;
+type OrdersFilters = {
+  day: DayChip;
+  branchId: string;
+  status: string;
+  fulfillment: string;
+  paymentStatus: string;
+  paymentMethod: string;
+  q: string;
+};
+
+function parseDay(value: string | null): DayChip {
+  if (value === "today" || value === "tomorrow" || value === "week" || value === "all") {
+    return value;
+  }
   return "today";
+}
+
+function parseOrdersSearch(search: string): OrdersFilters {
+  return {
+    day: parseDay(readSearchParam(search, "day")),
+    branchId: readSearchParam(search, "branchId") || "all",
+    status: readSearchParam(search, "status") || "all",
+    fulfillment: readSearchParam(search, "fulfillment") || "all",
+    paymentStatus: readSearchParam(search, "paymentStatus") || "all",
+    paymentMethod: readSearchParam(search, "paymentMethod") || "all",
+    q: readSearchParam(search, "q") || "",
+  };
+}
+
+function orderDetailHref(orderId: string, search: string) {
+  const qs = normalizeSearch(search);
+  return qs ? `/admin/pedidos/${orderId}?${qs}` : `/admin/pedidos/${orderId}`;
 }
 
 export default function AdminOrdersList() {
   const search = useSearch();
-  const [dayChip, setDayChip] = useState<DayChip>(() => parseDayFromSearch(search));
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>("all");
-  const [fulfillmentFilter, setFulfillmentFilter] = useState<string>("all");
+  const [, setLocation] = useLocation();
+  const filters = useMemo(() => parseOrdersSearch(search), [search]);
+  const [searchDraft, setSearchDraft] = useState(filters.q);
 
-  const range = dayChip === "all" ? undefined : dayRange(dayChip);
-  const { data: orders, isLoading } = useListAdminOrders({
-    status: statusFilter === "all" ? undefined : statusFilter,
-    branchId: branchFilter === "all" ? undefined : Number(branchFilter),
+  const patchFilters = (patch: Partial<OrdersFilters>) => {
+    const next = { ...filters, ...patch };
+    setLocation(
+      withSearchParams("/admin/pedidos", search, {
+        day: next.day === "today" ? null : next.day,
+        branchId: next.branchId,
+        status: next.status,
+        fulfillment: next.fulfillment,
+        paymentStatus: next.paymentStatus,
+        paymentMethod: next.paymentMethod,
+        q: next.q || null,
+      }),
+      { replace: true },
+    );
+  };
+
+  const range = filters.day === "all" ? undefined : dayRange(filters.day);
+  const { data: orders, isLoading, isError, refetch } = useListAdminOrders({
+    status: filters.status === "all" ? undefined : filters.status,
+    branchId: filters.branchId === "all" ? undefined : Number(filters.branchId),
     fulfillmentMethod:
-      fulfillmentFilter === "all"
+      filters.fulfillment === "all"
         ? undefined
-        : (fulfillmentFilter as "pickup" | "delivery"),
+        : (filters.fulfillment as "pickup" | "delivery"),
     from: range?.from,
     to: range?.to,
   });
@@ -54,6 +125,32 @@ export default function AdminOrdersList() {
   const updateOrder = useUpdateAdminOrder();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const filteredOrders = useMemo(() => {
+    let list = orders ?? [];
+    if (filters.paymentStatus !== "all") {
+      list = list.filter((o) => o.paymentStatus === filters.paymentStatus);
+    }
+    if (filters.paymentMethod !== "all") {
+      list = list.filter((o) => o.paymentMethod === filters.paymentMethod);
+    }
+    const q = filters.q.trim().toLowerCase();
+    if (q) {
+      list = list.filter((o) => {
+        const hay = [
+          o.orderNumber,
+          o.customerName,
+          o.customerPhone,
+          o.customerEmail,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    return list;
+  }, [orders, filters.paymentStatus, filters.paymentMethod, filters.q]);
 
   const handleStatusChange = async (orderId: string, newStatus: OrderStatusUpdateStatus) => {
     try {
@@ -77,158 +174,254 @@ export default function AdminOrdersList() {
 
   return (
     <AdminLayout>
-      <div className="p-6 md:p-10 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-4 mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div>
-              <h1 className="font-serif text-3xl mb-2 text-foreground">Pedidos</h1>
-              <p className="text-muted-foreground text-sm">
-                Gestión operativa por fecha, sucursal y estado.
-              </p>
-            </div>
+      <AdminPageShell>
+        <AdminPageHeader
+          title="Pedidos"
+          description="Identifica, prioriza y abre pedidos que requieren atención."
+          actions={
             <Button asChild className="rounded-none shrink-0">
               <Link href="/admin/pedidos/nuevo">+ Nuevo pedido</Link>
             </Button>
-          </div>
+          }
+        />
 
-          <div className="flex flex-wrap gap-2">
+        <div className="sticky top-0 z-10 -mx-6 space-y-3 border-b border-border bg-background/95 px-6 py-3 backdrop-blur md:-mx-10 md:px-10">
+          <AdminFilterBar>
             {chips.map((chip) => (
               <button
                 key={chip.id}
                 type="button"
-                onClick={() => setDayChip(chip.id)}
+                onClick={() => patchFilters({ day: chip.id })}
                 className={cn(
-                  "px-3 py-1.5 text-sm border transition-colors",
-                  dayChip === chip.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border text-foreground hover:bg-muted",
+                  "border px-3 py-1.5 text-sm transition-colors",
+                  filters.day === chip.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-foreground hover:bg-muted",
                 )}
               >
                 {chip.label}
               </button>
             ))}
-          </div>
+          </AdminFilterBar>
 
-          <div className="flex flex-wrap gap-2">
-            <Select value={branchFilter} onValueChange={setBranchFilter}>
-              <SelectTrigger className="bg-background rounded-none w-44">
-                <SelectValue placeholder="Sucursal" />
-              </SelectTrigger>
-              <SelectContent className="rounded-none">
-                <SelectItem value="all">Todas las sucursales</SelectItem>
-                {branches.data?.map((b) => (
-                  <SelectItem key={b.id} value={String(b.id)}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={fulfillmentFilter} onValueChange={setFulfillmentFilter}>
-              <SelectTrigger className="bg-background rounded-none w-40">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent className="rounded-none">
-                <SelectItem value="all">Pickup / Delivery</SelectItem>
-                <SelectItem value="pickup">Pickup</SelectItem>
-                <SelectItem value="delivery">Delivery</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-background rounded-none w-44">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent className="rounded-none">
-                <SelectItem value="all">Todos los estados</SelectItem>
-                {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <AdminFilterBar>
+            <AdminFilterSelect
+              value={filters.branchId}
+              onValueChange={(branchId) => patchFilters({ branchId })}
+              placeholder="Sucursal"
+              triggerClassName="w-44"
+              options={[
+                { value: "all", label: "Todas las sucursales" },
+                ...(branches.data?.map((b) => ({
+                  value: String(b.id),
+                  label: b.name,
+                })) ?? []),
+              ]}
+            />
+            <AdminFilterSelect
+              value={filters.fulfillment}
+              onValueChange={(fulfillment) => patchFilters({ fulfillment })}
+              placeholder="Tipo"
+              triggerClassName="w-36"
+              options={[
+                { value: "all", label: "Pickup / Delivery" },
+                { value: "pickup", label: "Pickup" },
+                { value: "delivery", label: "Delivery" },
+              ]}
+            />
+            <AdminFilterSelect
+              value={filters.status}
+              onValueChange={(status) => patchFilters({ status })}
+              placeholder="Estado"
+              triggerClassName="w-40"
+              options={[
+                { value: "all", label: "Estado pedido" },
+                ...Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+            <AdminFilterSelect
+              value={filters.paymentStatus}
+              onValueChange={(paymentStatus) => patchFilters({ paymentStatus })}
+              placeholder="Pago"
+              triggerClassName="w-40"
+              options={[
+                { value: "all", label: "Estado pago" },
+                ...Object.entries(PAYMENT_STATUS_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+            <AdminFilterSelect
+              value={filters.paymentMethod}
+              onValueChange={(paymentMethod) => patchFilters({ paymentMethod })}
+              placeholder="Forma de pago"
+              triggerClassName="w-44"
+              options={[
+                { value: "all", label: "Forma de pago" },
+                ...Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+            <form
+              className="relative min-w-[200px] flex-1 max-w-sm"
+              onSubmit={(e) => {
+                e.preventDefault();
+                patchFilters({ q: searchDraft.trim() });
+              }}
+            >
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="h-9 rounded-none pl-8"
+                placeholder="Pedido, cliente, teléfono…"
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                onBlur={() => {
+                  if (searchDraft.trim() !== filters.q) patchFilters({ q: searchDraft.trim() });
+                }}
+              />
+            </form>
+          </AdminFilterBar>
         </div>
 
-        {isLoading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        ) : !orders || orders.length === 0 ? (
-          <div className="bg-background border border-border p-12 text-center text-muted-foreground">
-            <Package className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p>No se encontraron pedidos.</p>
-          </div>
-        ) : (
-          <div className="bg-background border border-border overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-muted/50 border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Pedido</th>
-                  <th className="px-4 py-3 font-medium">Origen</th>
-                  <th className="px-4 py-3 font-medium">Hora</th>
-                  <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium">Sucursal</th>
-                  <th className="px-4 py-3 font-medium">Tipo</th>
-                  <th className="px-4 py-3 font-medium">Total</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {orders.map((order) => {
-                  const nextStatuses = getValidNextStatuses(order.status);
-                  return (
-                    <tr key={order.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3">
-                        <Link href={`/admin/pedidos/${order.id}`} className="font-medium text-primary hover:underline">
-                          #{order.orderNumber}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {ORDER_SOURCE_LABELS[order.orderSource ?? "STOREFRONT"] ?? order.orderSource ?? "Web"}
-                      </td>
-                      <td className="px-4 py-3">{formatOrderTime(order.scheduledStart)}</td>
-                      <td className="px-4 py-3">{order.customerName}</td>
-                      <td className="px-4 py-3">{order.branchName ?? `Sucursal ${order.branchId}`}</td>
-                      <td className="px-4 py-3 capitalize">{order.fulfillmentMethod}</td>
-                      <td className="px-4 py-3">{formatPriceMx(order.total)}</td>
-                      <td className="px-4 py-3 min-w-[180px]">
-                        {nextStatuses.length === 0 ? (
-                          <span className="text-muted-foreground">
-                            {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] ??
-                              order.status}
-                          </span>
-                        ) : (
-                          <Select
-                            value={order.status}
-                            onValueChange={(value) =>
-                              handleStatusChange(order.id, value as OrderStatusUpdateStatus)
-                            }
-                          >
-                            <SelectTrigger className="h-8 rounded-none bg-background">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-none">
-                              <SelectItem value={order.status} disabled>
-                                {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] ??
-                                  order.status}
-                              </SelectItem>
-                              {nextStatuses.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                  {ORDER_STATUS_LABELS[status]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+        {isLoading ? <AdminLoading label="Cargando pedidos…" /> : null}
+        {isError ? (
+          <AdminError title="No se pudieron cargar los pedidos" onRetry={() => refetch()} />
+        ) : null}
+        {!isLoading && !isError && filteredOrders.length === 0 ? (
+          <AdminEmptyState
+            icon={Package}
+            title="No se encontraron pedidos"
+            description="Prueba otro rango de fechas o crea un pedido manual."
+            action={
+              <Button asChild className="rounded-none">
+                <Link href="/admin/pedidos/nuevo">+ Nuevo pedido</Link>
+              </Button>
+            }
+          />
+        ) : null}
+
+        {!isLoading && !isError && filteredOrders.length > 0 ? (
+          <AdminTable>
+            <AdminTableHeader>
+              <AdminTableRow>
+                {["Pedido", "Hora / Entrega", "Cliente", "Sucursal", "Total", "Pago", "Estado", "Acciones"].map(
+                  (heading) => (
+                    <AdminTableHead key={heading}>{heading}</AdminTableHead>
+                  ),
+                )}
+              </AdminTableRow>
+            </AdminTableHeader>
+            <AdminTableBody>
+              {filteredOrders.map((order) => {
+                const primary = getPrimaryNextStatus(order.status);
+                const href = orderDetailHref(order.id, search);
+                const unpaidCash =
+                  (order.paymentMethod === "CASH_ON_PICKUP" || order.paymentMethod === "CASH") &&
+                  order.paymentStatus === "unpaid";
+                return (
+                  <AdminTableRow
+                    key={order.id}
+                    className="cursor-pointer hover:bg-muted/40"
+                    onClick={() => setLocation(href)}
+                  >
+                    <AdminTableCell>
+                      <Link
+                        href={href}
+                        className="font-medium text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        #{order.orderNumber}
+                      </Link>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {formatRelativeShort(order.createdAt)}
+                      </div>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <div className="font-medium tabular-nums">{formatOrderTime(order.scheduledStart)}</div>
+                      <div className="text-xs text-muted-foreground">{fulfillmentLabel(order.fulfillmentMethod)}</div>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <div className="font-medium leading-tight">{order.customerName}</div>
+                      <div className="text-xs text-muted-foreground">{order.customerPhone}</div>
+                    </AdminTableCell>
+                    <AdminTableCell className="text-sm">
+                      {order.branchName ?? `Sucursal ${order.branchId}`}
+                    </AdminTableCell>
+                    <AdminTableCell className="font-medium tabular-nums">
+                      {formatPriceMx(order.total)}
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <div className="text-sm">
+                        {PAYMENT_METHOD_LABELS[order.paymentMethod ?? ""] ?? order.paymentMethod ?? "—"}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-xs font-medium",
+                          unpaidCash ? "text-amber-700" : "text-muted-foreground",
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                      >
+                        {PAYMENT_STATUS_LABELS[order.paymentStatus ?? ""] ?? order.paymentStatus}
+                      </div>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <span className="inline-flex border border-border px-2 py-0.5 text-xs font-medium">
+                        {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] ??
+                          order.status}
+                      </span>
+                    </AdminTableCell>
+                    <AdminTableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" className="h-8 rounded-none px-2" asChild>
+                          <Link href={href}>Ver</Link>
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-none">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-none">
+                            <DropdownMenuItem asChild>
+                              <Link href={href}>Ver pedido</Link>
+                            </DropdownMenuItem>
+                            {primary ? (
+                              <DropdownMenuItem
+                                disabled={updateOrder.isPending}
+                                onClick={() => handleStatusChange(order.id, primary)}
+                              >
+                                {ORDER_STATUS_ACTION_LABELS[primary] ?? ORDER_STATUS_LABELS[primary]}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {getValidNextStatuses(order.status).includes("cancelled") ? (
+                              <DropdownMenuItem
+                                disabled={updateOrder.isPending}
+                                onClick={() => handleStatusChange(order.id, "cancelled")}
+                              >
+                                Cancelar
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/pedidos/nuevo?duplicateFrom=${order.id}`}>
+                                Duplicar
+                              </Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </AdminTableCell>
+                  </AdminTableRow>
+                );
+              })}
+            </AdminTableBody>
+          </AdminTable>
+        ) : null}
+      </AdminPageShell>
     </AdminLayout>
   );
 }

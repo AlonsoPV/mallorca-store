@@ -24,5 +24,12 @@ export interface BranchAvailability {
   preparationTimeMinutes: number;
   pickupAvailable: boolean;
   deliveryAvailable: boolean;
+  physicalStock?: number;
+  reservedStock?: number;
+  availableStock?: number;
+  /** @nullable */
+  priceOverride?: number | null;
+  /** @nullable */
+  salePriceOverride?: number | null;
   promotion: Promotion | null;
 }

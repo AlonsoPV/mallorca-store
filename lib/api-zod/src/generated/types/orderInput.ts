@@ -5,7 +5,9 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { DeliveryAddressSnapshot } from './deliveryAddressSnapshot';
 import type { OrderInputFulfillmentMethod } from './orderInputFulfillmentMethod';
+import type { PaymentMethod } from './paymentMethod';
 
 export interface OrderInput {
   cartId: string;
@@ -16,8 +18,10 @@ export interface OrderInput {
   customerPhone: string;
   /** @nullable */
   notes?: string | null;
+  paymentMethod?: PaymentMethod;
   /** @nullable */
   deliveryAddress?: string | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot;
   /** @nullable */
   deliveryLatitude?: number | null;
   /** @nullable */

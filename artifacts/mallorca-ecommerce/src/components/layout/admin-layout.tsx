@@ -14,6 +14,7 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useListInventoryAlerts } from "@workspace/api-client-react";
@@ -30,6 +31,7 @@ const primaryNav = [
 ];
 
 const configNav = [
+  { href: "/admin/formas-de-pago", label: "Formas de pago", icon: CreditCard },
   { href: "/admin/importar", label: "Importar", icon: Upload },
   { href: "/admin/reportes", label: "Reportes", icon: BarChart3 },
   { href: "/admin/responsables", label: "Responsables", icon: Users },

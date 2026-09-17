@@ -52,6 +52,11 @@ export function fulfillmentSchedule(
   return { anchor, first, close, intervalMs, capacity: branch.pickupSlotCapacity };
 }
 
+/** Hold unpaid storefront stock at least 15 minutes and until the slot ends. */
+export function reservationTtlMinutesUntil(expiresAt: Date, now = new Date()): number {
+  return Math.max(15, Math.ceil((expiresAt.getTime() - now.getTime()) / 60_000));
+}
+
 export function isValidSlotTime(
   schedule: FulfillmentSchedule,
   scheduled: Date,

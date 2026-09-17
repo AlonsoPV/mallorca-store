@@ -24,6 +24,9 @@ export interface OrderSummary {
   customerPhone?: string;
   fulfillmentMethod: OrderSummaryFulfillmentMethod;
   paymentStatus?: string;
+  /** @nullable */
+  paymentMethod?: string | null;
+  amountPaid?: number;
   itemCount?: number;
   items?: OrderSummaryItem[];
 }

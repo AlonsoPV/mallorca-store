@@ -11,6 +11,7 @@ export type AdminOrderUpdateStatus = typeof AdminOrderUpdateStatus[keyof typeof 
 
 export const AdminOrderUpdateStatus = {
   pending_payment: 'pending_payment',
+  confirmed: 'confirmed',
   paid: 'paid',
   preparing: 'preparing',
   ready: 'ready',

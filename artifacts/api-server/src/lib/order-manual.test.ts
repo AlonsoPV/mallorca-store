@@ -8,7 +8,11 @@ import {
   maxManualDiscountPercent,
 } from "./order-permissions.ts";
 import { computeDeliveryFee, validateDeliveryCoverage } from "./delivery-validation.ts";
-import { fulfillmentSchedule, isValidSlotTime } from "./fulfillment-schedule.ts";
+import {
+  fulfillmentSchedule,
+  isValidSlotTime,
+  reservationTtlMinutesUntil,
+} from "./fulfillment-schedule.ts";
 
 describe("order-permissions", () => {
   it("blocks staff from 20% discount", () => {
@@ -90,5 +94,36 @@ describe("fulfillment-schedule", () => {
     assert.equal(schedule!.capacity, 5);
     const slot = new Date(schedule!.first);
     assert.equal(isValidSlotTime(schedule!, slot), true);
+  });
+
+  it("opens delivery slots later than pickup for the same branch", () => {
+    const branch = {
+      hours: [
+        { day: "monday", label: "Monday", open: "09:00", close: "18:00", closed: false },
+      ],
+      pickupSlotIntervalMinutes: 30,
+      preparationTimeMinutes: 60,
+      deliveryTimeMinutes: 45,
+      pickupSlotCapacity: 5,
+    } as any;
+    const now = Date.parse("2026-09-14T08:00:00-06:00");
+    const pickup = fulfillmentSchedule(branch, "2026-09-14", "pickup", 0, now);
+    const delivery = fulfillmentSchedule(branch, "2026-09-14", "delivery", 0, now);
+    assert.ok(pickup && delivery);
+    assert.ok(delivery.first > pickup.first);
+  });
+});
+
+describe("reservation TTL", () => {
+  it("holds stock until the slot and at least 15 minutes", () => {
+    const now = new Date("2026-09-15T12:00:00.000Z");
+    assert.equal(
+      reservationTtlMinutesUntil(new Date("2026-09-15T18:00:00.000Z"), now),
+      360,
+    );
+    assert.equal(
+      reservationTtlMinutesUntil(new Date("2026-09-15T12:05:00.000Z"), now),
+      15,
+    );
   });
 });

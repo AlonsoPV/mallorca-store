@@ -17,5 +17,13 @@ export interface CartLineItem {
   variantLabel: string | null;
   quantity: number;
   unitPrice: number;
+  listUnitPrice?: number;
   lineTotal: number;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  promotionId?: number | null;
+  /** @nullable */
+  promotionName?: string | null;
+  savings?: number;
 }

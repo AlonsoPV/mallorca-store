@@ -244,6 +244,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /admin/products/{id}:
+    get:
+      operationId: getAdminProduct
+      tags: [admin]
+      summary: Get a catalog product for administration (any status)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Admin product detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     patch:
       operationId: updateProduct
       tags: [admin]
@@ -536,6 +559,29 @@ paths:
       responses:
         "200": { description: Fulfillment preview, content: { application/json: { schema: { $ref: "#/components/schemas/FulfillmentPreview" } } } }
         "409": { description: Fulfillment slot unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+  /checkout/payment-methods:
+    get:
+      operationId: listCheckoutPaymentMethods
+      tags: [storefront]
+      summary: Payment methods available for this branch and fulfillment
+      parameters:
+        - { name: branchId, in: query, required: true, schema: { type: integer } }
+        - { name: fulfillmentMethod, in: query, required: true, schema: { type: string, enum: [pickup, delivery] } }
+      responses:
+        "200": { description: Methods, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CheckoutPaymentMethod" } } } } }
+  /orders/preview:
+    post:
+      operationId: previewOrder
+      tags: [storefront]
+      summary: Server-side totals for the storefront checkout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "200": { description: Preview totals, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrderPreview" } } } }
+        "409": { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
   /orders:
     post:
       operationId: createOrder
@@ -662,6 +708,44 @@ paths:
             schema: { $ref: "#/components/schemas/CouponInput" }
       responses:
         "201": { description: Coupon, content: { application/json: { schema: { $ref: "#/components/schemas/Coupon" } } } }
+  /admin/payment-methods:
+    get:
+      operationId: listAdminPaymentMethods
+      tags: [admin]
+      responses:
+        "200": { description: Payment method configs, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PaymentMethodConfig" } } } } }
+  /admin/payment-methods/{code}:
+    patch:
+      operationId: updateAdminPaymentMethod
+      tags: [admin]
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentMethodConfigUpdate" }
+      responses:
+        "200": { description: Updated config, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentMethodConfig" } } } }
+        "400": { description: Invalid update, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+  /admin/payment-providers/{provider}:
+    get:
+      operationId: getAdminPaymentProvider
+      tags: [admin]
+      parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Provider settings, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentProviderSettings" } } } }
+        "404": { description: Unknown provider, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    put:
+      operationId: updateAdminPaymentProvider
+      tags: [admin]
+      parameters: [{ name: provider, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentProviderSettingsInput" }
+      responses:
+        "200": { description: Provider settings, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentProviderSettings" } } } }
   /admin/branches:
     get:
       operationId: listAdminBranches
@@ -1335,6 +1419,16 @@ components:
           type: boolean
         deliveryAvailable:
           type: boolean
+        physicalStock:
+          type: integer
+        reservedStock:
+          type: integer
+        availableStock:
+          type: integer
+        priceOverride:
+          type: ["number", "null"]
+        salePriceOverride:
+          type: ["number", "null"]
         promotion:
           oneOf:
             - $ref: "#/components/schemas/Promotion"
@@ -1502,10 +1596,17 @@ components:
               type: ["string", "null"]
             minimumLeadTimeHours:
               type: integer
+            status:
+              type: string
+              enum: [draft, active, inactive]
             crossSellProductIds:
               type: array
               items: { type: integer }
               maxItems: 6
+            crossSellProducts:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductCard"
             variants:
               type: array
               items:
@@ -2111,7 +2212,12 @@ components:
         variantLabel: { type: ["string", "null"] }
         quantity: { type: integer }
         unitPrice: { type: number }
+        listUnitPrice: { type: number }
         lineTotal: { type: number }
+        imageUrl: { type: ["string", "null"] }
+        promotionId: { type: ["integer", "null"] }
+        promotionName: { type: ["string", "null"] }
+        savings: { type: number }
       required: [id, productId, variantId, sku, name, variantLabel, quantity, unitPrice, lineTotal]
     OrderLineItem:
       type: object
@@ -2128,13 +2234,76 @@ components:
         lineTotal: { type: number }
         promotionId: { type: ["integer", "null"] }
         manualLineItem: { type: boolean }
+        imageUrl: { type: ["string", "null"] }
       required: [id, productId, variantId, sku, name, variantLabel, quantity, unitPrice, lineTotal]
+    OrderAuditEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        action: { type: string }
+        reason: { type: ["string", "null"] }
+        actorUserId: { type: ["string", "null"] }
+        actorName: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        payload: { type: ["object", "null"], additionalProperties: true }
+      required: [id, action, createdAt]
     OrderSource:
       type: string
       enum: [STOREFRONT, PHONE, WHATSAPP, POS, CORPORATE, ADMIN, OTHER]
     PaymentMethod:
       type: string
-      enum: [ONLINE, CASH, TERMINAL, TRANSFER, PAYMENT_LINK, PENDING, COURTESY]
+      enum: [ONLINE, CASH, TERMINAL, TRANSFER, PAYMENT_LINK, PENDING, COURTESY, CASH_ON_PICKUP]
+    CheckoutPaymentMethod:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        provider: { type: string }
+        customerLabel: { type: string }
+        customerDescription: { type: ["string", "null"] }
+        allowPickup: { type: boolean }
+        allowDelivery: { type: boolean }
+      required: [code, name, provider, customerLabel, allowPickup, allowDelivery]
+    PaymentMethodConfig:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        provider: { type: string }
+        enabled: { type: boolean }
+        sortOrder: { type: integer }
+        allowPickup: { type: boolean }
+        allowDelivery: { type: boolean }
+        configurationStatus: { type: string, enum: [configured, not_configured] }
+        customerLabel: { type: string }
+        customerDescription: { type: ["string", "null"] }
+      required: [code, name, provider, enabled, sortOrder, allowPickup, allowDelivery, configurationStatus, customerLabel]
+    PaymentMethodConfigUpdate:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        allowPickup: { type: boolean }
+        allowDelivery: { type: boolean }
+        customerLabel: { type: string }
+        customerDescription: { type: ["string", "null"] }
+        sortOrder: { type: integer }
+    PaymentProviderSettings:
+      type: object
+      properties:
+        provider: { type: string }
+        sandbox: { type: boolean }
+        configured: { type: boolean }
+        publicKeyMasked: { type: ["string", "null"] }
+        accessTokenConfigured: { type: boolean }
+        webhookSecretConfigured: { type: boolean }
+      required: [provider, sandbox, configured, accessTokenConfigured, webhookSecretConfigured]
+    PaymentProviderSettingsInput:
+      type: object
+      properties:
+        sandbox: { type: boolean }
+        publicKey: { type: ["string", "null"] }
+        accessToken: { type: ["string", "null"] }
+        webhookSecret: { type: ["string", "null"] }
     AdminOrderLineInput:
       type: object
       properties:
@@ -2172,6 +2341,7 @@ components:
         customerName: { type: string }
         customerPhone: { type: string }
         deliveryAddress: { type: ["string", "null"] }
+        deliveryAddressSnapshot: { $ref: "#/components/schemas/DeliveryAddressSnapshot" }
         deliveryLatitude: { type: ["number", "null"] }
         deliveryLongitude: { type: ["number", "null"] }
         customerNotes: { type: ["string", "null"] }
@@ -2254,6 +2424,7 @@ components:
         userId: { type: ["string", "null"] }
         fulfillmentMethod: { type: string, enum: [pickup, delivery] }
         deliveryAddress: { type: ["string", "null"] }
+        deliveryAddressSnapshot: { $ref: "#/components/schemas/DeliveryAddressSnapshot" }
         deliveryLatitude: { type: ["number", "null"] }
         deliveryLongitude: { type: ["number", "null"] }
         customerNotes: { type: ["string", "null"] }
@@ -2292,8 +2463,9 @@ components:
     AdminOrderUpdate:
       type: object
       properties:
-        status: { type: string, enum: [pending_payment, paid, preparing, ready, completed, cancelled] }
+        status: { type: string, enum: [pending_payment, confirmed, paid, preparing, ready, completed, cancelled] }
         cancelReason: { type: ["string", "null"] }
+        confirmUnpaidComplete: { type: boolean }
         customerEmail: { type: string }
         customerName: { type: string }
         customerPhone: { type: string }
@@ -2302,6 +2474,18 @@ components:
         productionNotes: { type: ["string", "null"] }
         internalNotes: { type: ["string", "null"] }
         lines: { type: array, items: { $ref: "#/components/schemas/AdminOrderLineInput" } }
+    DeliveryAddressSnapshot:
+      type: object
+      properties:
+        street: { type: ["string", "null"] }
+        externalNumber: { type: ["string", "null"] }
+        internalNumber: { type: ["string", "null"] }
+        neighborhood: { type: ["string", "null"] }
+        municipality: { type: ["string", "null"] }
+        city: { type: ["string", "null"] }
+        state: { type: ["string", "null"] }
+        postalCode: { type: ["string", "null"] }
+        references: { type: ["string", "null"] }
     OrderInput:
       type: object
       properties:
@@ -2312,7 +2496,9 @@ components:
         customerName: { type: string }
         customerPhone: { type: string }
         notes: { type: ["string", "null"] }
+        paymentMethod: { $ref: "#/components/schemas/PaymentMethod" }
         deliveryAddress: { type: ["string", "null"] }
+        deliveryAddressSnapshot: { $ref: "#/components/schemas/DeliveryAddressSnapshot" }
         deliveryLatitude: { type: ["number", "null"] }
         deliveryLongitude: { type: ["number", "null"] }
       required: [cartId, fulfillmentMethod, scheduledStart, customerEmail, customerName, customerPhone]
@@ -2330,6 +2516,8 @@ components:
         paymentNote: { type: ["string", "null"] }
         paymentLinkUrl: { type: ["string", "null"] }
         amountPaid: { type: number }
+        paidAt: { type: ["string", "null"], format: date-time }
+        paidByUserId: { type: ["string", "null"] }
         fulfillmentMethod: { type: string, enum: [pickup, delivery] }
         scheduledStart: { type: string, format: date-time }
         scheduledEnd: { type: string, format: date-time }
@@ -2337,6 +2525,7 @@ components:
         customerName: { type: string }
         customerPhone: { type: string }
         deliveryAddress: { type: ["string", "null"] }
+        deliveryAddressSnapshot: { $ref: "#/components/schemas/DeliveryAddressSnapshot" }
         customerNotes: { type: ["string", "null"] }
         productionNotes: { type: ["string", "null"] }
         internalNotes: { type: ["string", "null"] }
@@ -2354,7 +2543,9 @@ components:
         branchId: { type: integer }
         branchName: { type: string }
         createdByUserId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
         items: { type: array, items: { $ref: "#/components/schemas/OrderLineItem" } }
+        audit: { type: array, items: { $ref: "#/components/schemas/OrderAuditEvent" } }
       required: [id, orderNumber, guestAccessToken, status, paymentStatus, fulfillmentMethod, scheduledStart, scheduledEnd, customerEmail, customerName, customerPhone, deliveryAddress, subtotal, deliveryFee, total, items]
     OrderSummaryItem:
       type: object
@@ -2379,6 +2570,8 @@ components:
         customerPhone: { type: string }
         fulfillmentMethod: { type: string, enum: [pickup, delivery] }
         paymentStatus: { type: string }
+        paymentMethod: { type: ["string", "null"] }
+        amountPaid: { type: number }
         itemCount: { type: integer }
         items: { type: array, items: { $ref: "#/components/schemas/OrderSummaryItem" } }
       required: [id, orderNumber, status, total, createdAt, scheduledStart, branchId, customerName, customerEmail, fulfillmentMethod]
@@ -2495,7 +2688,7 @@ components:
         phone: { type: ["string", "null"] }
     OrderStatusUpdate:
       type: object
-      properties: { status: { type: string, enum: [pending_payment, paid, preparing, ready, completed, cancelled] } }
+      properties: { status: { type: string, enum: [pending_payment, confirmed, paid, preparing, ready, completed, cancelled] } }
       required: [status]
     SafeUser:
       type: object

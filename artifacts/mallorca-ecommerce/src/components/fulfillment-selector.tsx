@@ -26,6 +26,7 @@ import {
 import type { FulfillmentPreview } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
+import { track } from "@/lib/analytics";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -42,7 +43,7 @@ function displayTime(value: string) {
 }
 
 export function FulfillmentSelector({ required = false }: FulfillmentSelectorProps) {
-  const { branchId, cartId, selectedDate, selectedTime, setFulfillmentContext } = useCart();
+  const { branchId, cartId, selectedDate, selectedTime, fulfillmentMethod, setFulfillmentContext } = useCart();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
@@ -66,7 +67,7 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
     {
       branchId: branchId!,
       date: draftDate || format(today, "yyyy-MM-dd"),
-      method: "pickup",
+      method: fulfillmentMethod,
       cartId: cartId || undefined,
     },
     {
@@ -75,7 +76,7 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
         queryKey: getListFulfillmentSlotsQueryKey({
           branchId: branchId!,
           date: draftDate || format(today, "yyyy-MM-dd"),
-          method: "pickup",
+          method: fulfillmentMethod,
           cartId: cartId || undefined,
         }),
       },
@@ -106,6 +107,7 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
     setDraftDate(format(date, "yyyy-MM-dd"));
     setDraftTime(null);
     setPreview(null);
+    track("date_selected", { date: format(date, "yyyy-MM-dd"), source: "header" });
   };
 
   const isDateClosed = (date: Date) => {
@@ -144,7 +146,7 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
         data: {
           cartId,
           scheduledStart: draftTime,
-          fulfillmentMethod: "pickup",
+          fulfillmentMethod,
         },
       });
       setPreview(result);
@@ -195,30 +197,21 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
   return (
     <>
       {branchId && (
-        <>
-          <button
-            type="button"
-            onClick={openSelector}
-            className="hidden items-center gap-2 border-l border-border/70 pl-4 text-left md:flex"
-            aria-label="Cambiar fecha y hora"
-          >
-            <CalendarDays className="h-4 w-4 text-primary" />
-            <span>
-              <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Tu horario</span>
-              <span className="flex items-center gap-1 text-xs font-semibold">{currentLabel}<ChevronRight className="h-3 w-3 rotate-90" /></span>
+        <button
+          type="button"
+          onClick={openSelector}
+          className="flex min-w-0 max-w-[10.5rem] items-center gap-1.5 text-left sm:max-w-[14rem] lg:max-w-none lg:gap-2 lg:border-l lg:border-border/70 lg:pl-4"
+          aria-label="Cambiar fecha y hora"
+        >
+          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary lg:h-4 lg:w-4" />
+          <span className="min-w-0">
+            <span className="hidden text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground lg:block">Tu horario</span>
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] sm:text-xs sm:normal-case sm:tracking-normal lg:font-semibold">
+              <span className="truncate">{currentLabel}</span>
+              <ChevronRight className="h-3 w-3 shrink-0 rotate-90" />
             </span>
-          </button>
-          <button
-            type="button"
-            onClick={openSelector}
-            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] md:hidden"
-            aria-label="Cambiar fecha y hora"
-          >
-            <CalendarDays className="h-3.5 w-3.5 text-primary" />
-            <span>{selectedDate && selectedTime ? format(parseISO(selectedDate), "d MMM", { locale: es }) : "Fecha"}</span>
-            <ChevronRight className="h-3 w-3 rotate-90" />
-          </button>
-        </>
+          </span>
+        </button>
       )}
 
       <Dialog open={isOpen} onOpenChange={(open) => !shouldBlockClose && setIsOpen(open)}>
@@ -323,7 +316,10 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
                               type="button"
                               key={value}
                               disabled={!available}
-                              onClick={() => setDraftTime(value)}
+                              onClick={() => {
+                                setDraftTime(value);
+                                track("time_selected", { time: value, method: fulfillmentMethod, source: "header" });
+                              }}
                               className={`border px-3 py-3 text-sm transition-colors ${draftTime === value ? "border-primary bg-primary text-white" : available ? "border-border hover:border-primary" : "cursor-not-allowed border-border/50 text-muted-foreground/50"}`}
                             >
                               <Clock className="mx-auto mb-1 h-3.5 w-3.5" />

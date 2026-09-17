@@ -1,9 +1,6 @@
 export type BranchAnalyticsEvent = "branch_selected" | "branch_changed";
 
-export function trackBranchEvent(
-  event: BranchAnalyticsEvent,
-  properties: { branchId: number; branchSlug?: string; source: "campaign" | "selector" | "header" },
-) {
+export function track(event: string, properties: Record<string, unknown> = {}) {
   if (typeof window === "undefined") return;
 
   window.dispatchEvent(
@@ -15,4 +12,11 @@ export function trackBranchEvent(
       },
     }),
   );
+}
+
+export function trackBranchEvent(
+  event: BranchAnalyticsEvent,
+  properties: { branchId: number; branchSlug?: string; source: "campaign" | "selector" | "header" },
+) {
+  track(event, properties);
 }

@@ -24,4 +24,6 @@ export interface OrderLineItem {
   /** @nullable */
   promotionId?: number | null;
   manualLineItem?: boolean;
+  /** @nullable */
+  imageUrl?: string | null;
 }

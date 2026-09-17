@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { getActivePromotion, resolveCatalogPrice } from "./catalog";
 import { computeDeliveryFee } from "./delivery-validation";
+import { loadReservedByBranchProductIds, sellableUnits } from "./reserved-stock";
 import {
   canApplyManualDiscount,
   discountPercentEquivalent,
@@ -144,17 +145,19 @@ export async function priceCatalogLine(params: {
   const promotion = await getActivePromotion(product.product.id, params.branchId);
   const resolved = resolveCatalogPrice(listUnitPrice, legacySalePrice, promotion?.promotion);
   const unitPrice = resolved.finalPrice;
+  const reserved = await loadReservedByBranchProductIds([product.bp.id]);
+  const inventory = sellableUnits(product.bp.inventory, reserved.get(product.bp.id) ?? 0);
   const available =
     product.product.status === "active" &&
     product.bp.available &&
-    product.bp.inventory >= params.quantity;
+    inventory >= params.quantity;
   const reason = available
     ? null
     : product.product.status !== "active"
       ? "Producto inactivo"
       : !product.bp.available
         ? "No disponible en esta sucursal"
-        : product.bp.inventory < params.quantity
+        : inventory < params.quantity
           ? "Stock insuficiente"
           : null;
 
@@ -172,7 +175,7 @@ export async function priceCatalogLine(params: {
     promotionDiscount: roundMoney(Math.max(0, listUnitPrice - unitPrice) * params.quantity),
     manualLineItem: false,
     available: available || Boolean(params.allowUnavailable),
-    inventory: product.bp.inventory,
+    inventory,
     reason: params.allowUnavailable ? null : reason,
   };
 }

@@ -42,6 +42,7 @@ export const fulfillmentMethodEnum = pgEnum("fulfillment_method", [
 ]);
 export const orderStatusEnum = pgEnum("order_status", [
   "pending_payment",
+  "confirmed",
   "paid",
   "preparing",
   "ready",
@@ -56,6 +57,7 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "refunded",
   "partially_paid",
   "partially_refunded",
+  "cancelled",
 ]);
 export const orderSourceEnum = pgEnum("order_source", [
   "STOREFRONT",
@@ -74,6 +76,7 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "PAYMENT_LINK",
   "PENDING",
   "COURTESY",
+  "CASH_ON_PICKUP",
 ]);
 export const reservationStatusEnum = pgEnum("reservation_status", [
   "active",
@@ -267,6 +270,17 @@ export const ordersTable = pgTable(
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull(),
     deliveryAddress: text("delivery_address"),
+    deliveryAddressSnapshot: jsonb("delivery_address_snapshot").$type<{
+      street?: string | null;
+      externalNumber?: string | null;
+      internalNumber?: string | null;
+      neighborhood?: string | null;
+      municipality?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postalCode?: string | null;
+      references?: string | null;
+    } | null>(),
     deliveryLatitude: numeric("delivery_latitude", { mode: "number" }),
     deliveryLongitude: numeric("delivery_longitude", { mode: "number" }),
     customerNotes: text("customer_notes"),
@@ -293,6 +307,10 @@ export const ordersTable = pgTable(
     }),
     overrideAt: timestamp("override_at", { withTimezone: true }),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidByUserId: text("paid_by_user_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
     inventoryCommittedAt: timestamp("inventory_committed_at", {
       withTimezone: true,
     }),
@@ -376,6 +394,7 @@ export const inventoryReservationsTable = pgTable("inventory_reservations", {
     .references(() => branchProductsTable.id),
   quantity: integer("quantity").notNull(),
   status: reservationStatusEnum("status").notNull().default("active"),
+  consumedPhysical: boolean("consumed_physical").notNull().default(true),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -506,6 +525,69 @@ export const internalNotificationsTable = pgTable("internal_notifications", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const orderPaymentsTable = pgTable("order_payments", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id")
+    .notNull()
+    .references(() => ordersTable.id, { onDelete: "cascade" }),
+  method: paymentMethodEnum("method").notNull(),
+  provider: text("provider").notNull(),
+  amount: numeric("amount", { mode: "number" }).notNull(),
+  currency: text("currency").notNull().default("MXN"),
+  status: paymentStatusEnum("status").notNull().default("unpaid"),
+  providerPaymentId: text("provider_payment_id"),
+  recordedByUserId: text("recorded_by_user_id").references(() => usersTable.id, {
+    onDelete: "set null",
+  }),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+});
+
+export const paymentMethodConfigsTable = pgTable("payment_method_configs", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  provider: text("provider").notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  allowPickup: boolean("allow_pickup").notNull().default(true),
+  allowDelivery: boolean("allow_delivery").notNull().default(false),
+  configurationStatus: text("configuration_status").notNull().default("not_configured"),
+  customerLabel: text("customer_label").notNull(),
+  customerDescription: text("customer_description"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const branchPaymentMethodsTable = pgTable(
+  "branch_payment_methods",
+  {
+    id: serial("id").primaryKey(),
+    branchId: integer("branch_id")
+      .notNull()
+      .references(() => branchesTable.id, { onDelete: "cascade" }),
+    methodCode: text("method_code")
+      .notNull()
+      .references(() => paymentMethodConfigsTable.code, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+  },
+  (table) => [uniqueIndex("branch_payment_methods_unique").on(table.branchId, table.methodCode)],
+);
+
+export const paymentProviderSettingsTable = pgTable("payment_provider_settings", {
+  provider: text("provider").primaryKey(),
+  sandbox: boolean("sandbox").notNull().default(true),
+  publicKey: text("public_key"),
+  accessTokenEncrypted: text("access_token_encrypted"),
+  webhookSecretEncrypted: text("webhook_secret_encrypted"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({
   createdAt: true,
   updatedAt: true,
@@ -534,3 +616,7 @@ export type BranchUserAssignment = typeof branchUserAssignmentsTable.$inferSelec
 export type CategoryResponsibleAssignment = typeof categoryResponsibleAssignmentsTable.$inferSelect;
 export type InventoryAlert = typeof inventoryAlertsTable.$inferSelect;
 export type InternalNotification = typeof internalNotificationsTable.$inferSelect;
+export type OrderPayment = typeof orderPaymentsTable.$inferSelect;
+export type PaymentMethodConfig = typeof paymentMethodConfigsTable.$inferSelect;
+export type BranchPaymentMethod = typeof branchPaymentMethodsTable.$inferSelect;
+export type PaymentProviderSettings = typeof paymentProviderSettingsTable.$inferSelect;

@@ -4,6 +4,7 @@ import { useParams, Link } from "wouter";
 import { CheckCircle, Clock, MapPin, Map, Phone, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppAuth } from "@/lib/app-auth";
+import { PAYMENT_METHOD_LABELS } from "@/lib/order-source";
 
 export default function OrderDetailsPage() {
   const { id, token } = useParams<{ id: string; token?: string }>();
@@ -56,6 +57,7 @@ export default function OrderDetailsPage() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'pending_payment': return 'Pago pendiente';
+      case 'confirmed': return 'Pedido confirmado';
       case 'paid': return 'Pagado';
       case 'preparing': return 'En preparación';
       case 'ready': return 'Listo';
@@ -74,6 +76,25 @@ export default function OrderDetailsPage() {
     minute: '2-digit' 
   });
 
+  const unpaidCash =
+    (order.paymentMethod === "CASH_ON_PICKUP" || order.paymentMethod === "CASH") &&
+    order.paymentStatus !== "paid" &&
+    order.paymentStatus !== "failed" &&
+    order.paymentStatus !== "cancelled";
+  const unpaidPending =
+    unpaidCash ||
+    order.paymentStatus === "unpaid" ||
+    order.status === "pending_payment" ||
+    order.status === "confirmed";
+  const heading =
+    order.paymentStatus === "paid"
+      ? "Pedido pagado"
+      : order.status === "confirmed" || unpaidCash
+        ? "Pedido confirmado"
+        : order.fulfillmentMethod === "delivery"
+          ? "Pagas al recibirlo."
+          : "Pedido confirmado";
+
   return (
     <StoreLayout>
       <div className="container mx-auto px-4 py-12 md:py-16 max-w-4xl">
@@ -83,16 +104,24 @@ export default function OrderDetailsPage() {
           ) : (
             <Clock className="w-16 h-16 text-primary mx-auto mb-6" />
           )}
-          <span className="mallorca-kicker text-primary">Todo listo</span>
-          <h1 className="mallorca-display mb-4 mt-3 text-5xl md:text-7xl">Tu pedido está en Mallorca.</h1>
+          <span className="mallorca-kicker text-primary">Pedido recibido</span>
+          <h1 className="mallorca-display mb-4 mt-3 text-4xl md:text-5xl">
+            {heading}
+          </h1>
           <p className="text-xl text-muted-foreground">Pedido <span className="font-bold text-foreground">#{order.orderNumber}</span></p>
           
-          {order.paymentStatus === 'pending' && (
+          {unpaidPending && order.paymentStatus !== "failed" ? (
             <div className="mt-8 bg-secondary p-6 border border-border inline-block text-left">
-              <h3 className="font-bold text-lg mb-2">Pago pendiente</h3>
-              <p className="max-w-sm text-sm text-muted-foreground">Tu pedido está reservado. El pago en línea estará disponible próximamente; por ahora, paga al recogerlo o recibirlo.</p>
+              <h3 className="font-bold text-lg mb-2">Pedido confirmado</h3>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {order.paymentMethod === "CASH_ON_PICKUP" || (order.fulfillmentMethod === "pickup" && unpaidCash)
+                  ? "Tu pago está pendiente y se realizará al recoger tu pedido."
+                  : order.fulfillmentMethod === "delivery"
+                    ? "Tu pedido está reservado. Pagas al recibirlo en tu domicilio."
+                    : "Tu pedido está reservado. Pagas al recogerlo en sucursal."}
+              </p>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -120,6 +149,15 @@ export default function OrderDetailsPage() {
                   <span className="block text-muted-foreground mb-1">Estado del Pedido</span>
                   <span className="inline-block px-3 py-1 bg-primary/10 text-primary font-medium text-xs tracking-wider uppercase">
                     {getStatusText(order.status)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-muted-foreground mb-1">Forma de pago</span>
+                  <span className="font-medium">
+                    {PAYMENT_METHOD_LABELS[order.paymentMethod ?? ""] ?? (order.fulfillmentMethod === "delivery" ? "Pagas al recibirlo" : "Efectivo al recoger")}
+                  </span>
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    {order.paymentStatus === "paid" ? "Pagado" : "Pendiente de cobro"} · {formatPrice(order.total)}
                   </span>
                 </div>
               </div>
@@ -174,7 +212,7 @@ export default function OrderDetailsPage() {
               </div>
 
               <div className="border-t border-border pt-4 mt-4 flex justify-between items-center">
-                <span className="font-serif text-lg">{order.paymentStatus === 'paid' ? 'Total Pagado' : 'Total a Pagar'}</span>
+                <span className="font-serif text-lg">{order.paymentStatus === 'paid' ? 'Total Pagado' : 'Total'}</span>
                 <span className="font-serif text-xl">{formatPrice(order.total)}</span>
               </div>
             </section>

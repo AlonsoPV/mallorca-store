@@ -15,7 +15,8 @@ import {
   PreviewCartBranchParams, PreviewCartBranchBody, PreviewCartBranchResponse,
   GetOrderDetailsParams, GetOrderDetailsResponse, GetGuestOrderDetailsParams,
   GetGuestOrderDetailsResponse, GetMeResponse, UpdateMeBody, UpdateMeResponse,
-  ListMyOrdersResponse, type Cart as CartShape,
+  ListMyOrdersResponse, ListCheckoutPaymentMethodsQueryParams, ListCheckoutPaymentMethodsResponse,
+  type Cart as CartShape,
 } from "@workspace/api-zod";
 import {
   calculatePromotionPrice,
@@ -32,6 +33,7 @@ import {
   fulfillmentSchedule,
   isValidSlotTime,
   mexicoDate,
+  reservationTtlMinutesUntil,
 } from "../lib/fulfillment-schedule";
 import {
   createOrder,
@@ -39,6 +41,8 @@ import {
   OrderCreateError,
   releaseExpiredReservations,
 } from "../lib/order-create";
+import { loadReservedByBranchProductIds, sellableUnits } from "../lib/reserved-stock";
+import { resolveAvailableMethods } from "../lib/payments";
 
 const router: IRouter = Router();
 const id = () => crypto.randomUUID();
@@ -66,15 +70,20 @@ async function cartView(cartId: string): Promise<CartShape | undefined> {
     const promotion = branchProduct
       ? await getActivePromotion(product.id, row.cart.branchId)
       : undefined;
-    const unitPrice = resolveCatalogPrice(
+    const resolved = resolveCatalogPrice(
       basePrice,
       legacySalePrice,
       promotion?.promotion,
-    ).finalPrice;
+    );
+    const unitPrice = resolved.finalPrice;
     return {
       id: item.id, productId: item.productId, variantId: item.variantId, sku: variant?.sku ?? product.sku,
       name: product.name, variantLabel: variant ? `${variant.name}: ${variant.value}` : null,
-      quantity: item.quantity, unitPrice, lineTotal: unitPrice * item.quantity,
+      quantity: item.quantity, unitPrice, listUnitPrice: basePrice, lineTotal: unitPrice * item.quantity,
+      imageUrl: product.imageUrl ?? null,
+      promotionId: promotion?.promotion.id ?? null,
+      promotionName: promotion?.promotion.name ?? null,
+      savings: resolved.savings * item.quantity,
     };
   }));
   return { id: cartId, branch: serializeBranch(row.branch), items: lines, subtotal: lines.reduce((s, x) => s + x.lineTotal, 0),
@@ -128,7 +137,20 @@ router.post("/cart/:id/branch-preview", async (req, res): Promise<void> => {
     .where(eq(cartItemsTable.cartId, cart.id));
 
   const previewItems = buildBranchPreviewItems(rows);
-  const items = await Promise.all(previewItems.map(async (item) => {
+  const reservedByBp = await loadReservedByBranchProductIds(
+    rows.flatMap((row) => (row.branchProduct?.id ? [row.branchProduct.id] : [])),
+  );
+  const sellableItems = previewItems.map((item, index) => {
+    const bp = rows[index]?.branchProduct;
+    if (!bp) return item;
+    const inventory = sellableUnits(bp.inventory, reservedByBp.get(bp.id) ?? 0);
+    return {
+      ...item,
+      inventory,
+      available: Boolean(bp.available && inventory >= item.quantity && rows[index]?.product.status === "active"),
+    };
+  });
+  const items = await Promise.all(sellableItems.map(async (item) => {
     const promotion = await getActivePromotion(item.productId, b.data.branchId);
     if (!promotion) return item;
     return {
@@ -165,7 +187,9 @@ router.post("/cart/:id/items", async (req, res): Promise<void> => {
   ).finalPrice;
   const existing = await db.select().from(cartItemsTable).where(and(eq(cartItemsTable.cartId, cart.cart.id), eq(cartItemsTable.productId, b.data.productId), b.data.variantId == null ? sql`${cartItemsTable.variantId} is null` : eq(cartItemsTable.variantId, b.data.variantId as number)));
   const resulting = (existing[0]?.quantity ?? 0) + b.data.quantity;
-  if (resulting > product.bp.inventory) { res.status(409).json({ error: "Insufficient inventory" }); return; }
+  const reserved = await loadReservedByBranchProductIds([product.bp.id]);
+  const sellable = sellableUnits(product.bp.inventory, reserved.get(product.bp.id) ?? 0);
+  if (resulting > sellable) { res.status(409).json({ error: "Insufficient inventory" }); return; }
   if (existing[0]) await db.update(cartItemsTable).set({ quantity: resulting, unitPrice: price }).where(eq(cartItemsTable.id, existing[0].id));
   else await db.insert(cartItemsTable).values({ cartId: cart.cart.id, productId: b.data.productId, variantId: b.data.variantId ?? null, quantity: b.data.quantity, unitPrice: price });
   res.json(AddCartItemResponse.parse(await cartView(cart.cart.id)));
@@ -179,7 +203,10 @@ router.patch("/cart/:id/items/:itemId", async (req, res): Promise<void> => {
     .innerJoin(cartsTable, eq(cartItemsTable.cartId, cartsTable.id))
     .innerJoin(branchProductsTable, and(eq(branchProductsTable.branchId, cartsTable.branchId), eq(branchProductsTable.productId, cartItemsTable.productId)))
     .where(and(eq(cartItemsTable.id, p.data.itemId), eq(cartItemsTable.cartId, p.data.id)));
-  if (!row || b.data.quantity > row.bp.inventory) { res.status(409).json({ error: "Insufficient inventory or item not found" }); return; }
+  if (!row) { res.status(409).json({ error: "Insufficient inventory or item not found" }); return; }
+  const reserved = await loadReservedByBranchProductIds([row.bp.id]);
+  const sellable = sellableUnits(row.bp.inventory, reserved.get(row.bp.id) ?? 0);
+  if (b.data.quantity > sellable) { res.status(409).json({ error: "Insufficient inventory or item not found" }); return; }
   await db.update(cartItemsTable).set({ quantity: b.data.quantity }).where(eq(cartItemsTable.id, p.data.itemId));
   res.json(UpdateCartItemResponse.parse(await cartView(p.data.id)));
 });
@@ -212,7 +239,12 @@ router.get("/fulfillment/slots", async (req, res): Promise<void> => {
   if (!schedule) { res.json([]); return; }
   const slots = []; for (let t = schedule.first; t + schedule.intervalMs <= schedule.close; t += schedule.intervalMs) {
     const s = new Date(t), e = new Date(t + schedule.intervalMs);
-    const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(ordersTable).where(and(eq(ordersTable.branchId, b.id), eq(ordersTable.scheduledStart, s), sql`${ordersTable.status} <> 'cancelled'`));
+    const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(ordersTable).where(and(
+      eq(ordersTable.branchId, b.id),
+      eq(ordersTable.scheduledStart, s),
+      eq(ordersTable.fulfillmentMethod, p.data.method),
+      sql`${ordersTable.status} <> 'cancelled'`,
+    ));
     slots.push({ start: s, end: e, available: count < schedule.capacity, remainingCapacity: Math.max(0, schedule.capacity - count) });
   } res.json(ListFulfillmentSlotsResponse.parse(slots));
 });
@@ -264,16 +296,19 @@ router.post("/fulfillment/preview", async (req, res): Promise<void> => {
     ))
     .where(eq(cartItemsTable.cartId, cart.id));
 
+  const reservedByBp = await loadReservedByBranchProductIds(rows.map(({ branchProduct }) => branchProduct.id));
+
   const items = rows.map(({ item, product, branchProduct }) => {
     const requiredLeadMinutes = Math.max(
       product.minimumLeadTimeHours * 60,
       branchProduct.preparationTimeMinutes ?? branch.preparationTimeMinutes,
     );
+    const sellable = sellableUnits(branchProduct.inventory, reservedByBp.get(branchProduct.id) ?? 0);
     const available = Boolean(
       slotAvailable &&
       product.status === "active" &&
       branchProduct.available &&
-      branchProduct.inventory >= item.quantity &&
+      sellable >= item.quantity &&
       scheduled.getTime() >= Date.now() + requiredLeadMinutes * 60_000,
     );
     return {
@@ -305,7 +340,65 @@ function orderShape(order: NonNullable<Awaited<ReturnType<typeof findOrderWithIt
   return order;
 }
 
-router.post("/orders", async (req, res): Promise<void> => {
+function storefrontOrderInput(
+  cart: { branchId: number; id: string },
+  body: {
+    fulfillmentMethod: "pickup" | "delivery";
+    scheduledStart: string | Date;
+    customerEmail: string;
+    customerName: string;
+    customerPhone: string;
+    notes?: string | null;
+    paymentMethod?: "ONLINE" | "CASH" | "TERMINAL" | "TRANSFER" | "PAYMENT_LINK" | "PENDING" | "COURTESY" | "CASH_ON_PICKUP" | null;
+    deliveryAddress?: string | null;
+    deliveryAddressSnapshot?: {
+      street?: string | null;
+      externalNumber?: string | null;
+      internalNumber?: string | null;
+      neighborhood?: string | null;
+      municipality?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postalCode?: string | null;
+      references?: string | null;
+    } | null;
+    deliveryLatitude?: number | null;
+    deliveryLongitude?: number | null;
+  },
+  userId?: string,
+) {
+  return {
+    orderSource: "STOREFRONT" as const,
+    branchId: cart.branchId,
+    cartId: cart.id,
+    userId,
+    fulfillmentMethod: body.fulfillmentMethod,
+    scheduledStart: body.scheduledStart,
+    customerEmail: body.customerEmail,
+    customerName: body.customerName,
+    customerPhone: body.customerPhone,
+    customerNotes: body.notes ?? null,
+    deliveryAddress: body.fulfillmentMethod === "delivery" ? body.deliveryAddress ?? null : null,
+    deliveryAddressSnapshot: body.fulfillmentMethod === "delivery" ? body.deliveryAddressSnapshot ?? null : null,
+    deliveryLatitude: body.fulfillmentMethod === "delivery" ? body.deliveryLatitude ?? null : null,
+    deliveryLongitude: body.fulfillmentMethod === "delivery" ? body.deliveryLongitude ?? null : null,
+    paymentMethod: body.paymentMethod ?? (body.fulfillmentMethod === "pickup" ? "CASH_ON_PICKUP" : "PENDING"),
+    markPaid: false as const,
+  };
+}
+
+router.get("/checkout/payment-methods", async (req, res): Promise<void> => {
+  const q = ListCheckoutPaymentMethodsQueryParams.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
+  const methods = await resolveAvailableMethods({
+    branchId: q.data.branchId,
+    fulfillmentMethod: q.data.fulfillmentMethod,
+    audience: "storefront",
+  });
+  res.json(ListCheckoutPaymentMethodsResponse.parse(methods));
+});
+
+router.post("/orders/preview", async (req, res): Promise<void> => {
   const b = CreateOrderBody.safeParse(req.body);
   if (!b.success) { res.status(400).json({ error: b.error.message }); return; }
   const requestUser = await getRequestUser(req);
@@ -313,22 +406,38 @@ router.post("/orders", async (req, res): Promise<void> => {
   if (!cart) { res.status(409).json({ error: "Cart is empty" }); return; }
   try {
     const result = await createOrder({
-      orderSource: "STOREFRONT",
-      branchId: cart.branchId,
-      cartId: b.data.cartId,
-      userId: requestUser?.id,
-      fulfillmentMethod: b.data.fulfillmentMethod,
-      scheduledStart: b.data.scheduledStart,
-      customerEmail: b.data.customerEmail,
-      customerName: b.data.customerName,
-      customerPhone: b.data.customerPhone,
-      customerNotes: b.data.notes ?? null,
-      deliveryAddress: b.data.deliveryAddress ?? null,
-      deliveryLatitude: b.data.deliveryLatitude ?? null,
-      deliveryLongitude: b.data.deliveryLongitude ?? null,
-      paymentMethod: "ONLINE",
-      markPaid: false,
+      ...storefrontOrderInput(cart, b.data, requestUser?.id),
+      previewOnly: true,
     });
+    res.json({
+      lines: result.lines,
+      subtotal: result.subtotal,
+      promotionDiscountTotal: result.promotionDiscountTotal,
+      discountAmount: result.discountAmount,
+      discountPercent: result.discountPercent,
+      couponCode: result.couponCode,
+      couponDiscount: result.couponDiscount,
+      deliveryFee: result.deliveryFee,
+      total: result.total,
+      errors: result.errors,
+    });
+  } catch (error) {
+    if (error instanceof OrderCreateError) {
+      res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.post("/orders", async (req, res): Promise<void> => {
+  const b = CreateOrderBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: b.error.message }); return; }
+  const requestUser = await getRequestUser(req);
+  const [cart] = await db.select().from(cartsTable).where(eq(cartsTable.id, b.data.cartId));
+  if (!cart) { res.status(409).json({ error: "Cart is empty" }); return; }
+  try {
+    const result = await createOrder(storefrontOrderInput(cart, b.data, requestUser?.id));
     if (!result.order) { res.status(500).json({ error: "Order create failed" }); return; }
     const full = await findOrderWithItems(result.order.id);
     res.status(201).json(CreateOrderResponse.parse(orderShape(full!)));
