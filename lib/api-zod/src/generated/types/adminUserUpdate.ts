@@ -5,17 +5,14 @@
  * Core API for the Mallorca ecommerce storefront and admin.
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminStaffRole } from './adminStaffRole';
 
-export interface SafeUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
+export interface AdminUserUpdate {
   /** @nullable */
   firstName?: string | null;
   /** @nullable */
   lastName?: string | null;
   /** @nullable */
   phone?: string | null;
-  createdAt?: Date;
+  role?: AdminStaffRole;
 }

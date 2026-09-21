@@ -18,6 +18,7 @@ import { AdminLayout } from "@/components/layout/admin-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { formatOrderTime, formatPriceMx, ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
@@ -475,21 +476,30 @@ export default function AdminBranchDetail() {
             {tab === 8 && (
               <div className="space-y-8 max-w-2xl">
                 <section className="space-y-3">
-                  <h2 className="font-semibold">Pickup / Delivery</h2>
-                  <div className="flex gap-4 text-sm">
-                    <label className="flex items-center gap-2">
-                      <Checkbox
+                  <h2 className="font-semibold">Métodos de recolección y entrega</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Enciende o apaga lo que esta sucursal ofrece al cliente.
+                  </p>
+                  <div className="flex flex-col gap-4 rounded-none border border-border p-4 text-sm">
+                    <label className="flex items-center justify-between gap-4">
+                      <span>
+                        <span className="font-medium">Recolección (pickup)</span>
+                        <span className="mt-0.5 block text-muted-foreground">Cliente puede recoger en sucursal</span>
+                      </span>
+                      <Switch
                         checked={!!branch.pickupAvailable}
-                        onCheckedChange={(v) => void saveConfig({ pickupAvailable: !!v })}
+                        onCheckedChange={(v) => void saveConfig({ pickupAvailable: v })}
                       />
-                      Pickup
                     </label>
-                    <label className="flex items-center gap-2">
-                      <Checkbox
+                    <label className="flex items-center justify-between gap-4 border-t border-border pt-4">
+                      <span>
+                        <span className="font-medium">Entrega a domicilio</span>
+                        <span className="mt-0.5 block text-muted-foreground">Cliente puede pedir envío</span>
+                      </span>
+                      <Switch
                         checked={!!branch.deliveryAvailable}
-                        onCheckedChange={(v) => void saveConfig({ deliveryAvailable: !!v })}
+                        onCheckedChange={(v) => void saveConfig({ deliveryAvailable: v })}
                       />
-                      Delivery
                     </label>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-3">

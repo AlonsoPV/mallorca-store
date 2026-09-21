@@ -222,10 +222,10 @@ export default function Home() {
           <div>
             <span className="mallorca-kicker text-white/70">Familia Mallorca</span>
             <h2 className="mallorca-display mt-3 text-5xl leading-none md:text-6xl">Algo bueno está por venir.</h2>
-            <p className="mt-4 max-w-xl text-white/80">Crea tu cuenta para guardar tus datos, consultar tus pedidos y enterarte primero de lo que sale del horno.</p>
+            <p className="mt-4 max-w-xl text-white/80">Inicia sesión para consultar tus pedidos y enterarte primero de lo que sale del horno.</p>
           </div>
-          <Link href="/sign-up" className="inline-flex items-center justify-center gap-3 rounded-md bg-white px-6 py-4 text-sm font-bold text-[var(--mallorca-red)] transition-colors hover:bg-[var(--mallorca-cream)]">
-            Unirme a la familia <ArrowUpRight className="h-4 w-4" />
+          <Link href="/sign-in" className="inline-flex items-center justify-center gap-3 rounded-md bg-white px-6 py-4 text-sm font-bold text-[var(--mallorca-red)] transition-colors hover:bg-[var(--mallorca-cream)]">
+            Iniciar sesión <ArrowUpRight className="h-4 w-4" />
           </Link>
         </div>
       </section>

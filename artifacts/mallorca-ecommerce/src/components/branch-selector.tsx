@@ -12,7 +12,7 @@ import {
 import type { Branch, BranchPreview } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart-context";
 import { trackBranchEvent } from "@/lib/analytics";
-import { formatMxn } from "@/lib/availability-copy";
+import { formatMxn, branchFulfillmentLabel, resolveFulfillmentMethod } from "@/lib/availability-copy";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getCampaignBranchId, keepAvailableCartItems, shouldPreviewBranchChange } from "@/lib/branch-flow";
@@ -30,9 +30,11 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
   const {
     branchId,
     cartId,
+    fulfillmentMethod,
     setBranchId,
     setCartSession,
     clearCartSession,
+    setFulfillmentMethod,
     branchPickerOpen,
     setBranchPickerOpen,
     notifyBranchPicked,
@@ -79,6 +81,16 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
     }
   }, [branchId, branches, location, setBranchId]);
 
+  const applyBranchFulfillment = (branch: Branch) => {
+    const next = resolveFulfillmentMethod(fulfillmentMethod, branch);
+    if (next && next !== fulfillmentMethod) setFulfillmentMethod(next);
+  };
+
+  useEffect(() => {
+    if (!currentBranch) return;
+    applyBranchFulfillment(currentBranch);
+  }, [currentBranch?.id, currentBranch?.pickupAvailable, currentBranch?.deliveryAvailable]);
+
   const chooseBranch = async (branch: Branch) => {
     if (branch.id === branchId) {
       setIsOpen(false);
@@ -87,6 +99,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
 
     if (!branchId || !cartId) {
       setBranchId(branch.id);
+      applyBranchFulfillment(branch);
       notifyBranchPicked(branch.id);
       trackBranchEvent(branchId ? "branch_changed" : "branch_selected", {
         branchId: branch.id,
@@ -102,6 +115,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
     if (!cart.items.length) {
       clearCartSession();
       setBranchId(branch.id);
+      applyBranchFulfillment(branch);
       trackBranchEvent("branch_changed", {
         branchId: branch.id,
         branchSlug: branch.slug,
@@ -118,6 +132,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
       cartItemCount: cart.items.length,
     })) {
       setBranchId(branch.id);
+      applyBranchFulfillment(branch);
       setIsOpen(false);
       return;
     }
@@ -155,6 +170,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
       }
 
       setCartSession(session.id, pendingBranch.id);
+      applyBranchFulfillment(pendingBranch);
       notifyBranchPicked(pendingBranch.id);
       trackBranchEvent("branch_changed", {
         branchId: pendingBranch.id,
@@ -178,6 +194,7 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
 
   const selectWithoutCart = (branch: Branch) => {
     setBranchId(branch.id);
+    applyBranchFulfillment(branch);
     notifyBranchPicked(branch.id);
     trackBranchEvent(branchId ? "branch_changed" : "branch_selected", {
       branchId: branch.id,
@@ -334,7 +351,10 @@ export function BranchSelector({ required = false }: BranchSelectorProps) {
                           </p>
                           <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Horarios disponibles</span>
-                            <span className="flex items-center gap-1.5">{branch.pickupAvailable ? <StoreIcon className="h-3.5 w-3.5" /> : <Truck className="h-3.5 w-3.5" />} {branch.deliveryAvailable ? "Pickup y delivery" : "Pickup disponible"}</span>
+                            <span className="flex items-center gap-1.5">
+                              {branch.pickupAvailable ? <StoreIcon className="h-3.5 w-3.5" /> : <Truck className="h-3.5 w-3.5" />}
+                              {branchFulfillmentLabel(branch)}
+                            </span>
                           </div>
                         </button>
                       );

@@ -22,3 +22,26 @@ export function productAvailabilityCopy(input: {
   }
   return null;
 }
+
+export function branchFulfillmentLabel(branch: {
+  pickupAvailable?: boolean | null;
+  deliveryAvailable?: boolean | null;
+}) {
+  const pickup = !!branch.pickupAvailable;
+  const delivery = !!branch.deliveryAvailable;
+  if (pickup && delivery) return "Recolección y entrega";
+  if (pickup) return "Solo recolección";
+  if (delivery) return "Solo entrega";
+  return "Sin métodos activos";
+}
+
+export function resolveFulfillmentMethod(
+  preferred: "pickup" | "delivery",
+  branch: { pickupAvailable?: boolean | null; deliveryAvailable?: boolean | null },
+): "pickup" | "delivery" | null {
+  if (preferred === "pickup" && branch.pickupAvailable) return "pickup";
+  if (preferred === "delivery" && branch.deliveryAvailable) return "delivery";
+  if (branch.pickupAvailable) return "pickup";
+  if (branch.deliveryAvailable) return "delivery";
+  return null;
+}

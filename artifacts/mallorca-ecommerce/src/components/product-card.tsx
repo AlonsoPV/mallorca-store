@@ -11,6 +11,7 @@ import { useState } from "react";
 import { ImageWithFallback } from "@/components/image-with-fallback";
 import { formatMxn, productAvailabilityCopy } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
+import { isCartNotFoundError } from "@/lib/cart-recovery";
 
 interface ProductCardProps {
   product: ProductCardType;
@@ -19,7 +20,7 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, className, showBranchAvailability = false }: ProductCardProps) {
-  const { cartId, branchId, setCartSession, openBranchPicker, openMiniCart } = useCart();
+  const { cartId, branchId, setCartSession, clearCartSession, openBranchPicker, openMiniCart } = useCart();
   const addCartItem = useAddCartItem();
   const createSession = useCreateCartSession();
   const queryClient = useQueryClient();
@@ -40,6 +41,12 @@ export function ProductCard({ product, className, showBranchAvailability = false
   const currentPrice = activeAvailability?.price ?? product.price;
   const currentSalePrice = activeAvailability?.salePrice ?? product.salePrice;
 
+  const createFreshCart = async (activeBranchId: number) => {
+    const session = await createSession.mutateAsync({ data: { branchId: activeBranchId } });
+    setCartSession(session.id, activeBranchId);
+    return session.id;
+  };
+
   const handleQuickAdd = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -53,11 +60,22 @@ export function ProductCard({ product, className, showBranchAvailability = false
       }
       let activeCartId = cartId;
       if (!activeCartId) {
-        const session = await createSession.mutateAsync({ data: { branchId: activeBranchId } });
-        activeCartId = session.id;
-        setCartSession(session.id, activeBranchId);
+        activeCartId = await createFreshCart(activeBranchId);
       }
-      await addCartItem.mutateAsync({ id: activeCartId, data: { productId: product.id, quantity: 1, variantId: null } });
+      try {
+        await addCartItem.mutateAsync({
+          id: activeCartId,
+          data: { productId: product.id, quantity: 1, variantId: null },
+        });
+      } catch (error) {
+        if (!isCartNotFoundError(error)) throw error;
+        clearCartSession();
+        activeCartId = await createFreshCart(activeBranchId);
+        await addCartItem.mutateAsync({
+          id: activeCartId,
+          data: { productId: product.id, quantity: 1, variantId: null },
+        });
+      }
       queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(activeCartId) });
       track("add_to_cart", { productId: product.id, name: product.name, quantity: 1, value: currentSalePrice ?? currentPrice });
       openMiniCart();

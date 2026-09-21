@@ -26,7 +26,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
-import { formatMxn } from "@/lib/availability-copy";
+import { formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
 
 function slotLabel(value: string) {
@@ -148,6 +148,15 @@ export default function CheckoutPage() {
       },
     },
   );
+
+  useEffect(() => {
+    if (!cart?.branch) return;
+    const next = resolveFulfillmentMethod(fulfillmentMethod, cart.branch);
+    if (next && next !== fulfillmentMethod) {
+      setFulfillmentMethod(next);
+      setSelectedSlot("");
+    }
+  }, [cart?.branch?.id, cart?.branch?.pickupAvailable, cart?.branch?.deliveryAvailable, fulfillmentMethod, setFulfillmentMethod]);
 
   useEffect(() => {
     if (fulfillmentMethod === "delivery") {
@@ -338,7 +347,7 @@ export default function CheckoutPage() {
   if (isLoadingCart) {
     return (
       <StoreLayout>
-        <div className="container mx-auto px-4 py-16 animate-pulse text-center">
+        <div className="container mx-auto px-4 py-8 animate-pulse text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
         </div>
       </StoreLayout>
@@ -356,20 +365,20 @@ export default function CheckoutPage() {
 
   return (
     <StoreLayout>
-      <div className="container mx-auto px-4 py-8 md:py-12 pb-32 lg:pb-12">
-        <Link href="/carrito" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <div className="container mx-auto px-4 py-5 md:py-8 pb-32 lg:pb-12">
+        <Link href="/carrito" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Volver a la bolsa
         </Link>
 
-        <div className="mb-8">
+        <div className="mb-5">
           <span className="mallorca-kicker text-primary">Confirmar pedido</span>
           <h1 className="mallorca-display mt-2 text-3xl md:text-4xl">Contacto, entrega y horario</h1>
           <p className="mt-2 text-sm text-muted-foreground">Una sola página. {payCopy}.</p>
         </div>
 
-        <form id="checkout-form" onSubmit={handleCheckout} className="flex min-w-0 flex-col lg:flex-row gap-10">
-          <div className="w-full min-w-0 lg:w-2/3 space-y-10">
+        <form id="checkout-form" onSubmit={handleCheckout} className="flex min-w-0 flex-col lg:flex-row gap-8">
+          <div className="w-full min-w-0 lg:w-2/3 space-y-8">
             <section>
               <h2 className="font-serif text-xl mb-4">1. Contacto</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -407,14 +416,19 @@ export default function CheckoutPage() {
                 }}
                 className="grid grid-cols-1 sm:grid-cols-2 gap-3"
               >
-                <div className={`border p-4 cursor-pointer ${fulfillmentMethod === "pickup" ? "border-primary bg-primary/5" : "border-border"}`} onClick={() => {
+                <div className={`border p-4 cursor-pointer ${fulfillmentMethod === "pickup" ? "border-primary bg-primary/5" : "border-border"} ${!cart.branch.pickupAvailable ? "opacity-50 pointer-events-none" : ""}`} onClick={() => {
+                  if (!cart.branch.pickupAvailable) return;
                   setFulfillmentMethod("pickup");
                   setSelectedSlot("");
                   track("fulfillment_selected", { method: "pickup" });
                 }}>
-                  <RadioGroupItem value="pickup" id="pickup" className="sr-only" />
+                  <RadioGroupItem value="pickup" id="pickup" className="sr-only" disabled={!cart.branch.pickupAvailable} />
                   <Label htmlFor="pickup" className="font-semibold cursor-pointer">Recoger en sucursal</Label>
-                  <p className="text-sm text-muted-foreground mt-1">Sin costo extra. Pagas al recoger.</p>
+                  {cart.branch.pickupAvailable ? (
+                    <p className="text-sm text-muted-foreground mt-1">Sin costo extra. Pagas al recoger.</p>
+                  ) : (
+                    <p className="text-sm text-destructive mt-1">Esta sucursal no ofrece recolección.</p>
+                  )}
                 </div>
                 <div className={`border p-4 cursor-pointer ${fulfillmentMethod === "delivery" ? "border-primary bg-primary/5" : "border-border"} ${!cart.branch.deliveryAvailable ? "opacity-50 pointer-events-none" : ""}`} onClick={() => {
                   if (!cart.branch.deliveryAvailable) return;

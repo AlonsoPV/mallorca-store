@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ClerkProvider } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
+import { esES } from '@clerk/localizations';
 import { shadcn } from '@clerk/themes';
 import {
   Route,
@@ -41,7 +42,7 @@ import AdminBranchForm from '@/pages/admin/branch-form';
 import AdminAlerts from '@/pages/admin/alerts';
 import AdminBranchDetail from '@/pages/admin/branch-detail';
 import AdminReports from '@/pages/admin/reports';
-import AdminResponsibles from '@/pages/admin/responsibles';
+import AdminUsers from '@/pages/admin/users';
 import AdminPaymentMethods from '@/pages/admin/payment-methods';
 import { AdminGuard } from '@/components/layout/admin-guard';
 
@@ -120,6 +121,7 @@ const clerkAppearance = {
     formButtonPrimary: "bg-primary text-primary-foreground hover:bg-primary/90 rounded-none font-medium h-10",
     formFieldInput: "border border-input bg-background rounded-none focus:ring-1 focus:ring-ring text-foreground px-3 py-2",
     footerAction: "justify-center mt-4",
+    footerAction__signIn: { display: "none" },
     dividerLine: "bg-border h-[1px]",
     alert: "bg-destructive/10 border border-destructive/20 rounded-none",
     otpCodeFieldInput: "border border-input bg-background rounded-none focus:ring-1 focus:ring-ring text-foreground",
@@ -151,24 +153,6 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-function HomeRedirect() {
-  // Local dummy auth should not bounce every visit to /cuenta.
-  if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) {
-    return <Home />;
-  }
-
-  return (
-    <>
-      <AuthShow when="signed-in">
-        <Redirect to="/cuenta" />
-      </AuthShow>
-      <AuthShow when="signed-out">
-        <Home />
-      </AuthShow>
-    </>
-  );
-}
-
 function AccountRedirect() {
   return (
     <>
@@ -195,7 +179,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 function AppRoutes() {
   return (
     <Switch>
-      <Route path="/" component={HomeRedirect} />
+      <Route path="/" component={Home} />
       <Route path="/tienda" component={Store} />
       <Route path="/producto/:slug" component={ProductDetail} />
       <Route path="/sucursales" component={Branches} />
@@ -254,8 +238,13 @@ function AppRoutes() {
       <Route path="/admin/reportes">
         <AdminGuard><AdminReports /></AdminGuard>
       </Route>
+      <Route path="/admin/usuarios">
+        <AdminGuard><AdminUsers /></AdminGuard>
+      </Route>
       <Route path="/admin/responsables">
-        <AdminGuard><AdminResponsibles /></AdminGuard>
+        <AdminGuard>
+          <Redirect to="/admin/usuarios?tab=asignaciones" />
+        </AdminGuard>
       </Route>
       <Route path="/admin/formas-de-pago">
         <AdminGuard><AdminPaymentMethods /></AdminGuard>
@@ -299,21 +288,7 @@ function ClerkProviderWithRoutes() {
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
-      signUpUrl={`${basePath}/sign-up`}
-      localization={{
-        signIn: {
-          start: {
-            title: "Bienvenido",
-            subtitle: "Inicia sesión para acceder a tu cuenta",
-          },
-        },
-        signUp: {
-          start: {
-            title: "Crea tu cuenta",
-            subtitle: "Empieza hoy mismo",
-          },
-        },
-      }}
+      localization={esES}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >

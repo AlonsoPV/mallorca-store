@@ -253,6 +253,9 @@ importers:
 
   artifacts/mallorca-ecommerce:
     dependencies:
+      '@clerk/localizations':
+        specifier: ^3.37.8
+        version: 3.37.8(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
       '@clerk/react':
         specifier: ^6.15.2
         version: 6.15.2(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
@@ -787,6 +790,10 @@ packages:
     peerDependencies:
       express: ^4.17.0 || ^5.0.0
 
+  '@clerk/localizations@3.37.8':
+    resolution: {integrity: sha512-ib/8WciLkflXsg72IM9BjMZgENUv3nfXx1BrygKkpDqFPb1Dshron1+u+sG7dD+quQpZOLn6iie2Vno5YJy3zQ==}
+    engines: {node: '>=18.17.0'}
+
   '@clerk/react@6.15.2':
     resolution: {integrity: sha512-7oI6Mcfzrlsnrz8JXNyXLgjK1uhO9mTEg2ut0bUfcgXwUSAqY6QG+/UGXUV/hHeeLKOrxrnOe6gQ8/TT4RQvwg==}
     engines: {node: '>=20.9.0'}
@@ -820,6 +827,10 @@ packages:
 
   '@clerk/themes@2.4.57':
     resolution: {integrity: sha512-Nb3bO79rMTU/MPVTC/dde6LG27/IgOMKIYi5KSvAmO4ZUHlj0OWufu6CMvz5OYVZ0YdyMnTBU2aPGRUiRzO+2w==}
+    engines: {node: '>=18.17.0'}
+
+  '@clerk/types@4.101.26':
+    resolution: {integrity: sha512-tUeiElAZoXu9Dxom9t6IjkEfsfP7aWSVf5x5mCoHnSr2w+wV4EtEwoLl9vexT5LL0di4qidROSfcrOnorzczIQ==}
     engines: {node: '>=18.17.0'}
 
   '@commander-js/extra-typings@15.0.0':
@@ -3720,6 +3731,13 @@ snapshots:
       - react
       - react-dom
 
+  '@clerk/localizations@3.37.8(react-dom@19.1.4(react@19.1.4))(react@19.1.4)':
+    dependencies:
+      '@clerk/types': 4.101.26(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
   '@clerk/react@6.15.2(react-dom@19.1.4(react@19.1.4))(react@19.1.4)':
     dependencies:
       '@clerk/shared': 4.31.1(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
@@ -3753,6 +3771,13 @@ snapshots:
     dependencies:
       '@clerk/shared': 3.47.8(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
       tslib: 2.8.1
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
+  '@clerk/types@4.101.26(react-dom@19.1.4(react@19.1.4))(react@19.1.4)':
+    dependencies:
+      '@clerk/shared': 3.47.8(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
     transitivePeerDependencies:
       - react
       - react-dom

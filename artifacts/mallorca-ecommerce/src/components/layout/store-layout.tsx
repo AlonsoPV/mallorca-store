@@ -10,6 +10,7 @@ import { MiniCart } from "@/components/mini-cart";
 import { useGetCart, useGetMe, useListBranches, getGetCartQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppAuth } from "@/lib/app-auth";
+import { isCartNotFoundError } from "@/lib/cart-recovery";
 import footerLogo from "@assets/MallorcaFooter_1789166205501.webp";
 
 export function StoreLayout({ children }: { children: ReactNode }) {
@@ -24,8 +25,21 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   const { data: user } = useGetMe({ query: { enabled: !!isSignedIn, queryKey: getGetMeQueryKey() } });
   const { data: footerBranches } = useListBranches();
   
-  const { cartId, openMiniCart } = useCart();
-  const { data: cart } = useGetCart(cartId!, { query: { enabled: !!cartId, queryKey: getGetCartQueryKey(cartId!) } });
+  const { cartId, openMiniCart, clearCartSession } = useCart();
+  const { data: cart, isError: cartError, error: cartErrorValue } = useGetCart(cartId!, {
+    query: {
+      enabled: !!cartId,
+      queryKey: getGetCartQueryKey(cartId!),
+      retry: false,
+    },
+  });
+
+  useEffect(() => {
+    if (!cartId || !cartError) return;
+    if (!isCartNotFoundError(cartErrorValue)) return;
+    clearCartSession();
+    queryClient.removeQueries({ queryKey: getGetCartQueryKey(cartId) });
+  }, [cartId, cartError, cartErrorValue, clearCartSession, queryClient]);
   const toggleMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const isAdmin = !!user && ["staff", "branch_manager", "operations_manager", "operations", "manager", "admin"].includes(user.role);

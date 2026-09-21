@@ -2057,19 +2057,41 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && path === "/api/admin/reports/branches") {
     if (!requireLocalAuth(req, res)) return;
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    const inRange = (iso) => {
+      if (!iso) return true;
+      const t = new Date(iso).getTime();
+      if (from && t < new Date(from).getTime()) return false;
+      if (to && t >= new Date(to).getTime()) return false;
+      return true;
+    };
     send(
       res,
       200,
-      branches.map((b) => ({
-        branchId: b.id,
-        branchName: b.name,
-        orderCount: 0,
-        revenue: "0",
-        inventoryCount: products.length * 20,
-        inventoryValue: String(products.reduce((sum, p) => sum + p.price * 20, 0)),
-        lowStockCount: 0,
-        outOfStockCount: 0,
-      })),
+      branches.map((b) => {
+        const branchOrders = orders.filter(
+          (o) => o.branchId === b.id && o.status !== "cancelled" && inRange(o.createdAt || o.scheduledStart),
+        );
+        const revenue = branchOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+        const low = b.id === 2 ? 1 : 0;
+        const out = 0;
+        const inventoryCount = products.length * (b.id === 2 ? 12 : 20);
+        const inventoryValue = products.reduce(
+          (sum, p) => sum + p.price * (b.id === 2 ? 12 : 20),
+          0,
+        );
+        return {
+          branchId: b.id,
+          branchName: b.name,
+          orderCount: branchOrders.length,
+          revenue: String(revenue),
+          inventoryCount,
+          inventoryValue: String(inventoryValue),
+          lowStockCount: low,
+          outOfStockCount: out,
+        };
+      }),
     );
     return;
   }
@@ -2081,12 +2103,139 @@ const server = http.createServer((req, res) => {
       200,
       mockUsers.map((u) => ({
         id: u.id,
-        name: `${u.firstName} ${u.lastName}`.trim(),
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
         email: u.email,
         role: u.role,
+        firstName: u.firstName ?? null,
+        lastName: u.lastName ?? null,
+        phone: u.phone ?? null,
+        createdAt: new Date().toISOString(),
       })),
     );
     return;
+  }
+
+  if (req.method === "POST" && path === "/api/admin/users") {
+    if (!requireLocalAuth(req, res)) return;
+    readJson(req)
+      .then((body) => {
+        const email = String(body?.email || "").trim().toLowerCase();
+        if (!email || !body?.role) {
+          send(res, 400, { error: "email and role required" });
+          return;
+        }
+        const existing = mockUsers.find((u) => u.email.toLowerCase() === email);
+        if (existing && existing.role !== "customer") {
+          send(res, 409, { error: "Ya existe un usuario operativo con ese correo", code: "USER_EXISTS" });
+          return;
+        }
+        let user;
+        let created = false;
+        let promoted = false;
+        if (existing) {
+          existing.role = body.role;
+          existing.firstName = body.firstName ?? existing.firstName;
+          existing.lastName = body.lastName ?? existing.lastName;
+          existing.phone = body.phone ?? existing.phone;
+          user = existing;
+          promoted = true;
+        } else {
+          user = {
+            id: `user_local_${Date.now()}`,
+            email,
+            firstName: body.firstName || "Nuevo",
+            lastName: body.lastName || "Usuario",
+            phone: body.phone || null,
+            role: body.role,
+          };
+          mockUsers.push(user);
+          created = true;
+        }
+        if (body.branchId) {
+          const branchId = Number(body.branchId);
+          const already = branchAssignments.find(
+            (a) => a.branchId === branchId && a.userId === user.id,
+          );
+          if (!already) {
+            if (body.isPrimary) {
+              branchAssignments.forEach((a) => {
+                if (a.branchId === branchId) a.isPrimary = false;
+              });
+            }
+            branchAssignments.push({
+              id: nextAssignmentId++,
+              branchId,
+              userId: user.id,
+              role: body.branchRole || "staff",
+              isPrimary: Boolean(body.isPrimary),
+              active: true,
+            });
+          }
+        }
+        const safe = {
+          id: user.id,
+          name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
+          email: user.email,
+          role: user.role,
+          firstName: user.firstName ?? null,
+          lastName: user.lastName ?? null,
+          phone: user.phone ?? null,
+        };
+        send(res, 201, {
+          user: safe,
+          created,
+          promoted,
+          inviteSent: false,
+          message: promoted
+            ? "Cliente existente promovido a usuario operativo"
+            : "Usuario creado",
+        });
+      })
+      .catch(() => send(res, 400, { error: "Invalid body" }));
+    return;
+  }
+
+  const adminUserMatch = path.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (adminUserMatch) {
+    if (!requireLocalAuth(req, res)) return;
+    const userId = decodeURIComponent(adminUserMatch[1]);
+    const user = mockUsers.find((u) => u.id === userId);
+    if (!user) {
+      send(res, 404, { error: "User not found" });
+      return;
+    }
+    if (req.method === "GET") {
+      send(res, 200, {
+        id: user.id,
+        name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName ?? null,
+        lastName: user.lastName ?? null,
+        phone: user.phone ?? null,
+      });
+      return;
+    }
+    if (req.method === "PATCH") {
+      readJson(req)
+        .then((body) => {
+          if (body.firstName !== undefined) user.firstName = body.firstName;
+          if (body.lastName !== undefined) user.lastName = body.lastName;
+          if (body.phone !== undefined) user.phone = body.phone;
+          if (body.role !== undefined) user.role = body.role;
+          send(res, 200, {
+            id: user.id,
+            name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
+            email: user.email,
+            role: user.role,
+            firstName: user.firstName ?? null,
+            lastName: user.lastName ?? null,
+            phone: user.phone ?? null,
+          });
+        })
+        .catch(() => send(res, 400, { error: "Invalid body" }));
+      return;
+    }
   }
 
   if (req.method === "GET" && path === "/api/admin/category-responsibles") {

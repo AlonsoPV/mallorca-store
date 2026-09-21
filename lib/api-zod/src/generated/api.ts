@@ -5517,9 +5517,86 @@ export const ListAdminUsersResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.string()
+  "role": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
+
+
+export const createAdminUserBodyBranchRoleDefault = `staff`;
+export const createAdminUserBodyIsPrimaryDefault = false;
+export const createAdminUserBodySendInviteDefault = true;
+
+export const CreateAdminUserBody = zod.object({
+  "email": zod.string().email(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "role": zod.enum(['staff', 'branch_manager', 'operations', 'operations_manager', 'manager', 'admin']),
+  "branchId": zod.number().int().nullish(),
+  "branchRole": zod.enum(['branch_manager', 'staff', 'operations']).default(createAdminUserBodyBranchRoleDefault),
+  "isPrimary": zod.boolean().default(createAdminUserBodyIsPrimaryDefault),
+  "sendInvite": zod.boolean().default(createAdminUserBodySendInviteDefault)
+})
+
+export const CreateAdminUserResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+}),
+  "created": zod.boolean(),
+  "promoted": zod.boolean(),
+  "inviteSent": zod.boolean(),
+  "message": zod.string().nullish()
+})
+
+
+export const GetAdminUserParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetAdminUserResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+export const UpdateAdminUserParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateAdminUserBody = zod.object({
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "role": zod.enum(['staff', 'branch_manager', 'operations', 'operations_manager', 'manager', 'admin']).optional()
+})
+
+export const UpdateAdminUserResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
 
 
 export const ListBranchAssignmentsParams = zod.object({

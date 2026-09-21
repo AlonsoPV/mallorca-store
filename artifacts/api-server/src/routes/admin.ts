@@ -103,6 +103,17 @@ import {
 } from "../lib/catalog";
 import { commitOrderReservations, releaseOrderReservations, reserveBranchProduct } from "../lib/inventory-hold";
 import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
+import {
+  assignUserToBranch,
+  canAssignRole,
+  canManageUsers,
+  findUserByEmail,
+  isAdminStaffRole,
+  resolveIdentityForAdminUser,
+  serializeSafeUser,
+  syncClerkProfile,
+  type AdminStaffRole,
+} from "../lib/admin-users";
 import { DEFAULT_NOTIFICATION_PREFERENCES, normalizeNotificationPreferences } from "../lib/notification-prefs";
 import {
   stockState,
@@ -336,9 +347,235 @@ async function assignmentActor(req: Parameters<typeof getRequestUser>[0]) {
 // Assignment administration deliberately returns no authentication/provider fields.
 router.get("/admin/users", async (req, res): Promise<void> => {
   if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
-  const rows = await db.select({ id: usersTable.id, name: sql<string>`trim(concat(${usersTable.firstName}, ' ', ${usersTable.lastName}))`, email: usersTable.email, role: usersTable.role })
-    .from(usersTable).where(sql`${usersTable.role} <> 'customer'`).orderBy(usersTable.email);
-  res.json(rows);
+  const rows = await db
+    .select({
+      id: usersTable.id,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      email: usersTable.email,
+      phone: usersTable.phone,
+      role: usersTable.role,
+      createdAt: usersTable.createdAt,
+    })
+    .from(usersTable)
+    .where(sql`${usersTable.role} <> 'customer'`)
+    .orderBy(usersTable.email);
+  res.json(rows.map(serializeSafeUser));
+});
+
+router.get("/admin/users/:id", async (req, res): Promise<void> => {
+  if (!(await assignmentActor(req))) { res.status(403).json({ error: "Global assignment access required" }); return; }
+  const [row] = await db
+    .select({
+      id: usersTable.id,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      email: usersTable.email,
+      phone: usersTable.phone,
+      role: usersTable.role,
+      createdAt: usersTable.createdAt,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.params.id))
+    .limit(1);
+  if (!row || row.role === "customer") {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  res.json(serializeSafeUser(row));
+});
+
+const adminUserCreateBody = z.object({
+  email: z.string().email(),
+  firstName: z.string().trim().nullable().optional(),
+  lastName: z.string().trim().nullable().optional(),
+  phone: z.string().trim().nullable().optional(),
+  role: z.enum(["staff", "branch_manager", "operations", "operations_manager", "manager", "admin"]),
+  branchId: z.number().int().positive().nullable().optional(),
+  branchRole: z.enum(["branch_manager", "staff", "operations"]).default("staff"),
+  isPrimary: z.boolean().default(false),
+  sendInvite: z.boolean().default(true),
+});
+
+const adminUserUpdateBody = z.object({
+  firstName: z.string().trim().nullable().optional(),
+  lastName: z.string().trim().nullable().optional(),
+  phone: z.string().trim().nullable().optional(),
+  role: z.enum(["staff", "branch_manager", "operations", "operations_manager", "manager", "admin"]).optional(),
+});
+
+router.post("/admin/users", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !canManageUsers(actor)) {
+    res.status(403).json({ error: "Solo admin u operations manager pueden crear usuarios" });
+    return;
+  }
+  const body = adminUserCreateBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const role = body.data.role as AdminStaffRole;
+  if (!canAssignRole(actor, role)) {
+    res.status(403).json({ error: "No tienes permiso para asignar ese rol" });
+    return;
+  }
+
+  const email = body.data.email.trim().toLowerCase();
+  const existing = await findUserByEmail(email);
+  if (existing && existing.role !== "customer") {
+    res.status(409).json({ error: "Ya existe un usuario operativo con ese correo", code: "USER_EXISTS" });
+    return;
+  }
+
+  if (body.data.branchId != null && !(await canAccessBranch(req, body.data.branchId))) {
+    res.status(403).json({ error: "Branch access denied" });
+    return;
+  }
+
+  let userRow = existing;
+  let created = false;
+  let promoted = false;
+  let inviteSent = false;
+
+  try {
+    if (existing) {
+      const [updated] = await db
+        .update(usersTable)
+        .set({
+          firstName: body.data.firstName ?? existing.firstName,
+          lastName: body.data.lastName ?? existing.lastName,
+          phone: body.data.phone ?? existing.phone,
+          role,
+          updatedAt: new Date(),
+        })
+        .where(eq(usersTable.id, existing.id))
+        .returning();
+      userRow = updated;
+      promoted = true;
+      await syncClerkProfile({
+        userId: existing.id,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+      });
+    } else {
+      const identity = await resolveIdentityForAdminUser({
+        email,
+        firstName: body.data.firstName,
+        lastName: body.data.lastName,
+        sendInvite: body.data.sendInvite,
+      });
+      inviteSent = identity.inviteSent;
+      const [inserted] = await db
+        .insert(usersTable)
+        .values({
+          id: identity.userId,
+          email,
+          firstName: body.data.firstName ?? null,
+          lastName: body.data.lastName ?? null,
+          phone: body.data.phone ?? null,
+          role,
+        })
+        .onConflictDoUpdate({
+          target: usersTable.id,
+          set: {
+            email,
+            firstName: body.data.firstName ?? null,
+            lastName: body.data.lastName ?? null,
+            phone: body.data.phone ?? null,
+            role,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      userRow = inserted;
+      created = true;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "No se pudo crear el usuario";
+    res.status(400).json({ error: message, code: "USER_CREATE_FAILED" });
+    return;
+  }
+
+  if (!userRow) {
+    res.status(500).json({ error: "Usuario no persistido" });
+    return;
+  }
+
+  if (body.data.branchId != null) {
+    try {
+      await assignUserToBranch({
+        branchId: body.data.branchId,
+        userId: userRow.id,
+        role: body.data.branchRole,
+        isPrimary: body.data.isPrimary,
+      });
+    } catch {
+      // User created; assignment can be completed from Responsables.
+    }
+  }
+
+  res.status(201).json({
+    user: serializeSafeUser(userRow),
+    created,
+    promoted,
+    inviteSent,
+    message: promoted
+      ? "Cliente existente promovido a usuario operativo"
+      : inviteSent
+        ? "Usuario creado. Se envió invitación de acceso."
+        : "Usuario creado",
+  });
+});
+
+router.patch("/admin/users/:id", async (req, res): Promise<void> => {
+  const actor = await getRequestUser(req);
+  if (!actor || !canManageUsers(actor)) {
+    res.status(403).json({ error: "Solo admin u operations manager pueden editar usuarios" });
+    return;
+  }
+  const body = adminUserUpdateBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const [current] = await db.select().from(usersTable).where(eq(usersTable.id, req.params.id)).limit(1);
+  if (!current) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  if (body.data.role != null) {
+    if (!isAdminStaffRole(body.data.role) || !canAssignRole(actor, body.data.role)) {
+      res.status(403).json({ error: "No tienes permiso para asignar ese rol" });
+      return;
+    }
+    if (current.id === actor.id && body.data.role !== "admin" && actor.role === "admin") {
+      res.status(400).json({ error: "No puedes quitarte el rol admin a ti mismo" });
+      return;
+    }
+  }
+
+  const patch: Partial<typeof usersTable.$inferInsert> = { updatedAt: new Date() };
+  if (body.data.firstName !== undefined) patch.firstName = body.data.firstName;
+  if (body.data.lastName !== undefined) patch.lastName = body.data.lastName;
+  if (body.data.phone !== undefined) patch.phone = body.data.phone;
+  if (body.data.role !== undefined) patch.role = body.data.role;
+
+  const [updated] = await db
+    .update(usersTable)
+    .set(patch)
+    .where(eq(usersTable.id, current.id))
+    .returning();
+
+  await syncClerkProfile({
+    userId: updated.id,
+    firstName: updated.firstName,
+    lastName: updated.lastName,
+  });
+
+  res.json(serializeSafeUser(updated));
 });
 
 router.get("/admin/branches/:id/assignments", async (req, res): Promise<void> => {
@@ -1721,8 +1958,19 @@ router.get("/admin/reports/branches", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const ids = await getAccessibleBranchIds(req);
   const dateFilters: ReturnType<typeof sql>[] = [];
-  if (parsed.data.from) dateFilters.push(sql`${ordersTable.createdAt} >= ${new Date(parsed.data.from)}`);
-  if (parsed.data.to) dateFilters.push(sql`${ordersTable.createdAt} < ${new Date(parsed.data.to)}`);
+  if (parsed.data.from) {
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(parsed.data.from)
+      ? new Date(`${parsed.data.from}T00:00:00-06:00`)
+      : new Date(parsed.data.from);
+    dateFilters.push(sql`${ordersTable.createdAt} >= ${from}`);
+  }
+  if (parsed.data.to) {
+    // Accept exclusive ISO or date-only (treat date-only as start of that day exclusive upper bound already provided by clients).
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(parsed.data.to)
+      ? new Date(`${parsed.data.to}T00:00:00-06:00`)
+      : new Date(parsed.data.to);
+    dateFilters.push(sql`${ordersTable.createdAt} < ${to}`);
+  }
   const branchFilter = ids ? (ids.length ? inArray(branchesTable.id, ids) : sql`false`) : undefined;
   const branches = await db.select({ id: branchesTable.id, name: branchesTable.name }).from(branchesTable).where(branchFilter).orderBy(branchesTable.id);
   const rows = await Promise.all(branches.map(async (branch) => {

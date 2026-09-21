@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getImageUrl } from "@/lib/image-url";
@@ -968,14 +969,29 @@ export default function AdminBranchForm() {
 
           {section === 3 && (
             <>
-              <div className="flex flex-wrap gap-6">
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={!!form.pickupAvailable} onCheckedChange={(v) => set("pickupAvailable", !!v)} />
-                  Pickup
+              <div className="flex flex-col gap-4 rounded-none border border-border p-4 text-sm max-w-xl">
+                <p className="text-muted-foreground">
+                  Enciende o apaga los métodos que esta sucursal ofrecerá al cliente.
+                </p>
+                <label className="flex items-center justify-between gap-4">
+                  <span>
+                    <span className="font-medium">Recolección (pickup)</span>
+                    <span className="mt-0.5 block text-muted-foreground">Cliente puede recoger en sucursal</span>
+                  </span>
+                  <Switch
+                    checked={!!form.pickupAvailable}
+                    onCheckedChange={(v) => set("pickupAvailable", v)}
+                  />
                 </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={!!form.deliveryAvailable} onCheckedChange={(v) => set("deliveryAvailable", !!v)} />
-                  Delivery
+                <label className="flex items-center justify-between gap-4 border-t border-border pt-4">
+                  <span>
+                    <span className="font-medium">Entrega a domicilio</span>
+                    <span className="mt-0.5 block text-muted-foreground">Cliente puede pedir envío</span>
+                  </span>
+                  <Switch
+                    checked={!!form.deliveryAvailable}
+                    onCheckedChange={(v) => set("deliveryAvailable", v)}
+                  />
                 </label>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">

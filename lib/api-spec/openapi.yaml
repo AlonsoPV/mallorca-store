@@ -1106,6 +1106,41 @@ paths:
       tags: [admin]
       responses:
         "200": { description: Safe staff directory, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SafeUser" } } } } }
+    post:
+      operationId: createAdminUser
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminUserCreate" }
+      responses:
+        "201": { description: User created or promoted, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUserMutationResult" } } } }
+        "400": { description: Validation error, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "403": { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "409": { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+  /admin/users/{id}:
+    get:
+      operationId: getAdminUser
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: User, content: { application/json: { schema: { $ref: "#/components/schemas/SafeUser" } } } }
+        "404": { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    patch:
+      operationId: updateAdminUser
+      tags: [admin]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminUserUpdate" }
+      responses:
+        "200": { description: Updated user, content: { application/json: { schema: { $ref: "#/components/schemas/SafeUser" } } } }
+        "400": { description: Validation error, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "403": { description: Forbidden, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "404": { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
   /admin/branches/{id}/assignments:
     get:
       operationId: listBranchAssignments
@@ -2697,7 +2732,43 @@ components:
         name: { type: string }
         email: { type: string }
         role: { type: string }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
       required: [id, name, email, role]
+    AdminStaffRole:
+      type: string
+      enum: [staff, branch_manager, operations, operations_manager, manager, admin]
+    AdminUserCreate:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        role: { $ref: "#/components/schemas/AdminStaffRole" }
+        branchId: { type: ["integer", "null"] }
+        branchRole: { type: string, enum: [branch_manager, staff, operations], default: staff }
+        isPrimary: { type: boolean, default: false }
+        sendInvite: { type: boolean, default: true }
+      required: [email, role]
+    AdminUserUpdate:
+      type: object
+      properties:
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        role: { $ref: "#/components/schemas/AdminStaffRole" }
+    AdminUserMutationResult:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/SafeUser" }
+        created: { type: boolean }
+        promoted: { type: boolean }
+        inviteSent: { type: boolean }
+        message: { type: ["string", "null"] }
+      required: [user, created, promoted, inviteSent]
     AssignmentInput:
       type: object
       properties:

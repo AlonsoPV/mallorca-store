@@ -76,6 +76,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@clerk/localizations": "^3.37.8",
     "@clerk/react": "^6.15.2",
     "@clerk/themes": "^2.4.57",
     "xlsx": "^0.18.5"

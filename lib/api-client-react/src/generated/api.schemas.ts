@@ -1718,6 +1718,69 @@ export interface SafeUser {
   name: string;
   email: string;
   role: string;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  createdAt?: string;
+}
+
+export type AdminStaffRole = typeof AdminStaffRole[keyof typeof AdminStaffRole];
+
+
+export const AdminStaffRole = {
+  staff: 'staff',
+  branch_manager: 'branch_manager',
+  operations: 'operations',
+  operations_manager: 'operations_manager',
+  manager: 'manager',
+  admin: 'admin',
+} as const;
+
+export type AdminUserCreateBranchRole = typeof AdminUserCreateBranchRole[keyof typeof AdminUserCreateBranchRole];
+
+
+export const AdminUserCreateBranchRole = {
+  branch_manager: 'branch_manager',
+  staff: 'staff',
+  operations: 'operations',
+} as const;
+
+export interface AdminUserCreate {
+  email: string;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  role: AdminStaffRole;
+  /** @nullable */
+  branchId?: number | null;
+  branchRole?: AdminUserCreateBranchRole;
+  isPrimary?: boolean;
+  sendInvite?: boolean;
+}
+
+export interface AdminUserUpdate {
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  role?: AdminStaffRole;
+}
+
+export interface AdminUserMutationResult {
+  user: SafeUser;
+  created: boolean;
+  promoted: boolean;
+  inviteSent: boolean;
+  /** @nullable */
+  message?: string | null;
 }
 
 export type AssignmentInputRole = typeof AssignmentInputRole[keyof typeof AssignmentInputRole];

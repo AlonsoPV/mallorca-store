@@ -31,10 +31,10 @@ const primaryNav = [
 ];
 
 const configNav = [
+  { href: "/admin/usuarios", label: "Usuarios", icon: Users },
   { href: "/admin/formas-de-pago", label: "Formas de pago", icon: CreditCard },
   { href: "/admin/importar", label: "Importar", icon: Upload },
   { href: "/admin/reportes", label: "Reportes", icon: BarChart3 },
-  { href: "/admin/responsables", label: "Responsables", icon: Users },
 ];
 
 function NavLink({

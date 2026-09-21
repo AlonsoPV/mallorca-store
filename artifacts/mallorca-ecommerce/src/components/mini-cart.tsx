@@ -9,6 +9,7 @@ import { formatMxn } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { isCartNotFoundError } from "@/lib/cart-recovery";
 import {
   getGetCartQueryKey,
   useDeleteCartItem,
@@ -17,12 +18,24 @@ import {
 } from "@workspace/api-client-react";
 
 export function MiniCart() {
-  const { cartId, miniCartOpen, setMiniCartOpen, closeMiniCart } = useCart();
-  const { data: cart } = useGetCart(cartId!, { query: { enabled: !!cartId, queryKey: getGetCartQueryKey(cartId!) } });
+  const { cartId, miniCartOpen, setMiniCartOpen, closeMiniCart, clearCartSession } = useCart();
+  const { data: cart, isError: cartError, error: cartErrorValue } = useGetCart(cartId!, {
+    query: {
+      enabled: !!cartId,
+      queryKey: getGetCartQueryKey(cartId!),
+      retry: false,
+    },
+  });
   const updateCartItem = useUpdateCartItem();
   const deleteCartItem = useDeleteCartItem();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!cartId || !cartError || !isCartNotFoundError(cartErrorValue)) return;
+    clearCartSession();
+    queryClient.removeQueries({ queryKey: getGetCartQueryKey(cartId) });
+  }, [cartId, cartError, cartErrorValue, clearCartSession, queryClient]);
 
   useEffect(() => {
     if (miniCartOpen) {

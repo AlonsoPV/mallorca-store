@@ -14,7 +14,7 @@ function getRedirectPath() {
     return requestedPath;
   }
 
-  return `${basePath}/cuenta` || "/cuenta";
+  return basePath ? `${basePath}/` : "/";
 }
 
 function toAppPath(path: string) {
@@ -44,14 +44,19 @@ export default function SignInPage() {
           <SignIn
             routing="path"
             path={`${basePath}/sign-in`}
-            signUpUrl={`${basePath}/sign-up?redirect_url=${encodeURIComponent(redirectPath)}`}
             fallbackRedirectUrl={redirectPath}
-            signUpFallbackRedirectUrl={redirectPath}
+            withSignUp={false}
+            transferable={false}
+            appearance={{
+              elements: {
+                footerAction__signIn: { display: "none" },
+              },
+            }}
           />
           <p className="max-w-[440px] text-center text-xs leading-5 text-muted-foreground">
             Si no recuerdas tu contraseña, escribe primero tu correo y selecciona
-            <span className="font-medium text-foreground"> “Forgot password” </span>
-            dentro del formulario de Clerk.
+            <span className="font-medium text-foreground"> “¿Olvidaste tu contraseña?” </span>
+            dentro del formulario.
           </p>
         </>
       ) : (

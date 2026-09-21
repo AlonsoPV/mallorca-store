@@ -10,16 +10,23 @@ import { useToast } from "@/hooks/use-toast";
 import { formatMxn } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
 import { ImageWithFallback } from "@/components/image-with-fallback";
+import { isCartNotFoundError } from "@/lib/cart-recovery";
 
 export default function CartPage() {
-  const { cartId } = useCart();
-  const { data: cart, isLoading } = useGetCart(cartId!, {
-    query: { enabled: !!cartId, queryKey: getGetCartQueryKey(cartId!) }
+  const { cartId, clearCartSession } = useCart();
+  const { data: cart, isLoading, isError, error } = useGetCart(cartId!, {
+    query: { enabled: !!cartId, queryKey: getGetCartQueryKey(cartId!), retry: false },
   });
   const updateCartItem = useUpdateCartItem();
   const deleteCartItem = useDeleteCartItem();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!cartId || !isError || !isCartNotFoundError(error)) return;
+    clearCartSession();
+    queryClient.removeQueries({ queryKey: getGetCartQueryKey(cartId) });
+  }, [cartId, isError, error, clearCartSession, queryClient]);
 
   useEffect(() => {
     if (cart) track("view_cart", { source: "cart_page", quantity: cart.quantity, value: cart.subtotal });
@@ -59,8 +66,8 @@ export default function CartPage() {
   if (isLoading) {
     return (
       <StoreLayout>
-        <div className="container mx-auto px-4 py-16 animate-pulse">
-          <div className="h-10 bg-muted w-1/3 mb-10" />
+        <div className="container mx-auto px-4 py-8 animate-pulse">
+          <div className="h-10 bg-muted w-1/3 mb-6" />
           <div className="space-y-6">
             <div className="h-32 bg-muted w-full" />
             <div className="h-32 bg-muted w-full" />
@@ -73,11 +80,11 @@ export default function CartPage() {
   if (!cart || cart.items.length === 0) {
     return (
       <StoreLayout>
-        <div className="container mx-auto px-4 py-32 text-center flex flex-col items-center">
-          <ShoppingBag className="mb-6 h-16 w-16 text-primary opacity-30" />
+        <div className="container mx-auto px-4 py-16 md:py-20 text-center flex flex-col items-center">
+          <ShoppingBag className="mb-4 h-16 w-16 text-primary opacity-30" />
           <span className="mallorca-kicker text-primary">Tu bolsa</span>
-          <h2 className="mallorca-display mb-4 mt-3 text-4xl md:text-5xl">Está un poco triste.</h2>
-          <p className="mb-10 max-w-md text-muted-foreground">Vamos a arreglarlo con algo recién horneado.</p>
+          <h2 className="mallorca-display mb-3 mt-2 text-4xl md:text-5xl">Está un poco triste.</h2>
+          <p className="mb-8 max-w-md text-muted-foreground">Vamos a arreglarlo con algo recién horneado.</p>
           <Button asChild size="lg" className="h-14 rounded-none bg-primary px-8 text-base text-primary-foreground hover:bg-primary/90">
             <Link href="/tienda">Seguir descubriendo</Link>
           </Button>
@@ -88,11 +95,11 @@ export default function CartPage() {
 
   return (
     <StoreLayout>
-      <div className="container mx-auto px-4 py-8 md:py-12 pb-28 lg:pb-12">
+      <div className="container mx-auto px-4 py-5 md:py-8 pb-28 lg:pb-12">
         <span className="mallorca-kicker text-primary">Casi listo</span>
-        <h1 className="mallorca-display mb-6 mt-2 text-3xl md:text-4xl">Tu bolsa</h1>
+        <h1 className="mallorca-display mb-4 mt-0 text-3xl md:text-4xl">Tu bolsa</h1>
         
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-10">
           <div className="w-full lg:w-2/3">
               <div className="mb-4 flex items-center justify-between border-y border-border py-3">
               <div className="text-sm">

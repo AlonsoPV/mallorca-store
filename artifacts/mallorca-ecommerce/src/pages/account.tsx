@@ -47,9 +47,9 @@ export default function AccountPage() {
   if (isLoadingUser) {
     return (
       <StoreLayout>
-        <div className="container mx-auto px-4 py-16 animate-pulse">
-          <div className="h-10 bg-muted w-1/4 mb-12" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div className="container mx-auto px-4 py-8 animate-pulse">
+          <div className="h-10 bg-muted w-1/4 mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1 h-64 bg-muted" />
             <div className="md:col-span-2 h-96 bg-muted" />
           </div>
@@ -62,8 +62,8 @@ export default function AccountPage() {
 
   return (
     <StoreLayout>
-      <div className="container mx-auto px-4 py-12 md:py-16">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-4">
+      <div className="container mx-auto px-4 py-5 md:py-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
           <div>
             <h1 className="font-serif text-4xl md:text-5xl mb-2">Mi Cuenta</h1>
             <p className="text-muted-foreground">Hola, {user.firstName || user.email}</p>
@@ -74,7 +74,7 @@ export default function AccountPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Profile Form */}
           <div className="lg:col-span-1">
             <div className="bg-secondary/20 border border-border p-6 md:p-8">
