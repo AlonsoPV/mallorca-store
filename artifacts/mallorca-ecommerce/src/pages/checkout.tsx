@@ -28,10 +28,13 @@ import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
-
-function slotLabel(value: string) {
-  return new Date(value).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-}
+import {
+  formatSlotTime,
+  mexicoToday,
+  mexicoTodayLocalDate,
+  sameSlot,
+  slotToIso,
+} from "@/lib/slot-time";
 
 export default function CheckoutPage() {
   const {
@@ -59,8 +62,16 @@ export default function CheckoutPage() {
   const [number, setNumber] = useState("");
   const [colonia, setColonia] = useState("");
   const [postalCode, setPostalCode] = useState("");
-  const [checkoutDate, setCheckoutDate] = useState(selectedDate || format(new Date(), "yyyy-MM-dd"));
-  const [selectedSlot, setSelectedSlot] = useState(selectedTime || "");
+  const [checkoutDate, setCheckoutDate] = useState(() => {
+    const today = mexicoToday();
+    return selectedDate && selectedDate >= today ? selectedDate : today;
+  });
+  const [selectedSlot, setSelectedSlot] = useState(() => {
+    const today = mexicoToday();
+    if (!selectedTime) return "";
+    if (selectedDate && selectedDate < today) return "";
+    return selectedTime;
+  });
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH_ON_PICKUP");
   const { user, isSignedIn } = useAppUser();
 
@@ -136,6 +147,15 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
+    const today = mexicoToday();
+    if (selectedDate && selectedDate < today) {
+      setCheckoutDate(today);
+      setSelectedSlot("");
+      setFulfillmentContext(today, "");
+    }
+  }, [selectedDate, setFulfillmentContext]);
+
+  useEffect(() => {
     if (selectedTime) setSelectedSlot(selectedTime);
   }, [selectedTime]);
 
@@ -155,8 +175,9 @@ export default function CheckoutPage() {
     if (next && next !== fulfillmentMethod) {
       setFulfillmentMethod(next);
       setSelectedSlot("");
+      setFulfillmentContext(checkoutDate, "");
     }
-  }, [cart?.branch?.id, cart?.branch?.pickupAvailable, cart?.branch?.deliveryAvailable, fulfillmentMethod, setFulfillmentMethod]);
+  }, [cart?.branch?.id, cart?.branch?.pickupAvailable, cart?.branch?.deliveryAvailable, checkoutDate, fulfillmentMethod, setFulfillmentContext, setFulfillmentMethod]);
 
   useEffect(() => {
     if (fulfillmentMethod === "delivery") {
@@ -171,7 +192,7 @@ export default function CheckoutPage() {
   const [preview, setPreview] = useState<AdminOrderPreview | null>(null);
 
   const upcomingDays = useMemo(
-    () => Array.from({ length: 14 }, (_, index) => addDays(new Date(), index)),
+    () => Array.from({ length: 14 }, (_, index) => addDays(mexicoTodayLocalDate(), index)),
     [],
   );
 
@@ -283,8 +304,8 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!checkoutDate || !selectedSlot) {
-      toast({ title: "Horario faltante", description: "Selecciona fecha y horario aquí mismo.", variant: "destructive" });
+    if (!checkoutDate || !selectedSlot || !selectedSlotAvailable) {
+      toast({ title: "Horario faltante", description: "Selecciona fecha y un horario disponible aquí mismo.", variant: "destructive" });
       return;
     }
 
@@ -308,17 +329,19 @@ export default function CheckoutPage() {
         }
       });
 
-      track("purchase", {
+      try { track("purchase", {
         orderId: order.id,
         value: order.total,
         payment_type: fulfillmentMethod === "pickup" ? paymentMethod : "PENDING",
         fulfillmentMethod,
-      });
+      }); } catch { /* Analytics must not interrupt an already-created order. */ }
 
       const orderUrl = `/pedido/${order.id}/${order.guestAccessToken}`;
-      localStorage.setItem("mallorca_last_guest_order", orderUrl);
-      sessionStorage.removeItem("mallorca_checkout_draft");
-      clearCartSession();
+      try {
+        localStorage.setItem("mallorca_last_guest_order", orderUrl);
+        sessionStorage.removeItem("mallorca_checkout_draft");
+      } catch { /* Receipt remains accessible when browser storage is unavailable. */ }
+      try { clearCartSession(); } catch { /* Always show the created order. */ }
       setLocation(orderUrl);
     } catch (err: any) {
       setIsSubmitting(false);
@@ -333,7 +356,24 @@ export default function CheckoutPage() {
   const total = preview?.total ?? fallbackTotal;
   const minimumOrder = cart?.branch.minimumOrder ?? 0;
   const minimumRemaining = Math.max(0, minimumOrder - (preview?.subtotal ?? cart?.subtotal ?? 0));
-  const selectedSlotAvailable = Boolean(slots?.some((slot) => slot.start === selectedSlot && slot.available));
+  const selectedSlotAvailable = Boolean(
+    slots?.some((slot) => sameSlot(slot.start, selectedSlot) && slot.available),
+  );
+
+  useEffect(() => {
+    if (isLoadingSlots || !slots || !selectedSlot) return;
+    const match = slots.find((slot) => sameSlot(slot.start, selectedSlot));
+    if (!match?.available) {
+      setSelectedSlot("");
+      setFulfillmentContext(checkoutDate, "");
+      return;
+    }
+    const iso = slotToIso(match.start);
+    if (iso !== selectedSlot) {
+      setSelectedSlot(iso);
+      setFulfillmentContext(checkoutDate, iso);
+    }
+  }, [checkoutDate, isLoadingSlots, selectedSlot, setFulfillmentContext, slots]);
   const priceChanges = (preview?.lines ?? []).flatMap((line) => {
     const cartLine = cart?.items.find((item) => item.productId === line.productId && item.quantity === line.quantity)
       ?? cart?.items.find((item) => item.productId === line.productId);
@@ -412,6 +452,7 @@ export default function CheckoutPage() {
                 onValueChange={(val: OrderInputFulfillmentMethod) => {
                   setFulfillmentMethod(val);
                   setSelectedSlot("");
+                  setFulfillmentContext(checkoutDate, "");
                   track("fulfillment_selected", { method: val });
                 }}
                 className="grid grid-cols-1 sm:grid-cols-2 gap-3"
@@ -420,6 +461,7 @@ export default function CheckoutPage() {
                   if (!cart.branch.pickupAvailable) return;
                   setFulfillmentMethod("pickup");
                   setSelectedSlot("");
+                  setFulfillmentContext(checkoutDate, "");
                   track("fulfillment_selected", { method: "pickup" });
                 }}>
                   <RadioGroupItem value="pickup" id="pickup" className="sr-only" disabled={!cart.branch.pickupAvailable} />
@@ -434,6 +476,7 @@ export default function CheckoutPage() {
                   if (!cart.branch.deliveryAvailable) return;
                   setFulfillmentMethod("delivery");
                   setSelectedSlot("");
+                  setFulfillmentContext(checkoutDate, "");
                   track("fulfillment_selected", { method: "delivery" });
                 }}>
                   <RadioGroupItem value="delivery" id="delivery" className="sr-only" disabled={!cart.branch.deliveryAvailable} />
@@ -544,24 +587,35 @@ export default function CheckoutPage() {
               </div>
               {isLoadingSlots ? (
                 <div className="mt-4 flex items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando horarios {fulfillmentMethod}</div>
-              ) : (
+              ) : slots?.length ? (
                 <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {slots?.map((slot) => (
-                    <button
-                      key={slot.start}
-                      type="button"
-                      disabled={!slot.available}
-                      onClick={() => {
-                        setSelectedSlot(slot.start);
-                        setFulfillmentContext(checkoutDate, slot.start);
-                        track("time_selected", { time: slot.start, method: fulfillmentMethod, source: "checkout" });
-                      }}
-                      className={`border px-3 py-3 text-sm ${selectedSlot === slot.start ? "border-primary bg-primary text-white" : slot.available ? "border-border hover:border-primary" : "cursor-not-allowed text-muted-foreground/50"}`}
-                    >
-                      {slotLabel(slot.start)}
-                    </button>
-                  ))}
+                  {slots.map((slot) => {
+                    const iso = slotToIso(slot.start);
+                    const selected = sameSlot(selectedSlot, slot.start);
+                    return (
+                      <button
+                        key={iso}
+                        type="button"
+                        disabled={!slot.available}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setSelectedSlot(iso);
+                          setFulfillmentContext(checkoutDate, iso);
+                          track("time_selected", { time: iso, method: fulfillmentMethod, source: "checkout" });
+                        }}
+                        className={`border px-3 py-3 text-sm ${selected ? "border-primary bg-primary text-white" : slot.available ? "border-border hover:border-primary" : "cursor-not-allowed text-muted-foreground/50"}`}
+                      >
+                        {formatSlotTime(slot.start)}
+                      </button>
+                    );
+                  })}
                 </div>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {checkoutDate === mexicoToday()
+                    ? "Ya no hay horarios disponibles para hoy. Elige otro día."
+                    : `Esta fecha no tiene horarios disponibles para ${fulfillmentMethod === "delivery" ? "envío" : "recolección"}. Prueba con otro día.`}
+                </p>
               )}
               {selectedSlot && !selectedSlotAvailable && !isLoadingSlots && (
                 <p className="mt-3 text-sm text-destructive">Ese horario no está disponible para {fulfillmentMethod === "delivery" ? "envío" : "recolección"}. Elige otro de la lista.</p>
@@ -623,7 +677,8 @@ export default function CheckoutPage() {
                   isSubmitting ||
                   createOrder.isPending ||
                   minimumRemaining > 0 ||
-                  !selectedSlot ||
+                  isLoadingSlots ||
+                  !selectedSlotAvailable ||
                   availabilityChanges.length > 0 ||
                   (fulfillmentMethod === "delivery" && !deliveryInfo?.eligible)
                 }
@@ -649,7 +704,8 @@ export default function CheckoutPage() {
             isSubmitting ||
             createOrder.isPending ||
             minimumRemaining > 0 ||
-            !selectedSlot ||
+            isLoadingSlots ||
+            !selectedSlotAvailable ||
             availabilityChanges.length > 0 ||
             (fulfillmentMethod === "delivery" && !deliveryInfo?.eligible)
           }

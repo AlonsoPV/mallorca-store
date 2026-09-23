@@ -1,5 +1,5 @@
 import { StoreLayout } from "@/components/layout/store-layout";
-import { useGetMe, useListMyOrders, useUpdateMe } from "@workspace/api-client-react";
+import { useGetMe, useListMyOrders, useUpdateMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useAppSignOut } from "@/lib/app-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { LogOut, Package, User, Clock, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function AccountPage() {
   const { data: user, isLoading: isLoadingUser } = useGetMe();
@@ -15,6 +16,7 @@ export default function AccountPage() {
   const updateMe = useUpdateMe();
   const signOut = useAppSignOut();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -34,6 +36,7 @@ export default function AccountPage() {
       await updateMe.mutateAsync({
         data: { firstName, lastName, phone }
       });
+      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       toast({ title: "Perfil actualizado", description: "Tus datos se han guardado exitosamente." });
     } catch (err: any) {
       toast({ title: "Error", description: "No se pudo actualizar tu perfil.", variant: "destructive" });
@@ -151,7 +154,7 @@ export default function AccountPage() {
                         <div className="flex items-center gap-4 w-full md:w-auto mt-2 md:mt-0">
                           {isCompleted && <CheckCircle2 className="w-5 h-5 text-primary hidden md:block" />}
                           <Button asChild variant="outline" className="rounded-none border-border w-full md:w-auto">
-                            <Link href={`/pedido/${order.id}/none`}>Ver Detalles</Link>
+                            <Link href={`/pedido/${order.id}/user`}>Ver Detalles</Link>
                           </Button>
                         </div>
                       </div>

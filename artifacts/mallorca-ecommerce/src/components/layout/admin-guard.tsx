@@ -1,3 +1,4 @@
+import { useRoleAccess, pageModule } from "@/lib/role-access";
 import { ReactNode } from "react";
 import { useAppAuth } from "@/lib/app-auth";
 import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
@@ -16,6 +17,8 @@ export function AdminGuard({ children }: { children: ReactNode }) {
       queryKey: getGetMeQueryKey()
     }
   });
+
+  const access = useRoleAccess(!!user && user.role !== "customer");
 
   if (!isLoaded) {
     return (
@@ -58,5 +61,12 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     );
   }
 
+  if (user.role !== "admin") {
+    if (access.isLoading) return <div role="status" className="p-10 text-center">Comprobando accesos…</div>;
+    if (access.isError) return <div role="alert" className="p-10 text-center"><p>No se pudieron comprobar tus accesos.</p><Button onClick={() => access.refetch()}>Reintentar</Button></div>;
+    if (pageModule(location) === "roles" || !access.data?.modules[pageModule(location) ?? ""]) {
+      return <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-6 text-center"><ShieldAlert className="h-12 w-12 text-muted-foreground" /><h1 className="text-2xl font-semibold">Acceso no habilitado</h1><p>Tu rol no tiene acceso a este módulo. Contacta a un administrador.</p><Button asChild><Link href="/">Volver a la tienda</Link></Button></div>;
+    }
+  }
   return <>{children}</>;
 }

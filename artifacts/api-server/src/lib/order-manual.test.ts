@@ -96,6 +96,28 @@ describe("fulfillment-schedule", () => {
     assert.equal(isValidSlotTime(schedule!, slot), true);
   });
 
+  it("parses HH:mm:ss hours and Spanish weekday labels", () => {
+    const branch = {
+      hours: [
+        { day: "lunes", label: "Lunes", open: "09:00:00", close: "18:00:00", closed: false },
+      ],
+      pickupSlotIntervalMinutes: 30,
+      preparationTimeMinutes: 60,
+      deliveryTimeMinutes: 30,
+      pickupSlotCapacity: 5,
+    } as any;
+    const schedule = fulfillmentSchedule(
+      branch,
+      "2026-09-14",
+      "pickup",
+      0,
+      Date.parse("2026-09-14T08:00:00-06:00"),
+    );
+    assert.ok(schedule);
+    assert.equal(new Date(schedule!.first).toISOString(), "2026-09-14T16:00:00.000Z");
+    assert.equal(isValidSlotTime(schedule!, new Date(schedule!.first)), true);
+  });
+
   it("opens delivery slots later than pickup for the same branch", () => {
     const branch = {
       hours: [

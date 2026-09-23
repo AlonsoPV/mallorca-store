@@ -61,6 +61,13 @@ export function formatOrderDateTime(value?: string | Date | null) {
   return `${formatOrderDate(d)} · ${formatOrderTime(d)}`;
 }
 
+export function pipelineStepForStatus(status: string): OrderStatus | null {
+  if (status === "cancelled") return null;
+  if (status === "paid" || status === "pending_payment") return "confirmed";
+  if ((ORDER_STATUS_PIPELINE as readonly string[]).includes(status)) return status as OrderStatus;
+  return "confirmed";
+}
+
 export function getValidNextStatuses(status: string): OrderStatus[] {
   return ORDER_STATUS_TRANSITIONS[status as OrderStatus] ?? [];
 }

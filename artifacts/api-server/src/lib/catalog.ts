@@ -96,6 +96,7 @@ type ProductFilters = {
   categorySlug?: string;
   branchSlug?: string;
   featured?: boolean;
+  seasonal?: boolean;
   scheduledStart?: Date;
   includeUnavailable?: boolean;
   branchIds?: number[];
@@ -233,6 +234,10 @@ export async function listProductCards(filters: ProductFilters = {}) {
 
   if (filters.featured !== undefined) {
     conditions.push(eq(productsTable.featured, filters.featured));
+  }
+
+  if (filters.seasonal !== undefined) {
+    conditions.push(eq(productsTable.seasonal, filters.seasonal));
   }
 
   if (filters.productIds?.length) {

@@ -7,14 +7,25 @@ import { useAppAuth, useAppSignInLocalDev } from "@/lib/app-auth";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const clerkConfigured = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
+function getHomePath() {
+  return basePath ? `${basePath}/` : "/";
+}
+
 function getRedirectPath() {
   const requestedPath = new URLSearchParams(window.location.search).get("redirect_url");
+  const homePath = getHomePath();
 
-  if (requestedPath?.startsWith("/") && !requestedPath.startsWith("//")) {
-    return requestedPath;
+  if (!requestedPath?.startsWith("/") || requestedPath.startsWith("//")) {
+    return homePath;
   }
 
-  return basePath ? `${basePath}/` : "/";
+  // Post-login default is home; /cuenta is reachable from the nav once signed in.
+  const pathOnly = requestedPath.split("?")[0]?.split("#")[0] || "/";
+  if (pathOnly === "/cuenta" || pathOnly === `${basePath}/cuenta`) {
+    return homePath;
+  }
+
+  return requestedPath;
 }
 
 function toAppPath(path: string) {
@@ -44,6 +55,7 @@ export default function SignInPage() {
           <SignIn
             routing="path"
             path={`${basePath}/sign-in`}
+            forceRedirectUrl={redirectPath}
             fallbackRedirectUrl={redirectPath}
             withSignUp={false}
             transferable={false}

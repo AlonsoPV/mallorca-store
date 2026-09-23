@@ -47,3 +47,27 @@ test("product CSV parser rejects duplicate SKU and branch rows without rejecting
   assert.equal(result.errors.length, 1);
   assert.match(result.errors[0].message, /Duplicate/);
 });
+
+test("unified CSV preserves multiline descriptions and branch alert settings", () => {
+  const csv = 'sku,name,description,branchCode,inventory,minStock,criticalStock,autoAlertEnabled\n001,"Pan, especial","Primera línea\nSegunda ""línea""",REF,0,5,2,false\n001,,,LOM,12,4,1,true';
+  const parsed = parseProductImportCsv(csv);
+  assert.deepEqual(parsed.errors, []);
+  assert.equal(parsed.rows.length, 2);
+  assert.equal(parsed.rows[0].sku, "001");
+  assert.equal(parsed.rows[0].description, 'Primera línea\nSegunda "línea"');
+  assert.equal(parsed.rows[0].inventory, 0);
+  assert.equal(parsed.rows[0].criticalStock, 2);
+  assert.equal(parsed.rows[0].autoAlertEnabled, false);
+});
+
+test("unified CSV rejects fractional stock, missing branch and broken quotes", () => {
+  for (const csv of ['sku,branchCode,inventory\nA,REF,1.5', 'sku,inventory\nA,2', 'sku,name\nA,"unfinished']) {
+    assert.ok(parseProductImportCsv(csv).errors.length);
+  }
+  assert.ok(parseProductImportCsv('sku,branchCode,minStock,criticalStock\nA,REF,2,5').errors.length);
+});
+
+test("explicitly skipped columns do not silently import by header", () => {
+  const parsed = parseProductImportCsv('sku,price\nA,12', { price: "" });
+  assert.equal(parsed.rows[0].price, undefined);
+});

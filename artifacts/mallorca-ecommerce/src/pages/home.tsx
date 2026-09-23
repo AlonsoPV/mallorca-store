@@ -1,37 +1,45 @@
 import { useMemo, useState } from "react";
 import { StoreLayout } from "@/components/layout/store-layout";
-import { useListBranches, useListCategories, useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
+import { useListBranches, useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { ProductCard } from "@/components/product-card";
-import { ArrowDown, ArrowRight, ArrowUpRight, MapPin } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
-
-const categoryImages = [
-  "/images/mallorca-chocolate-cake.jpg",
-  "/images/mallorca-bolleria.jpg",
-  "/images/mallorca-panettone-hero.jpg",
-];
 
 export default function Home() {
   const { branchId, selectedTime } = useCart();
-  const { data: categories, isLoading: isLoadingCategories } = useListCategories();
   const { data: branchesData } = useListBranches();
   const branches = Array.isArray(branchesData) ? branchesData : undefined;
   const selectedBranch = branches?.find((branch) => branch.id === branchId);
-  const { data: products, isLoading: isLoadingProducts } = useListProducts({
-    featured: true,
+  const catalogParams = {
     branchSlug: selectedBranch?.slug,
     scheduledStart: selectedTime || undefined,
     includeUnavailable: true,
+  };
+  const { data: featuredProducts, isLoading: isLoadingFeatured } = useListProducts({
+    ...catalogParams,
+    featured: true,
   }, {
     query: {
-      queryKey: getListProductsQueryKey({ featured: true, branchSlug: selectedBranch?.slug, scheduledStart: selectedTime || undefined, includeUnavailable: true }),
+      queryKey: getListProductsQueryKey({ ...catalogParams, featured: true }),
+    },
+  });
+  const { data: seasonalProducts, isLoading: isLoadingSeasonal } = useListProducts({
+    ...catalogParams,
+    seasonal: true,
+  }, {
+    query: {
+      queryKey: getListProductsQueryKey({ ...catalogParams, seasonal: true }),
     },
   });
   const [heroShift, setHeroShift] = useState({ x: 0, y: 0 });
 
-  const featureProduct = products?.[0];
-  const secondaryProducts = useMemo(() => products?.slice(1, 5) ?? [], [products]);
+  const featuredList = useMemo(() => featuredProducts ?? [], [featuredProducts]);
+  const seasonalList = useMemo(() => seasonalProducts ?? [], [seasonalProducts]);
+  const seasonalHero = seasonalList[0];
+  const extraSeasonal = seasonalList.slice(1, 4);
+  const showFeatured = isLoadingFeatured || featuredList.length > 0;
+  const showSeasonal = isLoadingSeasonal || seasonalList.length > 0;
 
   const handleHeroMove = (event: React.MouseEvent<HTMLElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -44,7 +52,7 @@ export default function Home() {
   return (
     <StoreLayout>
       <section
-        className="relative isolate min-h-[min(860px,calc(100dvh-0px))] overflow-hidden bg-[var(--mallorca-cacao)] text-white"
+        className="relative isolate flex h-[100dvh] max-h-[100dvh] min-h-[100dvh] flex-col overflow-hidden bg-[var(--mallorca-cacao)] text-white"
         onMouseMove={handleHeroMove}
         onMouseLeave={() => setHeroShift({ x: 0, y: 0 })}
       >
@@ -57,116 +65,119 @@ export default function Home() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(37,33,30,.14)_0%,rgba(37,33,30,.06)_36%,rgba(37,33,30,.74)_100%)]" />
         <div className="absolute inset-0 bg-[var(--mallorca-red)]/10 mix-blend-multiply" />
 
-        <div className="container relative mx-auto flex min-h-[min(860px,100dvh)] flex-col justify-end px-5 pb-12 pt-36 md:px-8 md:pb-16">
-          <div className="max-w-3xl">
-            <div className="mallorca-reveal flex items-center gap-3 text-white/85">
-              <span className="h-px w-12 bg-[var(--mallorca-red)]" />
-              <span className="mallorca-kicker">De Madrid a México · CDMX</span>
+        <div
+          className="relative z-10 mx-auto flex h-full min-h-0 w-full max-w-[1280px] flex-col px-5 pb-6 md:px-8 md:pb-8"
+          style={{ paddingTop: "var(--store-header-height, 4.5rem)" }}
+        >
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col justify-end gap-8 py-3 md:justify-center md:gap-10 md:py-4">
+              <div className="mallorca-reveal flex items-center gap-3 text-white/85">
+                <span className="h-px w-10 shrink-0 bg-[var(--mallorca-red)] sm:w-14" />
+                <span className="mallorca-kicker">De Madrid a México · CDMX</span>
+              </div>
+
+              <div className="grid min-h-0 items-end gap-8 md:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.75fr)] md:items-end md:gap-12 lg:gap-16">
+                <h1 className="mallorca-display mallorca-reveal mallorca-reveal-delay text-balance text-[clamp(2.6rem,calc(1.1rem+4.2vw),5.5rem)] leading-[1.02] tracking-[-0.045em] text-white">
+                  Un clásico que{" "}
+                  <em className="font-serif italic text-[var(--mallorca-red)]">viajó</em>
+                  <br className="hidden sm:block" />
+                  {" "}hasta México.
+                </h1>
+
+                <div className="mallorca-reveal mallorca-reveal-delay-2 flex max-w-sm flex-col gap-5 md:justify-self-end md:border-l md:border-white/20 md:pl-8 lg:pl-10">
+                  <p className="text-[0.95rem] leading-[1.5] text-white/82 md:text-base">
+                    Pastelería europea contemporánea, hecha cada mañana para acompañar la vida de la ciudad.
+                  </p>
+                  <Link
+                    href="/tienda"
+                    className="group mt-1 inline-flex items-center gap-4 text-white"
+                  >
+                    <span className="border-b border-white/35 pb-1 text-[0.72rem] font-bold uppercase tracking-[0.18em] transition-colors group-hover:border-[var(--mallorca-red)]">
+                      Ver la tienda
+                    </span>
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--mallorca-red)] shadow-[0_8px_20px_rgba(212,59,43,0.35)] transition-all duration-300 group-hover:scale-105 group-hover:bg-[var(--mallorca-red-dark)]">
+                      <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </span>
+                  </Link>
+                </div>
+              </div>
             </div>
-            <h1 className="mallorca-display mallorca-reveal mallorca-reveal-delay mt-6 max-w-3xl text-[clamp(3.5rem,9vw,9rem)] leading-[0.9] text-white md:leading-[0.94]">
-              Un clásico que<br /><em className="text-[var(--mallorca-red)]">viajó</em> hasta México.
-            </h1>
-            <div className="mt-8 flex flex-wrap items-end justify-between gap-8">
-              <p className="mallorca-reveal mallorca-reveal-delay-2 max-w-sm text-base leading-relaxed text-white/80 md:text-lg">
-                Pastelería europea contemporánea, hecha cada mañana para acompañar la vida de la ciudad.
-              </p>
-              <Link href="/tienda" className="group inline-flex items-center gap-3 rounded-md bg-[var(--mallorca-red)] px-6 py-4 text-sm font-bold text-white transition-colors hover:bg-[var(--mallorca-red-dark)]">
-                Ver la tienda
-                <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </Link>
+
+            <div className="flex shrink-0 items-center gap-3 pt-2 text-xs text-white/65">
+              <ArrowDown className="h-4 w-4 animate-bounce" />
+              <span className="mallorca-kicker">Descubre Mallorca México</span>
             </div>
           </div>
         </div>
-        <div className="absolute bottom-6 left-5 flex items-center gap-3 text-xs text-white/70 md:left-8">
-          <ArrowDown className="h-4 w-4 animate-bounce" />
-          <span className="mallorca-kicker">Descubre Mallorca México</span>
-        </div>
       </section>
 
+      {showFeatured ? (
       <section className="bg-[var(--mallorca-cream)] px-5 py-20 md:px-8 md:py-28">
         <div className="container mx-auto">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
-              <span className="mallorca-kicker text-[var(--mallorca-red)]">Para cada antojo</span>
+              <span className="mallorca-kicker text-[var(--mallorca-red)]">Destacados</span>
               <h2 className="mallorca-display mt-4 max-w-2xl text-5xl leading-[0.92] md:text-7xl">¿Qué se te antoja hoy?</h2>
             </div>
             <Link href="/tienda" className="editorial-link mb-1 text-sm font-bold text-[var(--mallorca-red)]">
               Ver todo <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          {isLoadingCategories ? (
-            <div className="mt-12 grid gap-4 md:grid-cols-3">
-              {[1, 2, 3].map((item) => <div key={item} className="aspect-[1.15] animate-pulse bg-black/5" />)}
+          {isLoadingFeatured ? (
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((item) => <div key={item} className="aspect-[0.78] animate-pulse bg-black/5" />)}
             </div>
           ) : (
-            <div className="mt-12 grid gap-4 md:grid-cols-3">
-              {categories?.slice(0, 3).map((category, index) => (
-                <Link key={category.id} href={`/tienda?categorySlug=${category.slug}`} className="group relative aspect-[1.15] overflow-hidden bg-[var(--mallorca-cacao)]">
-                  <img src={category.imageUrl || categoryImages[index]} alt={category.name} className="mallorca-image h-full w-full object-cover opacity-90 transition duration-500 group-hover:scale-[1.02]" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                  <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white">
-                    <div>
-                      <span className="mallorca-kicker text-white/70">Explora</span>
-                      <h3 className="mallorca-display mt-1 text-3xl md:text-4xl">{category.name}</h3>
-                    </div>
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--mallorca-red)] transition-colors group-hover:bg-[var(--mallorca-red-dark)]">
-                      <ArrowUpRight className="h-4 w-4" />
-                    </span>
-                  </div>
-                </Link>
+            <div className="mt-12 grid gap-x-5 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+              {featuredList.slice(0, 6).map((product) => (
+                <ProductCard key={product.id} product={product} />
               ))}
             </div>
           )}
         </div>
       </section>
+      ) : null}
 
+      {showSeasonal ? (
       <section className="bg-[var(--mallorca-white)] px-5 py-20 md:px-8 md:py-28">
         <div className="container mx-auto">
           <div className="grid items-center gap-12 lg:grid-cols-[0.72fr_1.28fr]">
             <div>
-              <span className="mallorca-kicker text-[var(--mallorca-red)]">Hecho cada mañana</span>
-              <h2 className="mallorca-display mt-4 text-5xl leading-[0.92] md:text-7xl">La bollería<br /><em>para empezar mejor.</em></h2>
+              <span className="mallorca-kicker text-[var(--mallorca-red)]">Temporada</span>
+              <h2 className="mallorca-display mt-4 text-5xl leading-[0.92] md:text-7xl">Lo que el horno<br /><em>saca ahora.</em></h2>
               <p className="mt-7 max-w-sm leading-relaxed text-muted-foreground">
-                Capas, mantequilla y tiempo. Ese es el secreto de lo que sale temprano de nuestros hornos.
+                {seasonalHero?.shortDescription || "Piezas de temporada, hechas cuando el calendario y el horno coinciden."}
               </p>
-              <Link href={featureProduct ? `/producto/${featureProduct.slug}` : "/tienda"} className="editorial-link mt-8 text-sm font-bold text-[var(--mallorca-red)]">
-                Descubrir el favorito <ArrowRight className="h-4 w-4" />
+              <Link href={seasonalHero ? `/producto/${seasonalHero.slug}` : "/tienda"} className="editorial-link mt-8 text-sm font-bold text-[var(--mallorca-red)]">
+                Descubrir temporada <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
             <div className="relative">
-              <div className="relative aspect-[1.25] overflow-hidden bg-[var(--mallorca-sand)]">
-                <img src={featureProduct?.imageUrl || "/images/mallorca-bolleria.jpg"} alt={featureProduct?.name || "Bollería Mallorca"} className="mallorca-image h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
-              </div>
-              <div className="absolute -bottom-5 left-5 max-w-[18rem] bg-[var(--mallorca-red)] p-5 text-white md:-left-8">
-                <span className="mallorca-kicker text-white/75">Favorito Mallorca</span>
-                <p className="mt-2 font-serif text-2xl leading-tight">{featureProduct?.name || "Croissant de mantequilla"}</p>
-              </div>
+              {isLoadingSeasonal || !seasonalHero ? (
+                <div className="aspect-[1.25] animate-pulse bg-[var(--mallorca-sand)]" />
+              ) : (
+                <>
+                  <Link href={`/producto/${seasonalHero.slug}`} className="relative block aspect-[1.25] overflow-hidden bg-[var(--mallorca-sand)]">
+                    <img src={seasonalHero.imageUrl || "/images/mallorca-bolleria.jpg"} alt={seasonalHero.name} className="mallorca-image h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
+                  </Link>
+                  <div className="absolute -bottom-5 left-5 max-w-[18rem] bg-[var(--mallorca-red)] p-5 text-white md:-left-8">
+                    <span className="mallorca-kicker text-white/75">De temporada</span>
+                    <p className="mt-2 font-serif text-2xl leading-tight">{seasonalHero.name}</p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
+          {extraSeasonal.length > 0 ? (
+            <div className="mt-16 grid gap-x-5 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+              {extraSeasonal.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
-
-      <section className="bg-[var(--mallorca-cacao)] px-5 py-20 text-[var(--mallorca-white)] md:px-8 md:py-28">
-        <div className="container mx-auto">
-          <div className="mb-10 flex items-end justify-between gap-6">
-            <div>
-              <span className="mallorca-kicker text-[var(--mallorca-red)]">Los favoritos de Mallorca</span>
-              <h2 className="mallorca-display mt-4 text-5xl leading-none md:text-6xl">Vuelven por ellos.</h2>
-            </div>
-            <Link href="/tienda" className="editorial-link hidden text-sm font-bold text-[var(--mallorca-red)] md:inline-flex">Ver catálogo <ArrowRight className="h-4 w-4" /></Link>
-          </div>
-          {isLoadingProducts ? (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {[1, 2, 3, 4].map((item) => <div key={item} className="aspect-[0.78] animate-pulse bg-white/10" />)}
-            </div>
-          ) : (
-            <div className="grid gap-x-5 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
-              {secondaryProducts.map((product) => <ProductCard key={product.id} product={product} className="[&_h3]:text-white [&_p]:text-white/55 [&_span]:text-white" />)}
-            </div>
-          )}
-          <Link href="/tienda" className="editorial-link mt-12 text-sm font-bold text-[var(--mallorca-red)] md:hidden">Ver catálogo <ArrowRight className="h-4 w-4" /></Link>
-        </div>
-      </section>
+      ) : null}
 
       <section className="bg-[var(--mallorca-cream)] px-5 py-20 md:px-8 md:py-28">
         <div className="container mx-auto grid gap-12 md:grid-cols-2 md:items-center">
@@ -186,36 +197,63 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-[var(--mallorca-white)] px-5 py-20 md:px-8 md:py-28">
+      {branches && branches.length > 0 ? (
+      <section className="bg-[var(--mallorca-cacao)] px-5 py-20 text-white md:px-8 md:py-28">
         <div className="container mx-auto">
-          <div className="mb-10 flex flex-col justify-between gap-5 md:flex-row md:items-end">
-            <div>
+          <div className="mb-12 flex flex-col gap-6 md:mb-14 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-2xl">
               <span className="mallorca-kicker text-[var(--mallorca-red)]">Hospitalidad Mallorca</span>
-              <h2 className="mallorca-display mt-4 text-5xl leading-none md:text-7xl">¿Dónde nos vemos?</h2>
+              <h2 className="mallorca-display mt-4 text-5xl leading-[0.92] md:text-7xl">¿Dónde nos vemos?</h2>
+              <p className="mt-5 max-w-md text-sm leading-relaxed text-white/70 md:text-base">
+                Pan recién horneado, algo dulce y una pausa en la ciudad.
+              </p>
             </div>
-            <Link href="/sucursales" className="editorial-link text-sm font-bold text-[var(--mallorca-red)]">Ver sucursales <ArrowRight className="h-4 w-4" /></Link>
+            <Link href="/sucursales" className="group inline-flex items-center gap-3 self-start text-white md:self-auto">
+              <span className="border-b border-white/35 pb-1 text-[0.72rem] font-bold uppercase tracking-[0.18em] transition-colors group-hover:border-[var(--mallorca-red)]">
+                Ver todas
+              </span>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--mallorca-red)] transition-transform duration-300 group-hover:scale-105 group-hover:bg-[var(--mallorca-red-dark)]">
+                <ArrowUpRight className="h-4 w-4" />
+              </span>
+            </Link>
           </div>
-          <div className="grid gap-5 md:grid-cols-2">
-            {branches?.slice(0, 2).map((branch) => (
-              <article key={branch.id} className="group overflow-hidden bg-[var(--mallorca-cream)]">
-                <div className="aspect-[1.7] overflow-hidden bg-[var(--mallorca-sand)]">
-                  {branch.imageUrl ? <img src={branch.imageUrl} alt={branch.name} className="mallorca-image h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" /> : <img src="/images/mallorca-bolleria.jpg" alt="" className="mallorca-image h-full w-full object-cover" />}
-                </div>
-                <div className="flex items-start justify-between gap-5 p-6">
-                  <div>
-                    <span className="mallorca-kicker text-[var(--mallorca-red)]">Mallorca</span>
-                    <h3 className="mt-2 font-serif text-3xl">{branch.name.replace("Mallorca ", "")}</h3>
-                    <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">{branch.address}, {branch.neighborhood}</p>
+
+          <div className="grid gap-10 md:grid-cols-2 md:gap-8 lg:gap-12">
+            {branches.slice(0, 2).map((branch) => {
+              const shortName = branch.shortName || branch.name.replace(/^Mallorca\s+/i, "");
+              return (
+                <Link
+                  key={branch.id}
+                  href={`/sucursales/${branch.slug}`}
+                  className="group block"
+                >
+                  <div className="relative aspect-[5/4] overflow-hidden bg-[var(--mallorca-sand)] md:aspect-[4/3]">
+                    <img
+                      src={branch.imageUrl || "/images/mallorca-bolleria.jpg"}
+                      alt={branch.name}
+                      className="mallorca-image h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-80 transition-opacity duration-500 group-hover:opacity-100" />
+                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 md:p-6">
+                      <div>
+                        <span className="mallorca-kicker text-white/70">{branch.neighborhood || branch.city}</span>
+                        <h3 className="mallorca-display mt-2 text-3xl leading-none md:text-4xl">{shortName}</h3>
+                      </div>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[var(--mallorca-cacao)] transition-colors duration-300 group-hover:bg-[var(--mallorca-red)] group-hover:text-white">
+                        <ArrowUpRight className="h-4 w-4" />
+                      </span>
+                    </div>
                   </div>
-                  <Link href={`/sucursales/${branch.slug}`} aria-label={`Ver ${branch.name}`} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white hover:bg-[var(--mallorca-red-dark)]">
-                    <MapPin className="h-4 w-4" />
-                  </Link>
-                </div>
-              </article>
-            ))}
+                  <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/60">
+                    {[branch.neighborhood, branch.city].filter(Boolean).join(" · ")}
+                  </p>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>
+      ) : null}
 
       <section className="bg-[var(--mallorca-red)] px-5 py-16 text-white md:px-8 md:py-20">
         <div className="container mx-auto grid gap-8 md:grid-cols-[1fr_auto] md:items-center">

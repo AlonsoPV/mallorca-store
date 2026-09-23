@@ -27,19 +27,24 @@ export function ProductCard({ product, className, showBranchAvailability = false
   const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
 
-  const activeAvailability = branchId
-    ? product.availability?.find((availability) => availability.branchId === branchId)
-    : undefined;
-  const availabilityLabel = branchId
+  const pageAvailability = showBranchAvailability ? product.availability?.[0] : undefined;
+  const activeAvailability = pageAvailability
+    ?? (branchId
+      ? product.availability?.find((availability) => availability.branchId === branchId)
+      : undefined);
+  const availabilityLabel = pageAvailability || branchId
     ? productAvailabilityCopy({
         branchName: activeAvailability?.branchName,
         available: activeAvailability?.available,
         inventory: activeAvailability?.inventory,
       })
     : null;
-  const canQuickAdd = !branchId || Boolean(activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0);
+  const canQuickAdd = Boolean(activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0)
+    || (!pageAvailability && !branchId);
   const currentPrice = activeAvailability?.price ?? product.price;
-  const currentSalePrice = activeAvailability?.salePrice ?? product.salePrice;
+  const currentSalePrice = activeAvailability
+    ? activeAvailability.salePrice
+    : product.salePrice;
 
   const createFreshCart = async (activeBranchId: number) => {
     const session = await createSession.mutateAsync({ data: { branchId: activeBranchId } });
@@ -136,9 +141,9 @@ export function ProductCard({ product, className, showBranchAvailability = false
 
         <div className="mt-auto flex items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2">
-            {!branchId ? (
+            {!branchId && !showBranchAvailability ? (
               <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-xs">Desde {formatMxn(product.salePrice ?? product.price)}</span>
-            ) : currentSalePrice ? (
+            ) : currentSalePrice != null && currentSalePrice < currentPrice ? (
               <>
                 <span className="text-xs font-medium text-primary sm:text-base">{formatMxn(currentSalePrice)}</span>
                 <span className="hidden text-sm text-muted-foreground line-through sm:inline">{formatMxn(currentPrice)}</span>

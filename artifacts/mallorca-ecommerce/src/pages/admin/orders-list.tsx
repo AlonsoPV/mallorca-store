@@ -45,10 +45,9 @@ import {
   formatOrderTime,
   formatPriceMx,
   formatRelativeShort,
-  getPrimaryNextStatus,
-  getValidNextStatuses,
-  ORDER_STATUS_ACTION_LABELS,
   ORDER_STATUS_LABELS,
+  ORDER_STATUS_PIPELINE,
+  pipelineStepForStatus,
 } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
 
@@ -319,7 +318,6 @@ export default function AdminOrdersList() {
             </AdminTableHeader>
             <AdminTableBody>
               {filteredOrders.map((order) => {
-                const primary = getPrimaryNextStatus(order.status);
                 const href = orderDetailHref(order.id, search);
                 const unpaidCash =
                   (order.paymentMethod === "CASH_ON_PICKUP" || order.paymentMethod === "CASH") &&
@@ -390,15 +388,16 @@ export default function AdminOrdersList() {
                             <DropdownMenuItem asChild>
                               <Link href={href}>Ver pedido</Link>
                             </DropdownMenuItem>
-                            {primary ? (
+                            {ORDER_STATUS_PIPELINE.filter((step) => step !== pipelineStepForStatus(order.status)).map((step) => (
                               <DropdownMenuItem
+                                key={step}
                                 disabled={updateOrder.isPending}
-                                onClick={() => handleStatusChange(order.id, primary)}
+                                onClick={() => handleStatusChange(order.id, step === "confirmed" && order.paymentStatus === "paid" ? "paid" : step)}
                               >
-                                {ORDER_STATUS_ACTION_LABELS[primary] ?? ORDER_STATUS_LABELS[primary]}
+                                {ORDER_STATUS_LABELS[step]}
                               </DropdownMenuItem>
-                            ) : null}
-                            {getValidNextStatuses(order.status).includes("cancelled") ? (
+                            ))}
+                            {order.status !== "cancelled" ? (
                               <DropdownMenuItem
                                 disabled={updateOrder.isPending}
                                 onClick={() => handleStatusChange(order.id, "cancelled")}

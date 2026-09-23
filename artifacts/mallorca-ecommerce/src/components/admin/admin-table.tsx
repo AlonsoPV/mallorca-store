@@ -18,11 +18,11 @@ export function AdminTable({
   return (
     <div
       className={cn(
-        "overflow-x-auto border border-border bg-background",
+        "w-full min-w-0 max-w-full overflow-x-auto border border-border bg-background",
         containerClassName,
       )}
     >
-      <Table className={cn("min-w-full", className)} {...props}>
+      <Table className={cn("w-max min-w-full", className)} {...props}>
         {children}
       </Table>
     </div>

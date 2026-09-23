@@ -1,7 +1,6 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { ShoppingBag, Menu, X, User, Search, MapPin, ArrowUpRight, Instagram, Linkedin, Phone, Mail, MessageCircle, BriefcaseBusiness, FileText, Globe2, ChevronUp, Info } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 import { BranchSelector } from "@/components/branch-selector";
@@ -20,6 +19,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   const [isQuickLinksOpen, setIsQuickLinksOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
+  const headerChromeRef = useRef<HTMLDivElement>(null);
   const { isSignedIn } = useAppAuth();
   const queryClient = useQueryClient();
   const { data: user } = useGetMe({ query: { enabled: !!isSignedIn, queryKey: getGetMeQueryKey() } });
@@ -68,6 +68,26 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const chrome = headerChromeRef.current;
+    if (!chrome) return;
+
+    const publishHeight = () => {
+      document.documentElement.style.setProperty(
+        "--store-header-height",
+        `${chrome.offsetHeight}px`,
+      );
+    };
+
+    publishHeight();
+    const observer = new ResizeObserver(publishHeight);
+    observer.observe(chrome);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--store-header-height");
+    };
+  }, [isHeroHeader, isLargeHeader, isScrolled]);
+
+  useEffect(() => {
     const events = new EventSource("/api/catalog/events");
     const onChange = () => {
       void queryClient.invalidateQueries({
@@ -95,6 +115,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
     <div className="min-h-[100dvh] flex flex-col overflow-x-hidden bg-background selection:bg-primary selection:text-white">
       <MiniCart />
       <header className={`${isHeroHeader ? "absolute text-white" : "sticky border-border/70 bg-background/90 text-foreground shadow-sm backdrop-blur-xl"} top-0 z-50 w-full border-b transition-all duration-300`}>
+        <div ref={headerChromeRef}>
         <div className={`container mx-auto flex min-w-0 items-center gap-2 px-4 transition-all duration-300 md:gap-3 md:px-6 ${isScrolled ? "h-14" : "h-[4.5rem]"}`}>
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-6">
             <Link href="/" className={`group flex shrink-0 items-center gap-2 ${isHeroHeader ? "text-white" : "text-foreground"}`}>
@@ -187,6 +208,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
         ) : null}
+        </div>
 
         {isMobileMenuOpen && (
           <div className="flex flex-col gap-2 border-b border-border bg-background px-5 py-4 text-foreground animate-in slide-in-from-top-2 lg:hidden">

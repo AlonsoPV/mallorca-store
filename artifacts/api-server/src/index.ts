@@ -1,3 +1,4 @@
+import { startOrderEmailWorker } from "./lib/order-emails";
 import app from "./app";
 import { logger } from "./lib/logger";
 
@@ -22,4 +23,5 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  startOrderEmailWorker();
 });

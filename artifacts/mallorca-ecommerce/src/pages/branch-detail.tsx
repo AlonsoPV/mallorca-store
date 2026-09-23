@@ -4,6 +4,7 @@ import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, MapPin, Clock, Phone, Map, ExternalLink } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
+import { formatBranchPostalLines } from "@/lib/availability-copy";
 
 export default function BranchDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -144,10 +145,11 @@ export default function BranchDetail() {
                 <p className="flex items-start gap-3 text-sm text-foreground/90">
                   <MapPin className="h-5 w-5 shrink-0 mt-0.5 text-primary" />
                   <span>
-                    {branch.address}<br/>
-                    {branch.neighborhood}<br/>
-                    {branch.borough && <>{branch.borough}<br/></>}
-                    {branch.city}, {branch.state} {branch.postalCode}
+                    {formatBranchPostalLines(branch).map((line) => (
+                      <span key={line}>
+                        {line}<br />
+                      </span>
+                    ))}
                   </span>
                 </p>
                 <div className="mt-4 pl-8">
@@ -169,6 +171,11 @@ export default function BranchDetail() {
                   <Phone className="h-4 w-4 shrink-0 text-primary" />
                   <a href={`tel:${branch.phone}`} className="hover:text-primary">{branch.phone}</a>
                 </p>
+                {branch.email ? (
+                  <p className="flex items-center gap-3 text-sm text-foreground/90 mb-2">
+                    <a href={`mailto:${branch.email}`} className="hover:text-primary">{branch.email}</a>
+                  </p>
+                ) : null}
                 {whatsappHref && (
                   <p className="flex items-center gap-3 text-sm text-foreground/90">
                     <span className="w-4 flex justify-center text-primary font-bold text-lg leading-none shrink-0">W</span>

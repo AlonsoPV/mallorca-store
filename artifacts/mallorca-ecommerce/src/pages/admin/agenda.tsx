@@ -444,63 +444,73 @@ function AgendaOrderRow({
   const primary = closed ? null : getPrimaryNextStatus(order.status);
   const next = closed ? [] : getValidNextStatuses(order.status);
   const statusLabel = ORDER_STATUS_LABELS[order.status as OrderStatus] ?? order.status;
+  const branch = order.branchName ?? `Sucursal ${order.branchId}`;
+  const collectCash =
+    order.fulfillmentMethod === "pickup" &&
+    (order.paymentStatus === "unpaid" || order.paymentStatus === "processing");
+  const secondary = next.filter((status) => status !== primary);
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 border-b border-border px-3 py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
+        "grid grid-cols-1 gap-2 border-b border-border px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4",
         closed && "bg-muted/20",
       )}
     >
       <div className="min-w-0">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <Link href={`/admin/pedidos/${order.id}`} className="font-medium text-primary hover:underline">
+        <div className="flex min-w-0 items-baseline gap-x-2">
+          <Link
+            href={`/admin/pedidos/${order.id}`}
+            className="shrink-0 font-medium text-primary hover:underline"
+          >
             #{order.orderNumber}
           </Link>
-          <span className="text-sm text-muted-foreground">{fulfillmentLabel(order.fulfillmentMethod)}</span>
-          <span className="text-sm">{order.customerName}</span>
-          {showBranch ? (
-            <span className="text-xs text-muted-foreground">
-              {order.branchName ?? `Sucursal ${order.branchId}`}
-            </span>
-          ) : null}
+          <span className="truncate text-sm font-medium">{order.customerName}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {fulfillmentLabel(order.fulfillmentMethod)}
+          </span>
         </div>
-        <p className="truncate text-xs text-muted-foreground">{itemsCaption(order)}</p>
-        {order.fulfillmentMethod === "pickup" &&
-        (order.paymentStatus === "unpaid" || order.paymentStatus === "processing") ? (
-          <p className="text-xs font-medium text-amber-800">
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {showBranch ? `${branch} · ` : ""}
+          {itemsCaption(order)}
+        </p>
+        {collectCash ? (
+          <p className="mt-0.5 text-xs font-medium text-amber-800">
             Efectivo · {formatPriceMx(pendingPaymentAmount(order.total, order.amountPaid))} por cobrar
           </p>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge className={cn("rounded-none font-medium shadow-none", statusBadgeClass(order.status))}>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Badge
+          className={cn(
+            "h-8 shrink-0 rounded-none px-2 font-medium shadow-none",
+            statusBadgeClass(order.status),
+          )}
+        >
           {statusLabel}
         </Badge>
         {primary && onAdvance ? (
           <Button
             size="sm"
-            className="h-8 rounded-none"
+            className="h-8 shrink-0 rounded-none px-2.5"
             disabled={pending}
             onClick={() => onAdvance(order.id, primary)}
           >
             {AGENDA_ACTION_LABELS[primary] ?? ORDER_STATUS_LABELS[primary]}
           </Button>
         ) : null}
-        {next
-          .filter((status) => status !== primary)
-          .map((status) => (
-            <Button
-              key={status}
-              size="sm"
-              variant="outline"
-              className="h-8 rounded-none"
-              disabled={pending}
-              onClick={() => onAdvance?.(order.id, status)}
-            >
-              {AGENDA_ACTION_LABELS[status] ?? ORDER_STATUS_LABELS[status]}
-            </Button>
-          ))}
+        {secondary.map((status) => (
+          <Button
+            key={status}
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 rounded-none px-2.5"
+            disabled={pending}
+            onClick={() => onAdvance?.(order.id, status)}
+          >
+            {AGENDA_ACTION_LABELS[status] ?? ORDER_STATUS_LABELS[status]}
+          </Button>
+        ))}
       </div>
     </div>
   );

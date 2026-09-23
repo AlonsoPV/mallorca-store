@@ -1,7 +1,9 @@
+import { ProductWorkspaceNav } from "@/components/admin/product-workspace-nav";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  getListAdminProductsQueryKey,
   getGetInventoryMatrixQueryKey,
   getListAdminInventoryQueryKey,
   useGetInventoryMatrix,
@@ -84,7 +86,7 @@ function buildInventorySearch(filters: {
   state: string;
   categoryId: string;
 }) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ tab: "inventario" });
   if (filters.searchText.trim()) params.set("search", filters.searchText.trim());
   if (filters.branchId !== "all") params.set("branchId", filters.branchId);
   if (filters.state !== "all") params.set("state", filters.state);
@@ -149,7 +151,7 @@ export default function AdminInventory() {
     });
     const current = urlSearch.startsWith("?") ? urlSearch : urlSearch ? `?${urlSearch}` : "";
     if (next !== current) {
-      setLocation(`/admin/inventario${next}`, { replace: true });
+      setLocation(`/admin/productos${next}`, { replace: true });
     }
   }, [debouncedSearch, branchId, state, categoryId, setLocation, urlSearch]);
 
@@ -190,7 +192,8 @@ export default function AdminInventory() {
 
   const change = async (row: LooseInventoryRow, value: number, delta?: number) => {
     const previous = row.branchProduct.inventory ?? 0;
-    const next = delta === undefined ? Math.max(0, value) : Math.max(0, previous + delta);
+    const next = delta === undefined ? value : previous + delta;
+    if (!Number.isSafeInteger(next) || next < 0 || update.isPending) return;
     try {
       await update.mutateAsync({
         data: {
@@ -205,6 +208,7 @@ export default function AdminInventory() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListAdminInventoryQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetInventoryMatrixQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() }),
       ]);
       toast({
         title: `${row.product.name} · ${row.branch.name}`,
@@ -215,7 +219,9 @@ export default function AdminInventory() {
     }
   };
 
-  const matrixRows = (matrixQuery.data ?? []) as unknown as LooseInventoryRow[];
+  const matchingRows = new Set(((rows.data ?? []) as LooseInventoryRow[]).map(row => `${row.product.id}-${row.branch.id}`));
+  const matrixRows = ((matrixQuery.data ?? []) as unknown as LooseInventoryRow[])
+    .filter(row => matchingRows.has(`${row.product.id}-${row.branch.id}`));
   const listRows = (rows.data as LooseInventoryRow[] | undefined) ?? [];
   const attentionRows = (attention.data as LooseInventoryRow[] | undefined) ?? listRows;
   const attentionCounts = useMemo(() => {
@@ -229,17 +235,18 @@ export default function AdminInventory() {
     return counts;
   }, [attentionRows]);
 
-  const matrixFailed = matrixQuery.isError || matrixTimedOut;
+  const matrixFailed = matrixQuery.isError || rows.isError || matrixTimedOut;
   const retryMatrix = () => {
     setMatrixTimedOut(false);
     void matrixQuery.refetch();
+    void rows.refetch();
   };
 
   return (
     <AdminLayout>
       <AdminPageShell>
         <AdminPageHeader
-          title="Inventario"
+          title="Productos e inventario"
           description="Existencias independientes por sucursal y producto."
           meta={
             <>
@@ -286,6 +293,7 @@ export default function AdminInventory() {
             </>
           }
         />
+        <ProductWorkspaceNav inventory />
 
         <div className="sticky top-0 z-10 -mx-6 border-b border-border bg-background/95 px-6 py-3 backdrop-blur md:-mx-10 md:px-10">
           <AdminFilterBar>
@@ -336,7 +344,7 @@ export default function AdminInventory() {
 
         {matrix ? (
           <>
-            {matrixQuery.isLoading && !matrixTimedOut ? <AdminLoading label="Cargando matriz…" /> : null}
+            {(matrixQuery.isLoading || rows.isLoading) && !matrixTimedOut ? <AdminLoading label="Cargando matriz…" /> : null}
             {matrixFailed ? (
               <AdminError
                 title="No se pudo cargar la matriz"
@@ -401,7 +409,11 @@ export default function AdminInventory() {
                     const status = rowStatus(row);
                     return (
                       <AdminTableRow key={`${row.product.id}-${row.branch.id}`}>
-                        <AdminTableCell className="font-medium">{row.product.name}</AdminTableCell>
+                        <AdminTableCell className="font-medium">
+                          <Link href={`/admin/productos/${row.product.id}`} className="hover:underline" title="Editar producto">
+                            {row.product.name}
+                          </Link>
+                        </AdminTableCell>
                         <AdminTableCell className="font-mono text-xs">{row.product.sku}</AdminTableCell>
                         <AdminTableCell>{row.branch.name}</AdminTableCell>
                         <AdminTableCell>
@@ -422,9 +434,15 @@ export default function AdminInventory() {
                               type="number"
                               min="0"
                               defaultValue={stock}
+                              disabled={update.isPending}
+                              aria-label={`Existencias de ${row.product.name} en ${row.branch.name}`}
                               onBlur={(event) => {
                                 const next = Number(event.target.value);
-                                if (!Number.isFinite(next) || next === stock) return;
+                                if (!event.target.value.trim() || !Number.isSafeInteger(next) || next < 0) {
+                                  event.target.value = String(stock);
+                                  return;
+                                }
+                                if (next === stock) return;
                                 void change(row, next);
                               }}
                             />
@@ -579,7 +597,11 @@ function InventoryMatrix({
                       disabled={pending}
                       onBlur={(event) => {
                         const next = Number(event.target.value);
-                        if (!Number.isFinite(next) || next === stock) return;
+                        if (!event.target.value.trim() || !Number.isSafeInteger(next) || next < 0) {
+                                  event.target.value = String(stock);
+                                  return;
+                                }
+                                if (next === stock) return;
                         onChange(row, next);
                       }}
                     />

@@ -2,6 +2,35 @@ export function formatMxn(price: number) {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(price);
 }
 
+/** Structured branch fields are the source of truth; `address` is only a fallback. */
+export function formatBranchPostalLines(branch: {
+  address?: string | null;
+  street?: string | null;
+  externalNumber?: string | null;
+  internalNumber?: string | null;
+  neighborhood?: string | null;
+  borough?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+}): string[] {
+  const line1 = [
+    branch.street,
+    branch.externalNumber,
+    branch.internalNumber ? `Int. ${branch.internalNumber}` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const lines = [
+    line1 || null,
+    branch.neighborhood || null,
+    branch.borough || null,
+    [branch.city, [branch.state, branch.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ") || null,
+  ].filter((line): line is string => Boolean(line));
+  if (lines.length) return lines;
+  return branch.address ? [branch.address] : [];
+}
+
 export function productAvailabilityCopy(input: {
   branchName?: string | null;
   available?: boolean;

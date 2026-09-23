@@ -11,7 +11,8 @@ export type OrderAuditAction =
   | "LINES_CHANGED"
   | "SCHEDULE_CHANGED"
   | "DUPLICATED"
-  | "STATUS_CHANGED";
+  | "STATUS_CHANGED"
+  | "NOTE_UPDATED";
 
 export async function writeOrderAudit(params: {
   orderId: string;

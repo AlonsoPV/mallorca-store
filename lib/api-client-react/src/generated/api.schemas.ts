@@ -1875,6 +1875,7 @@ branchSlug?: string;
 categorySlug?: string;
 search?: string;
 featured?: boolean;
+seasonal?: boolean;
 scheduledStart?: string;
 includeUnavailable?: boolean;
 };

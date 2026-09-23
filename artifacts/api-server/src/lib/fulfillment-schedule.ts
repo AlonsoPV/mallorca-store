@@ -1,4 +1,5 @@
 import type { branchesTable } from "@workspace/db";
+import { WEEKDAY_KEYS, weekdayFromHour } from "./branch-legacy.ts";
 
 export type BranchHoursRow = typeof branchesTable.$inferSelect;
 
@@ -11,6 +12,16 @@ export function mexicoDate(date: Date): string {
   }).formatToParts(date);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
+}
+
+/** Accepts `9:00`, `09:00`, and `09:00:00` as Mexico local time. */
+export function parseMexicoDateTime(date: string, time: string): number {
+  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(time ?? "").trim());
+  if (!match) return Number.NaN;
+  const hours = match[1].padStart(2, "0");
+  const minutes = match[2];
+  const seconds = match[3] ?? "00";
+  return new Date(`${date}T${hours}:${minutes}:${seconds}-06:00`).getTime();
 }
 
 export type FulfillmentSchedule = {
@@ -31,16 +42,19 @@ export function fulfillmentSchedule(
   const day = new Date(`${date}T12:00:00Z`)
     .toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Mexico_City" })
     .toLowerCase();
+  const weekday = WEEKDAY_KEYS.indexOf(day as (typeof WEEKDAY_KEYS)[number]);
   const hours =
     branch.hours.find((entry) => entry.date === date) ??
+    branch.hours.find((entry) => weekdayFromHour(entry) === weekday) ??
     branch.hours.find(
       (entry) => entry.day.toLowerCase() === day || entry.label.toLowerCase() === day,
     );
   if (!hours || hours.closed) return undefined;
 
   const intervalMs = branch.pickupSlotIntervalMinutes * 60_000;
-  const open = new Date(`${date}T${hours.open}:00-06:00`).getTime();
-  const close = new Date(`${date}T${hours.close}:00-06:00`).getTime();
+  const open = parseMexicoDateTime(date, hours.open);
+  const close = parseMexicoDateTime(date, hours.close);
+  if (!Number.isFinite(open) || !Number.isFinite(close) || close <= open) return undefined;
   const leadMinutes =
     Math.max(cartLeadMinutes, branch.preparationTimeMinutes) +
     (method === "delivery" ? branch.deliveryTimeMinutes : 0);

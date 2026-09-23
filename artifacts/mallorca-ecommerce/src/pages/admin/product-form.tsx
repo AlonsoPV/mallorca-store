@@ -375,6 +375,7 @@ export default function AdminProductForm() {
   const initialized = useRef(false);
   useEffect(() => {
     if (isEditing && productDetail && !initialized.current) {
+      if (!productDetail.categories?.length && !categories) return;
       setBranchConfigurations(Object.fromEntries((productDetail.availability || []).map((availability) => [availability.branchId, {
         available: availability.available,
         inventory: availability.physicalStock ?? availability.inventory,
@@ -394,7 +395,7 @@ export default function AdminProductForm() {
         shortDescription: productDetail.shortDescription,
         description: productDetail.description,
         price: productDetail.price,
-        salePrice: productDetail.salePrice || null,
+        salePrice: productDetail.salePrice ?? null,
         categoryId: categories?.find(c => c.slug === productDetail.categorySlug)?.id || 0,
         imageUrl: productDetail.imageUrl || "",
         gallery: productDetail.gallery || [],
@@ -598,7 +599,7 @@ export default function AdminProductForm() {
     const payload = {
       ...data,
       imageUrl: data.imageUrl || null,
-      salePrice: data.salePrice || null,
+      salePrice: data.salePrice ?? null,
       categoryId: primaryCategoryId ?? data.categoryId,
       categoryIds: categoryIds.length ? categoryIds : [primaryCategoryId ?? data.categoryId],
       primaryCategoryId: primaryCategoryId ?? data.categoryId,
@@ -689,58 +690,65 @@ export default function AdminProductForm() {
 
   return (
     <AdminLayout>
-      <div className="flex-1 overflow-y-auto bg-background dark:bg-background pb-32">
+      <div className="flex-1 overflow-y-auto bg-background dark:bg-background pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] sm:pb-32">
         <Form {...form}>
           <form onSubmit={form.handleSubmit((data) => preSubmit(data))} className="space-y-0">
 
-            <div className="sticky top-0 z-10 border-b border-border bg-background px-6 py-4 md:px-10">
-              <div className="mx-auto flex max-w-5xl flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
+            <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3 sm:px-6 sm:py-4 md:px-10">
+              <div className="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+                <div className="flex min-w-0 items-start gap-2 sm:gap-3">
                   <Button variant="ghost" size="icon" asChild className="mt-0.5 shrink-0 rounded-none">
                     <Link href={listHref} aria-label="Volver a productos">
                       <ArrowLeft className="h-5 w-5" />
                     </Link>
                   </Button>
-                  <div className="min-w-0">
-                    <h1 className="font-serif text-3xl tracking-tight text-foreground">
+                  <div className="min-w-0 flex-1">
+                    <h1 className="truncate font-serif text-xl tracking-tight text-foreground sm:text-2xl md:text-3xl">
                       {isEditing ? `Editar: ${productDetail?.name || ""}` : "Alta rápida de producto"}
                     </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
                       {isEditing
                         ? "Básico siempre visible. Operación (sucursales) abajo. Comercial y avanzado opcionales."
                         : "Nombre, categoría, precio, sucursales e imagen. Lo demás es opcional."}
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 pl-10 sm:pl-11 md:pl-0 md:justify-end md:pt-1">
                   {isEditing ? (
-                    <Button asChild type="button" variant="outline" className="rounded-none">
+                    <Button asChild type="button" variant="outline" size="sm" className="rounded-none sm:h-10 sm:px-4">
                       <Link href={`/admin/inventario?search=${encodeURIComponent(productDetail?.sku || productDetail?.name || "")}`}>
-                        <Boxes className="mr-2 h-4 w-4" />
-                        Ver inventario
+                        <Boxes className="mr-1.5 h-4 w-4 sm:mr-2" />
+                        <span className="md:hidden">Inventario</span>
+                        <span className="hidden md:inline">Ver inventario</span>
                       </Link>
                     </Button>
                   ) : null}
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-none"
+                    size="sm"
+                    className="rounded-none sm:h-10 sm:px-4"
                     onClick={() => setShowExtra((v) => !v)}
                   >
-                    {showExtra
-                      ? "Ocultar comercial / avanzado"
-                      : isEditing
-                        ? "Mostrar comercial / avanzado"
-                        : "Configuración adicional"}
+                    <span className="md:hidden">
+                      {showExtra ? "Ocultar avanzado" : "Más opciones"}
+                    </span>
+                    <span className="hidden md:inline">
+                      {showExtra
+                        ? "Ocultar comercial / avanzado"
+                        : isEditing
+                          ? "Mostrar comercial / avanzado"
+                          : "Configuración adicional"}
+                    </span>
                   </Button>
                 </div>
               </div>
             </div>
 
-            <div className="mx-auto max-w-5xl space-y-8 p-6 md:p-10">
-              <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-                <div className="space-y-8 lg:col-span-2">
-                  <div className="space-y-6 border border-border bg-card p-6 md:p-8">
+            <div className="mx-auto max-w-5xl space-y-6 p-4 sm:space-y-8 sm:p-6 md:p-10">
+              <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
+                <div className="order-1 space-y-6 sm:space-y-8 lg:col-span-2">
+                  <div className="space-y-5 border border-border bg-card p-4 sm:space-y-6 sm:p-6 md:p-8">
                     <h2 className="border-b border-border pb-3 font-serif text-lg font-semibold text-foreground">
                       Básico
                     </h2>
@@ -753,7 +761,7 @@ export default function AdminProductForm() {
                       </FormItem>
                     )} />
 
-                    <div className={`grid grid-cols-2 gap-6 ${showExtra ? "" : "hidden"}`}>
+                    <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 ${showExtra ? "" : "hidden"}`}>
                       <FormField control={form.control} name="sku" render={({ field }) => (
                         <FormItem>
                           <FormLabel>SKU</FormLabel>
@@ -772,7 +780,7 @@ export default function AdminProductForm() {
                   </div>
 
                   {/* Pricing */}
-                  <div className="space-y-6 border border-border bg-card p-6 md:p-8">
+                  <div className="space-y-5 border border-border bg-card p-4 sm:space-y-6 sm:p-6 md:p-8">
                     <h2 className="border-b border-border pb-3 font-serif text-lg font-semibold text-foreground">Precio</h2>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
@@ -809,7 +817,7 @@ export default function AdminProductForm() {
                   </div>
 
                   {/* Content */}
-                  <div className="bg-white dark:bg-card p-8 border border-border dark:border-border space-y-6">
+                  <div className="space-y-5 border border-border bg-white p-4 dark:bg-card dark:border-border sm:space-y-6 sm:p-6 md:p-8">
                     <h2 className="text-lg font-semibold font-serif text-foreground dark:text-foreground border-b border-border dark:border-border pb-3">Contenido</h2>
 
                     <FormField control={form.control} name="shortDescription" render={({ field }) => (
@@ -920,9 +928,9 @@ export default function AdminProductForm() {
                   </div>
 
                   {/* Promotions */}
-                  <div className={`bg-white dark:bg-card p-8 border border-border dark:border-border space-y-6 ${showExtra ? "" : "hidden"}`}>
-                    <div className="flex items-start justify-between gap-4 border-b border-border dark:border-border pb-3">
-                      <div>
+                  <div className={`space-y-5 border border-border bg-white p-4 dark:bg-card dark:border-border sm:space-y-6 sm:p-6 md:p-8 ${showExtra ? "" : "hidden"}`}>
+                    <div className="flex flex-col gap-3 border-b border-border pb-3 dark:border-border sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
                         <h2 className="text-lg font-semibold font-serif text-foreground dark:text-foreground">Promociones programadas</h2>
                         <p className="mt-1 text-xs text-muted-foreground">El precio final se calcula en el servidor y cambia automáticamente según el horario.</p>
                       </div>
@@ -1064,9 +1072,9 @@ export default function AdminProductForm() {
                     )}
                   </div>
 
-                  <div className={`bg-white dark:bg-card p-8 border border-border dark:border-border space-y-4 ${showExtra || showCrossSell ? "" : "hidden"}`}>
-                    <div className="flex items-start justify-between gap-4 border-b border-border dark:border-border pb-3">
-                      <div>
+                  <div className={`space-y-4 border border-border bg-white p-4 dark:bg-card dark:border-border sm:p-6 md:p-8 ${showExtra || showCrossSell ? "" : "hidden"}`}>
+                    <div className="flex flex-col gap-3 border-b border-border pb-3 dark:border-border sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="min-w-0">
                         <h2 className="text-lg font-semibold font-serif text-foreground dark:text-foreground">Productos recomendados</h2>
                         <p className="mt-1 text-xs text-muted-foreground">Cross-sell manual para ficha, carrito y checkout.</p>
                       </div>
@@ -1094,13 +1102,13 @@ export default function AdminProductForm() {
 
                   {/* Branches / Operación */}
                   <div className="border border-border bg-card shadow-sm">
-                    <div className="flex items-center gap-2 border-b border-border bg-muted/30 p-6">
-                      <Store className="h-5 w-5 text-primary" />
-                      <div>
+                    <div className="flex items-center gap-2 border-b border-border bg-muted/30 p-4 sm:p-6">
+                      <Store className="h-5 w-5 shrink-0 text-primary" />
+                      <div className="min-w-0">
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           Operación
                         </p>
-                        <h2 className="font-serif text-lg font-semibold text-foreground">
+                        <h2 className="font-serif text-base font-semibold text-foreground sm:text-lg">
                           Disponibilidad por Sucursal
                         </h2>
                       </div>
@@ -1111,16 +1119,16 @@ export default function AdminProductForm() {
                         const config = branchConfigurations[branch.id] || {};
                         const setConfig = (key: string, value: any) => setBranchConfigurations(prev => ({ ...prev, [branch.id]: { ...prev[branch.id], [key]: value } }));
                         return (
-                          <div key={branch.id} className={`p-6 transition-colors ${config.available ? 'bg-white dark:bg-card' : 'bg-muted/30 dark:bg-muted/10'}`}>
-                            <div className="flex items-center justify-between mb-4">
-                              <div className="font-semibold text-base text-foreground dark:text-foreground">{branch.name}</div>
-                              <label className="flex gap-2 items-center text-sm font-medium cursor-pointer">
+                          <div key={branch.id} className={`p-4 transition-colors sm:p-6 ${config.available ? 'bg-white dark:bg-card' : 'bg-muted/30 dark:bg-muted/10'}`}>
+                            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0 font-semibold text-base text-foreground dark:text-foreground">{branch.name}</div>
+                              <label className="flex shrink-0 gap-2 items-center text-sm font-medium cursor-pointer">
                                 <Checkbox checked={config.available ?? false} onCheckedChange={v => setConfig("available", !!v)} className="data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
                                 Publicar aquí
                               </label>
                             </div>
 
-                            <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 items-end mt-4 transition-opacity ${config.available ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                            <div className={`mt-4 grid grid-cols-1 gap-3 transition-opacity items-end sm:grid-cols-2 sm:gap-4 ${showExtra ? "lg:grid-cols-3 xl:grid-cols-4" : ""} ${config.available ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                               <label className="text-sm font-medium text-muted-foreground">Stock<Input type="number" min="0" value={config.inventory ?? 0} onChange={e => setConfig("inventory", Number(e.target.value))} className="mt-1 rounded-none border-border dark:border-border bg-white" disabled={!config.available}/></label>
                               <label className={`text-sm font-medium text-muted-foreground ${showExtra ? "" : "hidden"}`}>Stock Mínimo<Input type="number" min="0" value={config.minStock ?? 0} onChange={e => setConfig("minStock", Number(e.target.value))} className="mt-1 rounded-none border-border dark:border-border bg-white" disabled={!config.available}/></label>
                               <label className={`text-sm font-medium text-muted-foreground ${showExtra ? "" : "hidden"}`}>Stock crítico<Input type="number" min="0" value={config.criticalStock ?? ""} onChange={e => setConfig("criticalStock", e.target.value === "" ? null : Number(e.target.value))} className="mt-1 rounded-none border-border dark:border-border bg-white" disabled={!config.available} placeholder="Opcional"/></label>
@@ -1132,7 +1140,7 @@ export default function AdminProductForm() {
                               <label className={`text-sm font-medium text-muted-foreground ${showExtra ? "" : "hidden"}`}>Prep. (min)<Input type="number" min="0" value={config.preparationTimeMinutes ?? branch.preparationTimeMinutes} onChange={e => setConfig("preparationTimeMinutes", Number(e.target.value))} className="mt-1 rounded-none border-border dark:border-border bg-white" disabled={!config.available}/></label>
                             </div>
 
-                            <div className={`flex flex-wrap gap-6 mt-4 pt-4 border-t border-dashed border-border dark:border-border transition-opacity ${showExtra && config.available ? 'opacity-100' : showExtra ? 'opacity-40 pointer-events-none' : 'hidden'}`}>
+                            <div className={`mt-4 flex flex-col gap-3 border-t border-dashed border-border pt-4 transition-opacity dark:border-border sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-3 ${showExtra && config.available ? 'opacity-100' : showExtra ? 'opacity-40 pointer-events-none' : 'hidden'}`}>
                               <label className="flex gap-2 items-center text-sm cursor-pointer text-foreground dark:text-foreground font-medium">
                                 <Checkbox checked={config.pickupAvailable ?? branch.pickupAvailable} onCheckedChange={v => setConfig("pickupAvailable", !!v)} disabled={!config.available} /> Pick-up
                               </label>
@@ -1147,7 +1155,7 @@ export default function AdminProductForm() {
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  className="rounded-none"
+                                  className="w-full rounded-none sm:w-auto"
                                   onClick={() => setAlertBranchId(branch.id)}
                                 >
                                   Generar alerta
@@ -1176,8 +1184,8 @@ export default function AdminProductForm() {
                 </div>
 
                 {/* Sidebar Column */}
-                <div className="space-y-8">
-                  <div className="bg-white dark:bg-card p-6 border border-border dark:border-border space-y-6">
+                <div className="order-2 space-y-6 sm:space-y-8 lg:order-none">
+                  <div className="space-y-5 border border-border bg-white p-4 dark:bg-card dark:border-border sm:space-y-6 sm:p-6">
                     <h2 className="text-lg font-semibold font-serif text-foreground dark:text-foreground border-b border-border dark:border-border pb-3">Publicación</h2>
 
                     <FormField control={form.control} name="status" render={({ field }) => (
@@ -1226,7 +1234,7 @@ export default function AdminProductForm() {
                     )} />
                   </div>
 
-                  <div className={`bg-white dark:bg-card p-6 border border-border dark:border-border space-y-4 ${showExtra ? "" : "hidden"}`}>
+                  <div className={`space-y-4 border border-border bg-white p-4 dark:bg-card dark:border-border sm:p-6 ${showExtra ? "" : "hidden"}`}>
                     <h2 className="text-lg font-semibold font-serif text-foreground dark:text-foreground border-b border-border dark:border-border pb-3">Atributos Especiales</h2>
 
                     <div className="flex flex-col gap-3 pt-2">
@@ -1235,7 +1243,7 @@ export default function AdminProductForm() {
                           <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"/></FormControl>
                           <div className="space-y-1 leading-none">
                             <FormLabel className="cursor-pointer font-semibold text-foreground dark:text-foreground">Destacado</FormLabel>
-                            <p className="text-xs text-muted-foreground mt-1">Aparece en inicio</p>
+                            <p className="text-xs text-muted-foreground mt-1">Se muestra en la sección de destacados del inicio. Si no hay ninguno, esa sección se oculta.</p>
                           </div>
                         </FormItem>
                       )} />
@@ -1245,7 +1253,7 @@ export default function AdminProductForm() {
                           <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"/></FormControl>
                           <div className="space-y-1 leading-none">
                             <FormLabel className="cursor-pointer font-semibold text-foreground dark:text-foreground">Temporada</FormLabel>
-                            <p className="text-xs text-muted-foreground mt-1">Colecciones especiales</p>
+                            <p className="text-xs text-muted-foreground mt-1">Se muestra en la sección de temporada del inicio. Si no hay ninguno, esa sección se oculta.</p>
                           </div>
                         </FormItem>
                       )} />
@@ -1257,36 +1265,46 @@ export default function AdminProductForm() {
             </div>
 
             {/* Sticky Action Area */}
-            <div className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-between border-t border-border bg-background px-6 py-4 md:left-64 md:px-8">
-              <div className="hidden text-sm font-medium text-muted-foreground sm:block">
-                {!isEditing && initializedDraft.current && (
-                  <span className="flex items-center gap-1.5">
-                    <Save className="h-4 w-4 text-emerald-600" /> Borrador local guardado
-                  </span>
-                )}
-              </div>
-              <div className="flex w-full flex-wrap justify-end gap-3 sm:w-auto">
-                <Button variant="outline" type="button" asChild className="h-11 rounded-none px-6">
-                  <Link href={listHref}>Descartar</Link>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isSaving}
-                  className="h-11 rounded-none px-6"
-                  onClick={() => form.handleSubmit((data) => preSubmit(data, "draft"))()}
-                >
-                  Guardar borrador
-                </Button>
-                <Button
-                  type="button"
-                  disabled={isSaving}
-                  className="h-11 rounded-none px-8 font-medium"
-                  onClick={() => form.handleSubmit((data) => preSubmit(data, "active"))()}
-                >
-                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  {isSaving ? "Guardando..." : isEditing ? "Guardar cambios" : "Publicar"}
-                </Button>
+            <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 px-3 py-3 backdrop-blur-sm supports-[backdrop-filter]:bg-background/90 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4 md:left-64 md:px-8">
+              <div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <div className="hidden text-sm font-medium text-muted-foreground sm:block">
+                  {!isEditing && initializedDraft.current && (
+                    <span className="flex items-center gap-1.5">
+                      <Save className="h-4 w-4 text-emerald-600" /> Borrador local guardado
+                    </span>
+                  )}
+                </div>
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end sm:gap-3">
+                  <Button variant="outline" type="button" asChild className="h-10 rounded-none px-3 sm:h-11 sm:px-6">
+                    <Link href={listHref}>Descartar</Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSaving}
+                    aria-label="Guardar borrador"
+                    className="h-10 rounded-none px-3 sm:h-11 sm:px-6"
+                    onClick={() => form.handleSubmit((data) => preSubmit(data, "draft"))()}
+                  >
+                    <span className="sm:hidden" aria-hidden="true">Borrador</span>
+                    <span className="hidden sm:inline">Guardar borrador</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isSaving}
+                    aria-label={isSaving ? "Guardando..." : isEditing ? "Guardar cambios" : "Publicar"}
+                    className="col-span-2 h-10 rounded-none px-4 font-medium sm:col-span-1 sm:h-11 sm:px-8"
+                    onClick={() => form.handleSubmit((data) => preSubmit(data, "active"))()}
+                  >
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {isSaving ? "Guardando..." : isEditing ? (
+                      <>
+                        <span className="sm:hidden" aria-hidden="true">Guardar</span>
+                        <span className="hidden sm:inline">Guardar cambios</span>
+                      </>
+                    ) : "Publicar"}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -1304,7 +1322,7 @@ export default function AdminProductForm() {
           <div className="p-6 space-y-4">
             {pendingSubmitData && (
               <div className="space-y-4">
-                <div className="grid grid-cols-[100px_1fr] gap-x-2 gap-y-3 text-sm">
+                <div className="grid grid-cols-1 gap-x-2 gap-y-3 text-sm sm:grid-cols-[100px_1fr]">
                   <span className="text-muted-foreground">Producto:</span>
                   <span className="font-semibold text-foreground dark:text-foreground">{pendingSubmitData.name}</span>
 
@@ -1317,10 +1335,10 @@ export default function AdminProductForm() {
                   </span>
 
                   <span className="text-muted-foreground">Precio Público:</span>
-                  <span className="font-semibold text-foreground dark:text-foreground text-base">${pendingSubmitData.salePrice || pendingSubmitData.price} MXN</span>
+                  <span className="font-semibold text-foreground dark:text-foreground text-base">${pendingSubmitData.salePrice ?? pendingSubmitData.price} MXN</span>
 
-                  <span className="text-muted-foreground pt-3 border-t border-border dark:border-border">Sucursales:</span>
-                  <span className="pt-3 border-t border-border dark:border-border font-medium text-sm text-foreground dark:text-foreground">
+                  <span className="text-muted-foreground pt-3 border-t border-border dark:border-border sm:pt-3">Sucursales:</span>
+                  <span className="pt-0 font-medium text-sm text-foreground dark:text-foreground sm:border-t sm:border-border sm:pt-3 dark:sm:border-border">
                     {Object.entries(branchConfigurations)
                       .filter(([_, config]) => config.available)
                       .map(([branchId]) => branches?.find(b => b.id === Number(branchId))?.name)

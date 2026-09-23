@@ -1,3 +1,4 @@
+import AdminRoles from "@/pages/admin/roles";
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ClerkProvider } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
@@ -7,6 +8,7 @@ import {
   Route,
   Switch,
   useLocation,
+  useSearch,
   Router as WouterRouter,
   Redirect
 } from 'wouter';
@@ -35,7 +37,6 @@ import AdminOrdersList from '@/pages/admin/orders-list';
 import AdminOrderDetail from '@/pages/admin/order-detail';
 import AdminOrderNew from '@/pages/admin/order-new';
 import AdminAgenda from '@/pages/admin/agenda';
-import AdminInventory from '@/pages/admin/inventory';
 import AdminImport from '@/pages/admin/import';
 import AdminBranches from '@/pages/admin/branches';
 import AdminBranchForm from '@/pages/admin/branch-form';
@@ -160,7 +161,7 @@ function AccountRedirect() {
         <Account />
       </AuthShow>
       <AuthShow when="signed-out">
-        <Redirect to="/" />
+        <Redirect to="/sign-in" />
       </AuthShow>
     </>
   );
@@ -174,6 +175,32 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   }, [location]);
 
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
+}
+
+function productWorkspaceHref(search: string) {
+  const params = new URLSearchParams(search);
+  params.delete("tab");
+  const query = params.get("search");
+  if (query && !params.has("q")) params.set("q", query);
+  params.delete("search");
+  const views: Record<string, string> = { LOW_STOCK: "low", CRITICAL_STOCK: "critical", OUT_OF_STOCK: "out", NORMAL: "normal" };
+  const state = params.get("state");
+  if (state && views[state]) params.set("view", views[state]);
+  params.delete("state");
+  return `/admin/productos${params.size ? `?${params}` : ""}`;
+}
+
+function AdminProductWorkspace() {
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  if (params.has("tab") || params.has("state") || params.has("search")) {
+    return <Redirect to={productWorkspaceHref(search)} replace />;
+  }
+  return <AdminProductsList />;
+}
+
+function LegacyInventoryRedirect() {
+  return <Redirect to={productWorkspaceHref(useSearch())} replace />;
 }
 
 function AppRoutes() {
@@ -197,7 +224,7 @@ function AppRoutes() {
         <AdminGuard><AdminDashboard /></AdminGuard>
       </Route>
       <Route path="/admin/productos">
-        <AdminGuard><AdminProductsList /></AdminGuard>
+        <AdminGuard><AdminProductWorkspace /></AdminGuard>
       </Route>
       <Route path="/admin/productos/nuevo">
         <AdminGuard><AdminProductForm /></AdminGuard>
@@ -218,7 +245,7 @@ function AppRoutes() {
         <AdminGuard><AdminAgenda /></AdminGuard>
       </Route>
       <Route path="/admin/inventario">
-        <AdminGuard><AdminInventory /></AdminGuard>
+        <AdminGuard><LegacyInventoryRedirect /></AdminGuard>
       </Route>
       <Route path="/admin/importar">
         <AdminGuard><AdminImport /></AdminGuard>
@@ -237,6 +264,9 @@ function AppRoutes() {
       </Route>
       <Route path="/admin/reportes">
         <AdminGuard><AdminReports /></AdminGuard>
+      </Route>
+      <Route path="/admin/roles">
+        <AdminGuard><AdminRoles /></AdminGuard>
       </Route>
       <Route path="/admin/usuarios">
         <AdminGuard><AdminUsers /></AdminGuard>

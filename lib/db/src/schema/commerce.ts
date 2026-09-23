@@ -140,6 +140,7 @@ export const orderAuditActionEnum = pgEnum("order_audit_action", [
   "SCHEDULE_CHANGED",
   "DUPLICATED",
   "STATUS_CHANGED",
+  "NOTE_UPDATED",
 ]);
 
 export const usersTable = pgTable(

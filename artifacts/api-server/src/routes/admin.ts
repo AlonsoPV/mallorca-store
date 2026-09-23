@@ -1369,6 +1369,18 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     if (b.data.customerNotes !== undefined) patch.customerNotes = b.data.customerNotes;
     if (b.data.productionNotes !== undefined) patch.productionNotes = b.data.productionNotes;
     if (b.data.internalNotes !== undefined) patch.internalNotes = b.data.internalNotes;
+    const notesChanged =
+      (b.data.customerNotes !== undefined && (b.data.customerNotes ?? null) !== (order.customerNotes ?? null)) ||
+      (b.data.productionNotes !== undefined && (b.data.productionNotes ?? null) !== (order.productionNotes ?? null)) ||
+      (b.data.internalNotes !== undefined && (b.data.internalNotes ?? null) !== (order.internalNotes ?? null));
+    if (notesChanged) {
+      await writeOrderAudit({
+        tx,
+        orderId: order.id,
+        actorUserId: user?.id,
+        action: "NOTE_UPDATED",
+      });
+    }
 
     if (b.data.scheduledStart && editable) {
       const [branch] = await tx.select().from(branchesTable).where(eq(branchesTable.id, order.branchId));
@@ -1467,16 +1479,16 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     }
 
     if (b.data.status) {
-      const valid: Record<string, string[]> = {
-        pending_payment: ["paid", "cancelled"],
-        confirmed: ["preparing", "cancelled"],
-        paid: ["preparing", "cancelled"],
-        preparing: ["ready", "cancelled"],
-        ready: ["completed", "cancelled"],
-        completed: [],
-        cancelled: [],
-      };
-      if (!valid[order.status].includes(b.data.status) && order.status !== b.data.status) throw new Error("INVALID_TRANSITION");
+      const valid = [
+        "pending_payment",
+        "confirmed",
+        "paid",
+        "preparing",
+        "ready",
+        "completed",
+        "cancelled",
+      ];
+      if (!valid.includes(b.data.status)) throw new Error("INVALID_TRANSITION");
       if (b.data.status === "paid" && order.status !== "paid") {
         await commitOrderReservations(tx, order.id, user?.id);
         patch.paymentStatus = "paid";
@@ -3072,6 +3084,8 @@ router.post("/admin/products/import", async (req, res): Promise<void> => {
               available: record.available,
               inventory: record.inventory,
               minStock: record.minStock,
+              criticalStock: record.criticalStock,
+              autoAlertEnabled: record.autoAlertEnabled,
               priceOverride: record.priceOverride,
               salePriceOverride: record.salePriceOverride,
               preparationTimeMinutes: record.preparationTimeMinutes,

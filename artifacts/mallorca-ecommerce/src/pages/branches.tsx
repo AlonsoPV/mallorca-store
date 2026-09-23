@@ -3,6 +3,7 @@ import { useListBranches } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { MapPin, Clock, Phone, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatBranchPostalLines } from "@/lib/availability-copy";
 
 export default function Branches() {
   const { data: branchesData, isLoading } = useListBranches();
@@ -65,7 +66,14 @@ export default function Branches() {
                   <div className="space-y-4 text-sm text-muted-foreground mb-8 flex-1">
                     <p className="flex items-start gap-3">
                       <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span>{branch.address}, {branch.neighborhood}<br/>{branch.city}, {branch.state} {branch.postalCode}</span>
+                      <span>
+                        {formatBranchPostalLines(branch).map((line, index) => (
+                          <span key={`${branch.id}-${line}`}>
+                            {index > 0 ? <br /> : null}
+                            {line}
+                          </span>
+                        ))}
+                      </span>
                     </p>
                     
                     <p className="flex items-center gap-3">

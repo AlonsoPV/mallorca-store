@@ -220,7 +220,7 @@ export default function AdminBranchDetail() {
                       {summary.upcoming.map((o: any) => (
                         <li key={o.id} className="flex justify-between border rounded-md px-3 py-2">
                           <Link href={`/admin/pedidos/${o.id}`} className="hover:text-primary">
-                            {formatOrderTime(o.scheduledStart)} · #{o.id}
+                            {formatOrderTime(o.scheduledStart)} · #{o.orderNumber ?? o.id}
                           </Link>
                           <span>{formatPriceMx(o.total)}</span>
                         </li>

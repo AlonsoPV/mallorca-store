@@ -11,7 +11,7 @@ export function AdminPageShell({
   return (
     <div
       className={cn(
-        "flex-1 space-y-6 overflow-auto p-6 md:p-10",
+        "min-w-0 flex-1 space-y-5 overflow-auto p-4 sm:space-y-6 sm:p-6 md:p-10",
         className,
       )}
     >

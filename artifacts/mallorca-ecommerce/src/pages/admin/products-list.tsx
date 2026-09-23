@@ -1,8 +1,12 @@
+import AdminImport from "@/pages/admin/import";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { ProductStockSheet } from "@/components/admin/product-stock-sheet";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListAdminProducts,
+  useListAdminInventory,
   useListAdminBranches,
   useListCategories,
   useUpdateProduct,
@@ -10,6 +14,8 @@ import {
   useExportProducts,
   useBulkUpdateProducts,
   getListAdminProductsQueryKey,
+  getListAdminInventoryQueryKey,
+  getGetInventoryMatrixQueryKey,
   type AdminProduct,
   type ListAdminProductsStatus,
   type ProductBulkInputAction,
@@ -17,7 +23,6 @@ import {
 import {
   Search,
   Plus,
-  Edit,
   Download,
   Upload,
   Copy,
@@ -25,6 +30,7 @@ import {
   MoreHorizontal,
   Package,
   Pencil,
+  SquarePen,
   X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -59,13 +65,15 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ProductQuickEdit } from "@/pages/admin/product-quick-edit";
 
-type ViewChip = "all" | "active" | "draft" | "low" | "out";
+type ViewChip = "all" | "active" | "draft" | "low" | "out" | "critical" | "normal";
 
 const VIEW_CHIPS: { id: ViewChip; label: string }[] = [
   { id: "all", label: "Todos" },
   { id: "active", label: "Activos" },
   { id: "draft", label: "Borradores" },
+  { id: "normal", label: "Stock normal" },
   { id: "low", label: "Stock bajo" },
+  { id: "critical", label: "Crítico" },
   { id: "out", label: "Agotados" },
 ];
 
@@ -78,7 +86,7 @@ const STATUS_LABEL: Record<string, string> = {
 const PRODUCTS_LIST_QUERY_KEY = "admin.productos.search";
 
 function parseView(value: string | null): ViewChip {
-  if (value === "active" || value === "draft" || value === "low" || value === "out") {
+  if (value === "active" || value === "draft" || value === "low" || value === "out" || value === "critical" || value === "normal") {
     return value;
   }
   return "all";
@@ -132,52 +140,19 @@ function statusBadgeClass(status: string) {
   }
 }
 
-function inventoryHref(opts: {
-  branchId: number;
-  state: "LOW_STOCK" | "OUT_OF_STOCK";
-  sku?: string;
+function StockCell({ product, branchId, onManage }: {
+  product: AdminProduct; branchId: number; onManage: () => void;
 }) {
-  const params = new URLSearchParams();
-  params.set("branchId", String(opts.branchId));
-  params.set("state", opts.state);
-  if (opts.sku) params.set("search", opts.sku);
-  return `/admin/inventario?${params.toString()}`;
-}
-
-function StockCell({
-  product,
-  branchId,
-}: {
-  product: AdminProduct;
-  branchId: number;
-}) {
-  const avail = product.availability?.find((a) => a.branchId === branchId);
-  if (!avail || !avail.available) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-  if (avail.inventory === 0) {
-    return (
-      <Link
-        href={inventoryHref({ branchId, state: "OUT_OF_STOCK", sku: product.sku })}
-        className="font-medium text-destructive hover:underline"
-      >
-        Agotado
-      </Link>
-    );
-  }
-  if (isLowStock(avail)) {
-    return (
-      <Link
-        href={inventoryHref({ branchId, state: "LOW_STOCK", sku: product.sku })}
-        className="font-medium text-amber-800 hover:underline"
-        title="Stock bajo"
-      >
-        {avail.inventory}
-        <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide">Bajo</span>
-      </Link>
-    );
-  }
-  return <span>{avail.inventory}</span>;
+  const avail = product.availability?.find(a => a.branchId === branchId);
+  if (!avail || !avail.available) return <span className="text-muted-foreground">—</span>;
+  const low = isLowStock(avail);
+  return <button type="button" onClick={onManage}
+    className={cn("min-h-9 min-w-9 px-2 font-medium underline decoration-dotted underline-offset-4 hover:bg-muted focus-visible:outline focus-visible:outline-2", avail.inventory === 0 ? "text-destructive" : low ? "text-amber-800" : "text-foreground")}
+    aria-label={`Gestionar existencias de ${product.name}: ${avail.inventory} unidades`}
+    title="Ajustar existencias sin salir del catálogo">
+    {avail.inventory === 0 ? "Agotado" : avail.inventory}
+    {low && <span className="ml-1 text-[10px] uppercase">Bajo</span>}
+  </button>;
 }
 
 function promoLabel(product: AdminProduct) {
@@ -186,6 +161,85 @@ function promoLabel(product: AdminProduct) {
   if (promo.type === "percentage") return `-${promo.value}%`;
   if (promo.type === "amount") return `-$${promo.value}`;
   return `$${promo.value}`;
+}
+
+function ProductRowActions({
+  product,
+  size = "sm",
+  fullWidth = false,
+  onQuickEdit,
+  onDuplicate,
+  onArchive,
+}: {
+  product: AdminProduct;
+  size?: "sm" | "md";
+  fullWidth?: boolean;
+  onQuickEdit: () => void;
+  onDuplicate: () => void;
+  onArchive: () => void;
+}) {
+  const btn = size === "md" ? "h-9 w-9" : "h-8 w-8";
+  return (
+    <div
+      className={cn(
+        "inline-flex border border-border bg-background",
+        fullWidth && "w-full",
+      )}
+    >
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn("rounded-none", btn, fullWidth && "flex-1")}
+        asChild
+      >
+        <Link
+          href={`/admin/productos/${product.id}`}
+          aria-label={`Editar ${product.name}`}
+          title="Editar"
+        >
+          <SquarePen className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={cn("rounded-none border-l border-border", btn, fullWidth && "flex-1")}
+        onClick={onQuickEdit}
+        aria-label={`Edición rápida de ${product.name}`}
+        title="Edición rápida"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn("rounded-none border-l border-border", btn)}
+            aria-label={`Más acciones para ${product.name}`}
+            title="Más acciones"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="rounded-none">
+          <DropdownMenuItem onClick={onDuplicate}>
+            <Copy className="mr-2 h-4 w-4" />
+            Duplicar
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={onArchive}
+          >
+            <Archive className="mr-2 h-4 w-4" />
+            Archivar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 }
 
 function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
@@ -216,6 +270,8 @@ export default function AdminProductsList() {
   const [categoryId, setCategoryId] = useState(initial.categoryId);
   const [branchId, setBranchId] = useState(initial.branchId);
   const [selected, setSelected] = useState<number[]>([]);
+  const [importOpen, setImportOpen] = useState(false);
+  const [stockTarget, setStockTarget] = useState<{ product: AdminProduct; branchId: number } | null>(null);
   const [quickEditId, setQuickEditId] = useState<number | null>(null);
   const [bulkAction, setBulkAction] = useState("none");
   const [bulkValue, setBulkValue] = useState("none");
@@ -257,10 +313,21 @@ export default function AdminProductsList() {
   const statusFilter: ListAdminProductsStatus | undefined =
     view === "active" ? "active" : view === "draft" ? "draft" : undefined;
 
-  const { data: products, isLoading, isError, refetch } = useListAdminProducts({
+  const { data: products, isLoading: productsLoading, isError: productsError, refetch } = useListAdminProducts({
     search: debouncedSearch || undefined,
     status: statusFilter,
   });
+  const inventoryStates = { low: "LOW_STOCK", critical: "CRITICAL_STOCK", out: "OUT_OF_STOCK", normal: "NORMAL" } as const;
+  const inventoryState = inventoryStates[view as keyof typeof inventoryStates];
+  const inventoryParams = {
+    state: inventoryState,
+    branchId: branchId !== "all" ? Number(branchId) : undefined,
+    categoryId: categoryId !== "all" ? Number(categoryId) : undefined,
+    search: debouncedSearch || undefined,
+  };
+  const inventory = useListAdminInventory(inventoryParams, { query: { queryKey: getListAdminInventoryQueryKey(inventoryParams), enabled: Boolean(inventoryState) } });
+  const isLoading = productsLoading || (Boolean(inventoryState) && inventory.isLoading);
+  const isError = productsError || (Boolean(inventoryState) && inventory.isError);
   const branches = useListAdminBranches();
   const categories = useListCategories();
   const updateProduct = useUpdateProduct();
@@ -284,31 +351,15 @@ export default function AdminProductsList() {
         (p.availability ?? []).some((a) => a.branchId === brId && a.available),
       );
     }
-    if (view === "low") {
-      list = list.filter((p) =>
-        (p.availability ?? []).some((a) => {
-          if (brId != null && a.branchId !== brId) return false;
-          return isLowStock(a);
-        }),
-      );
-    }
-    if (view === "out") {
-      list = list.filter((p) =>
-        (p.availability ?? []).some((a) => {
-          if (brId != null && a.branchId !== brId) return false;
-          return a.available && a.inventory === 0;
-        }),
-      );
+    if (inventoryState) {
+      const ids = new Set((inventory.data ?? []).map(row => row.product.id));
+      list = list.filter(product => ids.has(product.id));
     }
     return list;
-  }, [products, view, categoryId, branchId, categoryList]);
+  }, [products, inventoryState, inventory.data, categoryId, branchId, categoryList]);
 
   const activeFilterChips = useMemo(() => {
     const chips: { key: string; label: string; clear: () => void }[] = [];
-    if (view !== "all") {
-      const label = VIEW_CHIPS.find((c) => c.id === view)?.label ?? view;
-      chips.push({ key: "view", label: `Vista: ${label}`, clear: () => setView("all") });
-    }
     if (debouncedSearch.trim()) {
       chips.push({
         key: "q",
@@ -336,7 +387,7 @@ export default function AdminProductsList() {
       });
     }
     return chips;
-  }, [view, debouncedSearch, categoryId, branchId, categoryList, branchList]);
+  }, [debouncedSearch, categoryId, branchId, categoryList, branchList]);
 
   const clearAllFilters = () => {
     setView("all");
@@ -346,8 +397,11 @@ export default function AdminProductsList() {
     setBranchId("all");
   };
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
+  const invalidate = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getListAdminInventoryQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetInventoryMatrixQueryKey() }),
+  ]);
 
   const toggleAll = (checked: boolean) => {
     setSelected(checked ? filtered.map((p) => p.id) : []);
@@ -381,18 +435,19 @@ export default function AdminProductsList() {
   };
 
   const handleExport = async (format: "csv" | "xlsx", selectedOnly = false) => {
+    if (!filtered.length) { toast({ title: "No hay productos para exportar" }); return; }
     try {
       const result = await exportProducts.mutateAsync({
         data: {
           search: debouncedSearch || undefined,
           status: statusFilter,
-          ids: selectedOnly && selected.length ? selected : undefined,
+          ids: selectedOnly && selected.length ? selected : filtered.map(product => product.id),
           format,
           reimportable: true,
         },
       });
       if (format === "xlsx") {
-        const workbook = XLSX.read(result.content, { type: "string" });
+        const workbook = XLSX.read(result.content, { type: "string", raw: true });
         XLSX.writeFile(workbook, result.filename.replace(/\.csv$/i, ".xlsx"));
       } else {
         downloadText(result.filename, result.content);
@@ -562,59 +617,80 @@ export default function AdminProductsList() {
     <AdminLayout>
       <AdminPageShell>
         <AdminPageHeader
-          title="Productos"
-          description="Catálogo multi-sucursal con edición rápida, importación y exportación."
+          title="Productos e inventario"
+          description="Edita productos y ajusta existencias desde un solo lugar. Pulsa el stock de una sucursal para gestionarlo."
           actions={
             <>
-              <Button asChild variant="outline" className="rounded-none">
-                <Link href="/admin/importar">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Importar
-                </Link>
+              <Button onClick={() => setImportOpen(true)} variant="outline" size="sm" className="rounded-none px-2.5 md:h-10 md:px-4" aria-label="Importar">
+                  <Upload className="h-4 w-4 sm:mr-1.5 md:mr-2" />
+                  <span className="hidden sm:inline">Importar</span>
               </Button>
               <Button
                 variant="outline"
-                className="rounded-none"
-                onClick={() => handleExport("csv")}
+                size="sm"
+                className="rounded-none px-2.5 md:h-10 md:px-4"
+                onClick={() => handleExport("xlsx")}
                 disabled={exportProducts.isPending}
+                aria-label="Exportar"
               >
-                <Download className="mr-2 h-4 w-4" />
-                Exportar
+                <Download className="h-4 w-4 sm:mr-1.5 md:mr-2" />
+                <span className="hidden sm:inline">Exportar</span>
               </Button>
-              <Button asChild className="rounded-none">
+              <Button asChild size="sm" className="min-w-0 flex-1 rounded-none md:h-10 md:flex-none md:px-4">
                 <Link href="/admin/productos/nuevo">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Añadir producto
+                  <Plus className="mr-1.5 h-4 w-4 md:mr-2" />
+                  <span className="sm:hidden">Añadir</span>
+                  <span className="hidden sm:inline">Añadir producto</span>
                 </Link>
               </Button>
             </>
           }
         />
 
-        <div className="sticky top-0 z-10 -mx-6 space-y-3 border-b border-border bg-background/95 px-6 py-3 backdrop-blur md:-mx-10 md:px-10">
-          <AdminFilterBar>
-            {VIEW_CHIPS.map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => setView(chip.id)}
-                className={cn(
-                  "border px-3 py-1.5 text-sm transition-colors",
-                  view === chip.id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-foreground hover:bg-muted",
-                )}
-              >
-                {chip.label}
-              </button>
-            ))}
+        <div className="sticky top-0 z-10 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:-mx-10 md:px-10">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div
+              className="-mx-4 flex overflow-x-auto border-y border-border bg-background px-0 sm:mx-0 sm:border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="tablist"
+              aria-label="Vista del catálogo"
+            >
+              {VIEW_CHIPS.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === chip.id}
+                  onClick={() => setView(chip.id)}
+                  className={cn(
+                    "h-8 shrink-0 border-r border-border px-2.5 text-xs font-medium last:border-r-0 sm:px-3",
+                    view === chip.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background text-foreground hover:bg-muted",
+                  )}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Nombre o SKU"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 rounded-none bg-background pl-8 text-sm"
+                aria-label="Buscar productos"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <AdminFilterSelect
               value={categoryId}
               onValueChange={setCategoryId}
               placeholder="Categoría"
-              triggerClassName="min-w-[10rem]"
+              triggerClassName="h-8 min-w-0 w-full text-xs"
               options={[
-                { value: "all", label: "Todas las categorías" },
+                { value: "all", label: "Categorías" },
                 ...categoryList.map((c) => ({ value: String(c.id), label: c.name })),
               ]}
             />
@@ -622,23 +698,13 @@ export default function AdminProductsList() {
               value={branchId}
               onValueChange={setBranchId}
               placeholder="Sucursal"
-              triggerClassName="min-w-[10rem]"
+              triggerClassName="h-8 min-w-0 w-full text-xs"
               options={[
-                { value: "all", label: "Todas las sucursales" },
+                { value: "all", label: "Sucursales" },
                 ...branchList.map((b) => ({ value: String(b.id), label: b.name })),
               ]}
             />
-            <div className="relative min-w-[12rem] flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nombre o SKU..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-10 rounded-none bg-background pl-9"
-                aria-label="Buscar productos"
-              />
-            </div>
-          </AdminFilterBar>
+          </div>
 
           {activeFilterChips.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -665,13 +731,13 @@ export default function AdminProductsList() {
         </div>
 
         {selected.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/20 p-3">
+          <div className="flex flex-col gap-2 border border-border bg-muted/20 p-3 sm:flex-row sm:flex-wrap sm:items-center">
             <span className="text-sm font-medium">{selected.length} seleccionados</span>
             <AdminFilterSelect
               value={bulkAction}
               onValueChange={setBulkAction}
               placeholder="Acción masiva"
-              triggerClassName="min-w-[12rem]"
+              triggerClassName="min-w-0 w-full sm:min-w-[12rem] sm:w-auto"
               options={[
                 { value: "none", label: "Acción masiva..." },
                 { value: "set_status", label: "Cambiar estado" },
@@ -697,6 +763,7 @@ export default function AdminProductsList() {
               <AdminFilterSelect
                 value={bulkValue === "none" ? "active" : bulkValue}
                 onValueChange={setBulkValue}
+                triggerClassName="min-w-0 w-full sm:w-auto"
                 options={[
                   { value: "active", label: "Activo" },
                   { value: "draft", label: "Borrador" },
@@ -711,6 +778,7 @@ export default function AdminProductsList() {
                 value={bulkValue}
                 onValueChange={setBulkValue}
                 placeholder="Categoría"
+                triggerClassName="min-w-0 w-full sm:w-auto"
                 options={[
                   { value: "none", label: "Categoría..." },
                   ...categoryList.map((c) => ({
@@ -722,7 +790,7 @@ export default function AdminProductsList() {
             ) : null}
             {["add_tags", "remove_tags", "replace_tags"].includes(bulkAction) ? (
               <Input
-                className="h-10 w-56 rounded-none"
+                className="h-10 w-full rounded-none sm:w-56"
                 value={bulkTagValue}
                 onChange={(e) => setBulkTagValue(e.target.value)}
                 placeholder="Etiquetas con |"
@@ -735,6 +803,7 @@ export default function AdminProductsList() {
                 value={bulkValue}
                 onValueChange={setBulkValue}
                 placeholder="Sucursal"
+                triggerClassName="min-w-0 w-full sm:w-auto"
                 options={[
                   { value: "none", label: "Sucursal..." },
                   ...branchList.map((b) => ({ value: String(b.id), label: b.name })),
@@ -744,7 +813,7 @@ export default function AdminProductsList() {
             {bulkAction === "set_min_stock" ? (
               <Input
                 type="number"
-                className="h-10 w-28 rounded-none"
+                className="h-10 w-full rounded-none sm:w-28"
                 value={bulkTagValue}
                 onChange={(e) => setBulkTagValue(e.target.value)}
                 placeholder="Mín."
@@ -753,7 +822,7 @@ export default function AdminProductsList() {
             {bulkAction === "set_price" ? (
               <Input
                 type="number"
-                className="h-10 w-28 rounded-none"
+                className="h-10 w-full rounded-none sm:w-28"
                 value={bulkValue === "none" ? "" : bulkValue}
                 onChange={(e) => setBulkValue(e.target.value || "none")}
                 placeholder="Precio"
@@ -763,6 +832,7 @@ export default function AdminProductsList() {
               <AdminFilterSelect
                 value={bulkValue === "none" ? "true" : bulkValue}
                 onValueChange={setBulkValue}
+                triggerClassName="min-w-0 w-full sm:w-auto"
                 options={[
                   { value: "true", label: "Sí" },
                   { value: "false", label: "No" },
@@ -770,9 +840,9 @@ export default function AdminProductsList() {
               />
             ) : null}
             {bulkAction === "create_promotion" ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <Input
-                  className="h-10 w-28 rounded-none"
+                  className="h-10 w-full rounded-none sm:w-28"
                   value={bulkPromo.value}
                   onChange={(e) => setBulkPromo((p) => ({ ...p, value: e.target.value }))}
                   placeholder="% o monto"
@@ -780,6 +850,7 @@ export default function AdminProductsList() {
                 <AdminFilterSelect
                   value={bulkPromo.type}
                   onValueChange={(type) => setBulkPromo((p) => ({ ...p, type }))}
+                  triggerClassName="min-w-0 w-full sm:w-auto"
                   options={[
                     { value: "percentage", label: "%" },
                     { value: "amount", label: "Monto" },
@@ -788,13 +859,13 @@ export default function AdminProductsList() {
                 />
                 <Input
                   type="datetime-local"
-                  className="h-10 rounded-none"
+                  className="h-10 w-full rounded-none sm:w-auto"
                   value={bulkPromo.startsAt}
                   onChange={(e) => setBulkPromo((p) => ({ ...p, startsAt: e.target.value }))}
                 />
                 <Input
                   type="datetime-local"
-                  className="h-10 rounded-none"
+                  className="h-10 w-full rounded-none sm:w-auto"
                   value={bulkPromo.endsAt}
                   onChange={(e) => setBulkPromo((p) => ({ ...p, endsAt: e.target.value }))}
                 />
@@ -808,7 +879,7 @@ export default function AdminProductsList() {
                 value={bulkCrossSellId}
                 onValueChange={setBulkCrossSellId}
                 placeholder="Producto"
-                triggerClassName="min-w-[14rem]"
+                triggerClassName="min-w-0 w-full sm:min-w-[14rem] sm:w-auto"
                 options={[
                   { value: "none", label: "Producto recomendado..." },
                   ...filtered.map((p) => ({
@@ -818,23 +889,25 @@ export default function AdminProductsList() {
                 ]}
               />
             ) : null}
-            <Button size="sm" className="rounded-none" onClick={runBulk} disabled={bulk.isPending}>
-              Aplicar
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-none"
-              onClick={() => handleExport("xlsx", true)}
-            >
-              Exportar selección
-            </Button>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <Button size="sm" className="flex-1 rounded-none sm:flex-none" onClick={runBulk} disabled={bulk.isPending}>
+                Aplicar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 rounded-none sm:flex-none"
+                onClick={() => handleExport("xlsx", true)}
+              >
+                Exportar selección
+              </Button>
+            </div>
           </div>
         ) : null}
 
         {isLoading ? <AdminLoading label="Cargando productos…" /> : null}
         {isError ? (
-          <AdminError title="No se pudieron cargar los productos" onRetry={() => refetch()} />
+          <AdminError title="No se pudieron cargar los productos" onRetry={() => { void refetch(); if (inventoryState) void inventory.refetch(); }} />
         ) : null}
         {!isLoading && !isError && filtered.length === 0 ? (
           <AdminEmptyState
@@ -846,7 +919,105 @@ export default function AdminProductsList() {
         ) : null}
 
         {!isLoading && !isError && filtered.length > 0 ? (
-          <AdminTable>
+          <>
+            {/* Mobile card list */}
+            <div className="space-y-3 lg:hidden">
+              <div className="flex items-center gap-2 px-0.5">
+                <Checkbox
+                  checked={filtered.length > 0 && selected.length === filtered.length}
+                  onCheckedChange={(checked) => toggleAll(checked === true)}
+                  className="rounded-none"
+                  aria-label="Seleccionar todos"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {selected.length > 0
+                    ? `${selected.length} de ${filtered.length}`
+                    : `${filtered.length} productos`}
+                </span>
+              </div>
+              {filtered.map((product) => (
+                <article
+                  key={product.id}
+                  className="border border-border bg-card p-3"
+                >
+                  <div className="flex gap-3">
+                    <Checkbox
+                      checked={selected.includes(product.id)}
+                      onCheckedChange={(checked) => toggleOne(product.id, checked === true)}
+                      className="mt-1 rounded-none"
+                      aria-label={`Seleccionar ${product.name}`}
+                    />
+                    <div className="h-14 w-14 shrink-0 overflow-hidden bg-muted">
+                      <ImageWithFallback
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="h-full w-full object-cover"
+                        fallback={<div className="h-full w-full bg-muted" />}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-medium leading-snug">{product.name}</h3>
+                          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                            {product.sku}
+                            {product.categoryName ? ` · ${product.categoryName}` : ""}
+                          </p>
+                        </div>
+                        <Badge
+                          className={cn(
+                            "shrink-0 rounded-none font-medium shadow-none",
+                            statusBadgeClass(product.status),
+                          )}
+                        >
+                          {STATUS_LABEL[product.status] ?? product.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                        {product.salePrice != null && product.salePrice < product.price ? (
+                          <>
+                            <span className="font-medium">{formatPrice(product.salePrice)}</span>
+                            <span className="text-xs text-muted-foreground line-through">
+                              {formatPrice(product.price)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="font-medium">{formatPrice(product.price)}</span>
+                        )}
+                        {promoLabel(product) !== "—" ? (
+                          <span className="text-xs text-primary">Promo {promoLabel(product)}</span>
+                        ) : null}
+                      </div>
+                      {stockBranches.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {stockBranches.map((b) => (
+                            <span key={b.id} className="inline-flex items-center gap-1">
+                              <span className="font-medium text-foreground/70">
+                                {b.shortName || b.name}:
+                              </span>
+                              <StockCell product={product} branchId={b.id} onManage={() => setStockTarget({ product, branchId: b.id })} />
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex border-t border-border pt-3">
+                    <ProductRowActions
+                      product={product}
+                      size="md"
+                      fullWidth
+                      onQuickEdit={() => setQuickEditId(product.id)}
+                      onDuplicate={() => handleDuplicate(product.id)}
+                      onArchive={() => archive(product.id, product.name)}
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <AdminTable containerClassName="hidden lg:block">
             <AdminTableHeader>
               <AdminTableRow>
                 <AdminTableHead className="w-10">
@@ -858,22 +1029,24 @@ export default function AdminProductsList() {
                   />
                 </AdminTableHead>
                 <AdminTableHead>Producto</AdminTableHead>
-                <AdminTableHead>SKU</AdminTableHead>
-                <AdminTableHead>Categoría</AdminTableHead>
+                <AdminTableHead className="hidden xl:table-cell">SKU</AdminTableHead>
+                <AdminTableHead className="hidden xl:table-cell">Categoría</AdminTableHead>
                 <AdminTableHead className="text-right">Precio</AdminTableHead>
                 {stockBranches.map((b) => (
                   <AdminTableHead key={b.id} className="text-center">
                     {b.shortName || b.name}
                   </AdminTableHead>
                 ))}
-                <AdminTableHead className="text-center">Promo</AdminTableHead>
+                <AdminTableHead className="hidden xl:table-cell text-center">Promo</AdminTableHead>
                 <AdminTableHead className="text-center">Estado</AdminTableHead>
-                <AdminTableHead className="text-right">Acciones</AdminTableHead>
+                <AdminTableHead className="sticky right-0 z-20 w-px border-l border-border bg-muted text-right">
+                  <span className="sr-only">Acciones</span>
+                </AdminTableHead>
               </AdminTableRow>
             </AdminTableHeader>
             <AdminTableBody>
               {filtered.map((product) => (
-                <AdminTableRow key={product.id} className="h-[52px]">
+                <AdminTableRow key={product.id} className="group">
                   <AdminTableCell>
                     <Checkbox
                       checked={selected.includes(product.id)}
@@ -892,22 +1065,35 @@ export default function AdminProductsList() {
                           fallback={<div className="h-full w-full bg-muted" />}
                         />
                       </div>
-                      <div className="font-medium">{product.name}</div>
+                      <div className="min-w-0">
+                        <div className="font-medium">{product.name}</div>
+                        <div className="mt-0.5 font-mono text-[11px] text-muted-foreground xl:hidden">
+                          {product.sku}
+                          {product.categoryName ? ` · ${product.categoryName}` : ""}
+                        </div>
+                      </div>
                     </div>
                   </AdminTableCell>
-                  <AdminTableCell className="font-mono text-xs">{product.sku}</AdminTableCell>
-                  <AdminTableCell className="text-muted-foreground">
+                  <AdminTableCell className="hidden font-mono text-xs xl:table-cell">{product.sku}</AdminTableCell>
+                  <AdminTableCell className="hidden text-muted-foreground xl:table-cell">
                     {product.categoryName || "—"}
                   </AdminTableCell>
                   <AdminTableCell className="text-right">
-                    {formatPrice(product.price)}
+                    {product.salePrice != null && product.salePrice < product.price ? (
+                      <div className="flex flex-col items-end leading-tight">
+                        <span>{formatPrice(product.salePrice)}</span>
+                        <span className="text-xs text-muted-foreground line-through">{formatPrice(product.price)}</span>
+                      </div>
+                    ) : (
+                      formatPrice(product.price)
+                    )}
                   </AdminTableCell>
                   {stockBranches.map((b) => (
                     <AdminTableCell key={b.id} className="text-center">
-                      <StockCell product={product} branchId={b.id} />
+                      <StockCell product={product} branchId={b.id} onManage={() => setStockTarget({ product, branchId: b.id })} />
                     </AdminTableCell>
                   ))}
-                  <AdminTableCell className="text-center">{promoLabel(product)}</AdminTableCell>
+                  <AdminTableCell className="hidden text-center xl:table-cell">{promoLabel(product)}</AdminTableCell>
                   <AdminTableCell className="text-center">
                     <Badge
                       className={cn(
@@ -918,58 +1104,32 @@ export default function AdminProductsList() {
                       {STATUS_LABEL[product.status] ?? product.status}
                     </Badge>
                   </AdminTableCell>
-                  <AdminTableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button asChild variant="ghost" size="sm" className="h-8 rounded-none px-2">
-                        <Link href={`/admin/productos/${product.id}`} title="Editar">
-                          <Edit className="h-4 w-4" />
-                          <span className="sr-only">Editar</span>
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 rounded-none px-2"
-                        onClick={() => setQuickEditId(product.id)}
-                        title="Edición rápida"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edición rápida</span>
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 rounded-none px-2"
-                            title="Más acciones"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Más acciones</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-none">
-                          <DropdownMenuItem onClick={() => handleDuplicate(product.id)}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            Duplicar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => archive(product.id, product.name)}
-                          >
-                            <Archive className="mr-2 h-4 w-4" />
-                            Archivar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                  <AdminTableCell
+                    onClick={(e) => e.stopPropagation()}
+                    className="sticky right-0 z-10 w-px whitespace-nowrap border-l border-border bg-background py-1 text-right group-hover:bg-muted/50"
+                  >
+                    <ProductRowActions
+                      product={product}
+                      onQuickEdit={() => setQuickEditId(product.id)}
+                      onDuplicate={() => handleDuplicate(product.id)}
+                      onArchive={() => archive(product.id, product.name)}
+                    />
                   </AdminTableCell>
                 </AdminTableRow>
               ))}
             </AdminTableBody>
           </AdminTable>
+          </>
         ) : null}
       </AdminPageShell>
+
+      <Sheet open={importOpen} onOpenChange={setImportOpen}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
+          <SheetHeader><SheetTitle>Importar productos e inventario</SheetTitle><SheetDescription>Actualiza el catálogo y las existencias con un solo archivo.</SheetDescription></SheetHeader>
+          <AdminImport embedded />
+        </SheetContent>
+      </Sheet>
+      {stockTarget && <ProductStockSheet product={stockTarget.product} branchId={stockTarget.branchId} onClose={() => setStockTarget(null)} />}
 
       {quickProduct ? (
         <ProductQuickEdit

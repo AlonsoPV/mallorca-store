@@ -1,3 +1,4 @@
+import { enqueueOrderEmails } from "./order-emails";
 import crypto from "node:crypto";
 import { and, eq, lt, sql } from "drizzle-orm";
 import {
@@ -627,6 +628,7 @@ export async function createOrder(
         });
       }
 
+      if (input.orderSource === "STOREFRONT") await enqueueOrderEmails(tx, order, branch);
       return order;
     });
 
@@ -680,7 +682,8 @@ export async function findOrderWithItems(orderId: string) {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
   if (!order) return undefined;
   const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
-  return { ...order, items };
+  const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, order.branchId));
+  return { ...order, items, branchName: branch?.name ?? "Sucursal" };
 }
 
 export type { User };

@@ -1,3 +1,9 @@
+import crypto from "node:crypto";
+import { buildReceiptPdf, receiptFilename } from "./order-receipt.mjs";
+import { receiptSnapshot } from "../../lib/purchase-result.mjs";
+import { previewOrderEmails, previewEmailStatus } from "./local-order-emails.mjs";
+import { exportLocalProducts, previewLocalProducts, importLocalProducts } from "./local-product-transfer.mjs";
+import { handleRoleAccess } from "./local-role-access.mjs";
 /**
  * Lightweight local API mock for Windows/dev without Postgres.
  * Serves the storefront + local-dev auth endpoints the Vite app expects on :8080.
@@ -11,6 +17,7 @@ const PORT = Number(process.env.PORT || 8080);
 
 /** In-memory object store for local image uploads (mock only). */
 const localObjects = new Map();
+const productImportAttempts = new Map();
 
 const hours = [
   "monday",
@@ -256,6 +263,33 @@ const promotionsByProduct = new Map([
   ],
 ]);
 
+function hydrateCatalogPricing() {
+  for (const product of products) {
+    const active = (promotionsByProduct.get(product.id) ?? []).find((item) => item.status === "active");
+    for (const row of product.availability) {
+      if (row.salePrice == null && product.salePrice != null) {
+        row.salePrice = product.salePrice;
+      }
+      if (active) {
+        row.promotion = {
+          id: active.id,
+          name: active.name,
+          type: active.type,
+          value: active.value,
+          startsAt: active.startsAt,
+          endsAt: active.endsAt,
+          status: active.status,
+          finalPrice: active.finalPrice,
+          savings: active.savings,
+          branchIds: active.branchIds,
+        };
+        row.salePrice = active.finalPrice;
+      }
+    }
+  }
+}
+hydrateCatalogPricing();
+
 function toAdminProductDetail(product) {
   return {
     ...product,
@@ -412,10 +446,10 @@ function deriveInventoryStatus(available, minStock, criticalStock) {
 }
 
 function defaultInventoryQty(branchId, productId) {
-  if (productId === 2 && branchId === 2) return 2;
-  if (productId === 3 && branchId === 1) return 0;
-  if (productId === 3 && branchId === 2) return 2;
-  return 20 + productId * 3;
+  const product = products.find((item) => item.id === productId);
+  const row = product?.availability.find((item) => item.branchId === branchId);
+  if (row) return row.inventory;
+  return 20;
 }
 
 function getInventoryQty(branchId, productId) {
@@ -425,16 +459,27 @@ function getInventoryQty(branchId, productId) {
 }
 
 function setInventoryQty(branchId, productId, qty) {
-  inventoryStock.set(`${branchId}:${productId}`, Math.max(0, qty));
+  const next = Math.max(0, qty);
+  inventoryStock.set(`${branchId}:${productId}`, next);
+  const product = products.find((item) => item.id === productId);
+  const row = product?.availability.find((item) => item.branchId === branchId);
+  if (row) {
+    row.inventory = next;
+    row.physicalStock = next;
+    row.availableStock = Math.max(0, next - (row.reservedStock ?? 0));
+  }
 }
 
 function makeInventoryRow(branch, product) {
+  const avail = product.availability.find((item) => item.branchId === branch.id);
   const inventory = getInventoryQty(branch.id, product.id);
-  const minStock = 5;
-  const criticalStock = 2;
-  const reserved = 0;
+  const minStock = avail?.minStock ?? 5;
+  const criticalStock = avail?.criticalStock ?? 2;
+  const reserved = avail?.reservedStock ?? 0;
   const available = Math.max(0, inventory - reserved);
-  const status = deriveInventoryStatus(available, minStock, criticalStock);
+  const status = avail?.alertState && avail.alertState !== "NORMAL"
+    ? avail.alertState
+    : deriveInventoryStatus(available, minStock, criticalStock);
   return {
     branchProduct: {
       id: branch.id * 1000 + product.id,
@@ -666,15 +711,15 @@ const orders = [
   }),
 ];
 
-const ORDER_TRANSITIONS = {
-  pending_payment: ["paid", "cancelled"],
-  confirmed: ["preparing", "cancelled"],
-  paid: ["preparing", "cancelled"],
-  preparing: ["ready", "cancelled"],
-  ready: ["completed", "cancelled"],
-  completed: [],
-  cancelled: [],
-};
+const ORDER_STATUSES = new Set([
+  "pending_payment",
+  "confirmed",
+  "paid",
+  "preparing",
+  "ready",
+  "completed",
+  "cancelled",
+]);
 
 function toOrderSummary(order) {
   return {
@@ -781,6 +826,8 @@ function filterProducts(url) {
   const branchSlug = url.searchParams.get("branchSlug");
 
   if (featured === "true") list = list.filter((p) => p.featured);
+  const seasonal = url.searchParams.get("seasonal");
+  if (seasonal === "true") list = list.filter((p) => p.seasonal);
   if (categorySlug) {
     list = list.filter(
       (p) =>
@@ -806,7 +853,7 @@ function filterProducts(url) {
   return list;
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     send(res, 204);
     return;
@@ -814,6 +861,12 @@ const server = http.createServer((req, res) => {
 
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   const path = url.pathname.replace(/\/+$/, "") || "/";
+
+  if (path.startsWith("/api/admin/")) {
+    if (!requireLocalAuth(req, res)) return;
+    if (await handleRoleAccess(req, res, path, localUser, send, readJson)) return;
+  }
+
 
   if (req.method === "GET" && (path === "/api/healthz" || path === "/healthz")) {
     send(res, 200, { status: "ok" });
@@ -1123,7 +1176,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "POST" && path === "/api/orders") {
     readJson(req)
-      .then((body) => {
+      .then(async (body) => {
         const cart = carts.get(body?.cartId);
         if (!cart || !cart.items.length) {
           send(res, 409, { error: "Cart is empty" });
@@ -1142,7 +1195,8 @@ const server = http.createServer((req, res) => {
         const order = {
           id,
           orderNumber: `M-MOCK${String(orders.length + 1).padStart(3, "0")}`,
-          guestAccessToken: `guest_${id}`,
+          guestAccessToken: crypto.randomBytes(24).toString("hex"),
+          userId: req.headers.authorization === "Bearer local-dev" ? localUser.id : null,
           status: cashPickup ? "confirmed" : "pending_payment",
           paymentStatus: "unpaid",
           paymentMethod,
@@ -1165,16 +1219,31 @@ const server = http.createServer((req, res) => {
         };
         orders.unshift(order);
         carts.delete(cart.id);
+        await previewOrderEmails(order, cart.branch, branchAssignments.filter(a => a.branchId === order.branchId).map(a => ({ ...a, email: findMockUser(a.userId)?.email || "" }))).catch(() => console.warn("Could not prepare local email preview"));
         send(res, 201, order);
       })
       .catch(() => send(res, 400, { error: "Invalid body" }));
     return;
   }
 
+  const receiptRoute = path.match(/^\/api\/(?:guest\/orders\/([^/]+)\/([^/]+)|orders\/([^/]+))\/(receipt\.pdf|confirmation)$/);
+  if (req.method === "GET" && receiptRoute) {
+    const found = orders.find(o => o.id === (receiptRoute[1] || receiptRoute[3]));
+    const authorized = found && (receiptRoute[1] ? found.guestAccessToken === receiptRoute[2] : req.headers.authorization === "Bearer local-dev" && (!found.userId || found.userId === localUser.id));
+    if (!authorized) { send(res, 404, { error: "Order not found" }); return; }
+    const branch = branches.find(b => b.id === found.branchId);
+    if (receiptRoute[4] === "confirmation") {
+      send(res, 200, { branchName: branch?.name, branchAddress: branch?.address, branchPhone: branch?.phone, notifications: await previewEmailStatus(found.id) }); return;
+    }
+    const pdf = await buildReceiptPdf(receiptSnapshot(found, branch));
+    res.writeHead(200, { "content-type": "application/pdf", "content-disposition": `attachment; filename="${receiptFilename(found)}"`, "cache-control": "private, no-store" });
+    res.end(pdf); return;
+  }
+
   const guestOrder = path.match(/^\/api\/guest\/orders\/([^/]+)\/([^/]+)$/);
   if (req.method === "GET" && guestOrder) {
     const found = orders.find((o) => o.id === guestOrder[1]);
-    if (!found) {
+    if (!found || found.guestAccessToken !== guestOrder[2]) {
       send(res, 404, { error: "Order not found" });
       return;
     }
@@ -1183,6 +1252,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && path.startsWith("/api/orders/")) {
+    if (!requireLocalAuth(req, res)) return;
     const id = path.slice("/api/orders/".length);
     const found = orders.find((o) => o.id === id);
     if (!found) {
@@ -1201,7 +1271,14 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "PATCH" && path === "/api/me") {
     if (!requireLocalAuth(req, res)) return;
-    send(res, 200, localUser);
+    readJson(req)
+      .then((body) => {
+        if (body && Object.prototype.hasOwnProperty.call(body, "firstName")) localUser.firstName = body.firstName;
+        if (body && Object.prototype.hasOwnProperty.call(body, "lastName")) localUser.lastName = body.lastName;
+        if (body && Object.prototype.hasOwnProperty.call(body, "phone")) localUser.phone = body.phone;
+        send(res, 200, { ...localUser });
+      })
+      .catch(() => send(res, 400, { error: "Invalid body" }));
     return;
   }
 
@@ -1225,15 +1302,32 @@ const server = http.createServer((req, res) => {
       totalProducts: products.length,
       activeProducts: products.length,
       totalBranches: branches.length,
-      lowStockProducts: 1,
-      outOfStockProducts: 0,
+      lowStockProducts: products.reduce(
+        (count, product) =>
+          count + product.availability.filter((row) => row.alertState === "LOW_STOCK").length,
+        0,
+      ),
+      criticalStockProducts: products.reduce(
+        (count, product) =>
+          count + product.availability.filter((row) => row.alertState === "CRITICAL_STOCK").length,
+        0,
+      ),
+      outOfStockProducts: products.reduce(
+        (count, product) =>
+          count + product.availability.filter((row) => row.alertState === "OUT_OF_STOCK" || row.inventory <= 0).length,
+        0,
+      ),
       ordersToday: todayOrders.length,
       ordersPending: orders.filter((o) => ["pending_payment", "confirmed", "paid", "preparing", "ready"].includes(o.status)).length,
       ordersNextHour: orders.filter((o) => {
         const s = new Date(o.scheduledStart);
         return s >= now && s < inHour && !["cancelled", "completed"].includes(o.status);
       }).length,
-      alertsCount: 1,
+      alertsCount: products.reduce(
+        (count, product) =>
+          count + product.availability.filter((row) => row.alertState && row.alertState !== "NORMAL").length,
+        0,
+      ),
       salesToday: todayOrders.reduce((sum, o) => sum + o.total, 0),
       branchSummaries: branches.map((b) => ({
         branchId: b.id,
@@ -1316,12 +1410,12 @@ const server = http.createServer((req, res) => {
       send(res, 200, {
         branch: {
           ...b,
-          deliveryFee: b.deliveryFee ?? 0,
+          deliveryFee: b.deliveryFee ?? 90,
           taxRate: 0.16,
           timezone: "America/Mexico_City",
-          managerName: b.managerName || "María Pérez",
-          managerEmail: b.managerEmail || "maria@mallorca.local",
-          managerPhone: b.managerPhone || "5533333333",
+          managerName: b.managerName || b.primaryResponsible?.name || null,
+          managerEmail: b.managerEmail || b.primaryResponsible?.email || null,
+          managerPhone: b.managerPhone || null,
           notificationPreferences: b.notificationPreferences || { email: true, inApp: true },
         },
         general: b,
@@ -1359,12 +1453,15 @@ const server = http.createServer((req, res) => {
         futureOrdersCount: 0,
         summary: {
           ordersToday: b.ordersToday || 0,
-          salesToday: 18500,
+          salesToday: branchOrders.reduce((sum, o) => sum + (o.total || 0), 0),
           alertsOpen: b.alertsOpen || 0,
           outOfStock: 0,
-          lowStockProducts: id === 2 ? ["Panettone Clásico"] : [],
+          lowStockProducts: products
+            .filter((p) => p.availability.some((a) => a.branchId === id && a.alertState && a.alertState !== "NORMAL"))
+            .map((p) => p.name),
           upcoming: branchOrders.slice(0, 3).map((o) => ({
             id: o.id,
+            orderNumber: o.orderNumber,
             scheduledStart: o.scheduledStart,
             status: o.status,
             total: o.total,
@@ -1874,19 +1971,41 @@ const server = http.createServer((req, res) => {
     if (req.method === "PATCH") {
       readJson(req)
         .then((body) => {
+          const noteKeys = ["customerNotes", "productionNotes", "internalNotes"];
+          const notesChanged = noteKeys.some((key) => body?.[key] !== undefined && (body[key] || null) !== (order[key] || null));
+          for (const key of noteKeys) {
+            if (body?.[key] !== undefined) order[key] = body[key] || null;
+          }
+          if (notesChanged) {
+            order.audit = [
+              ...(order.audit || []),
+              {
+                id: Date.now(),
+                action: "NOTE_UPDATED",
+                reason: null,
+                actorUserId: "user_admin",
+                actorName: "Admin",
+                createdAt: new Date().toISOString(),
+                payload: null,
+              },
+            ];
+          }
           const next = body?.status;
-          const allowed = ORDER_TRANSITIONS[order.status] || [];
-          if (!allowed.includes(next) && next !== order.status) {
+          if (next == null || next === "") {
+            send(res, 200, order);
+            return;
+          }
+          if (!ORDER_STATUSES.has(next)) {
             send(res, 409, { error: "Invalid status transition" });
+            return;
+          }
+          if (next === "completed" && order.paymentStatus !== "paid" && !body?.confirmUnpaidComplete) {
+            send(res, 409, { error: "Order is still unpaid", code: "UNPAID_ON_COMPLETE" });
             return;
           }
           order.status = next;
           if (next === "paid") order.paymentStatus = "paid";
           if (next === "cancelled" && order.paymentStatus === "unpaid") order.paymentStatus = "cancelled";
-          if (next === "completed" && order.paymentStatus !== "paid" && !body?.confirmUnpaidComplete) {
-            send(res, 409, { error: "Order is still unpaid", code: "UNPAID_ON_COMPLETE" });
-            return;
-          }
           order.audit = [
             ...(order.audit || []),
             {
@@ -1957,7 +2076,29 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && path === "/api/admin/inventory/alerts") {
     if (!requireLocalAuth(req, res)) return;
-    send(res, 200, []);
+    const status = url.searchParams.get("status") || "OPEN";
+    const alerts = [];
+    let alertId = 1;
+    for (const product of products) {
+      for (const row of product.availability) {
+        if (!row.alertState || row.alertState === "NORMAL") continue;
+        alerts.push({
+          alert: {
+            id: alertId++,
+            type: row.alertState,
+            status: "OPEN",
+            source: "AUTO",
+            priority: row.alertState === "OUT_OF_STOCK" || row.alertState === "CRITICAL_STOCK" ? "HIGH" : "MEDIUM",
+            currentStock: row.inventory,
+            minStock: row.minStock,
+            createdAt: new Date().toISOString(),
+          },
+          branch: branches.find((item) => item.id === row.branchId),
+          product,
+        });
+      }
+    }
+    send(res, 200, status === "all" ? alerts : alerts.filter((row) => row.alert.status === status));
     return;
   }
 
@@ -2325,19 +2466,33 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && path === "/api/fulfillment/slots") {
-    const date = url.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+    const date = url.searchParams.get("date") || new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Mexico_City",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
     const method = url.searchParams.get("method") || "pickup";
+    const branchId = Number(url.searchParams.get("branchId"));
+    const b = branches.find((item) => item.id === branchId) || branches[0];
     const hours = method === "delivery" ? ["12:00", "14:00", "16:00", "18:00"] : ["10:00", "12:00", "14:00", "16:00", "18:00"];
-    const slots = hours.map((time) => {
-      const start = new Date(`${date}T${time}:00.000-06:00`);
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
-      return {
-        start: start.toISOString(),
-        end: end.toISOString(),
-        available: true,
-        remainingCapacity: method === "delivery" ? 4 : 8,
-      };
-    });
+    const leadMinutes =
+      Math.max(0, Number(b.preparationTimeMinutes) || 0) +
+      (method === "delivery" ? Number(b.deliveryTimeMinutes) || 0 : 0);
+    const earliest = Date.now() + leadMinutes * 60_000;
+    const slots = hours
+      .map((time) => {
+        const start = new Date(`${date}T${time}:00.000-06:00`);
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        const available = Number.isFinite(start.getTime()) && start.getTime() >= earliest;
+        return {
+          start: start.toISOString(),
+          end: end.toISOString(),
+          available,
+          remainingCapacity: available ? (method === "delivery" ? 4 : 8) : 0,
+        };
+      })
+      .filter((slot) => slot.available);
     send(res, 200, slots);
     return;
   }
@@ -2366,13 +2521,10 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "POST" && path === "/api/admin/products/export") {
     if (!requireLocalAuth(req, res)) return;
-    const header = "sku,name,price,status\n";
-    const body = products.map((p) => `${p.sku},${p.name},${p.price},active`).join("\n");
-    send(res, 200, {
-      filename: "productos-mallorca.csv",
-      contentType: "text/csv; charset=utf-8",
-      content: header + body,
-    });
+    readJson(req).then(body => send(res, 200, {
+      filename: "productos-inventario-mallorca.csv", contentType: "text/csv; charset=utf-8",
+      content: exportLocalProducts(products, branches, body),
+    })).catch(() => send(res, 400, { error: "Invalid export" }));
     return;
   }
 
@@ -2415,13 +2567,23 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "POST" && path === "/api/admin/products/import/preview") {
     if (!requireLocalAuth(req, res)) return;
-    send(res, 200, { rows: [], errors: [], valid: false });
+    readJson(req).then(body => send(res, 200, previewLocalProducts(body, products, branches, categories))).catch(() => send(res, 400, { error: "Invalid import" }));
     return;
   }
 
   if (req.method === "POST" && path === "/api/admin/products/import") {
     if (!requireLocalAuth(req, res)) return;
-    send(res, 200, { imported: 0, created: 0, updated: 0, errors: [], jobId: "mock-job" });
+    readJson(req).then(body => {
+      const previous = body.idempotencyKey ? productImportAttempts.get(body.idempotencyKey) : undefined;
+      const signature = JSON.stringify({ csv: body.csv, mapping: body.mapping, updateFields: body.updateFields, updateExisting: body.updateExisting });
+      if (previous) {
+        if (previous.signature !== signature) { send(res, 409, { error: "La clave ya pertenece a otra importación" }); return; }
+        send(res, 200, previous.result); return;
+      }
+      const result = importLocalProducts(body, products, branches, categories, applyBranchConfigurations, setInventoryQty);
+      if (body.idempotencyKey && !result.errors.length) productImportAttempts.set(body.idempotencyKey, { signature, result });
+      send(res, 200, result);
+    }).catch(() => send(res, 400, { error: "Invalid import" }));
     return;
   }
 
@@ -2444,6 +2606,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`[local-mock-api] listening on http://127.0.0.1:${PORT}`);
+  console.log(`[local-mock-api] listening on http://127.0.0.1:${server.address().port}`);
   console.log(`[local-mock-api] auth: Authorization: Bearer local-dev`);
 });

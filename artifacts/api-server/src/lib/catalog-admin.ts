@@ -244,6 +244,8 @@ export async function buildProductExportCsv(options: {
           inventory: branchProductsTable.inventory,
           minStock: branchProductsTable.minStock,
           criticalStock: branchProductsTable.criticalStock,
+          autoAlertEnabled: branchProductsTable.autoAlertEnabled,
+          preparationTimeMinutes: branchProductsTable.preparationTimeMinutes,
           available: branchProductsTable.available,
           priceOverride: branchProductsTable.priceOverride,
           salePriceOverride: branchProductsTable.salePriceOverride,
@@ -285,6 +287,8 @@ export async function buildProductExportCsv(options: {
       "inventory",
       "minStock",
       "criticalStock",
+      "autoAlertEnabled",
+      "preparationTimeMinutes",
       "priceOverride",
       "salePriceOverride",
       "pickupAvailable",
@@ -312,7 +316,7 @@ export async function buildProductExportCsv(options: {
       const branches = branchRows.filter((b) => b.productId === product.id);
       const targets = branches.length
         ? branches
-        : [{ branchCode: "", available: false, inventory: 0, minStock: 0 } as any];
+        : [{ branchCode: "" } as any];
       for (const branch of targets) {
         lines.push(
           [
@@ -337,6 +341,8 @@ export async function buildProductExportCsv(options: {
             branch.inventory ?? "",
             branch.minStock ?? "",
             branch.criticalStock ?? "",
+            branch.autoAlertEnabled ?? "",
+            branch.preparationTimeMinutes ?? "",
             branch.priceOverride ?? "",
             branch.salePriceOverride ?? "",
             branch.pickupAvailable ?? "",

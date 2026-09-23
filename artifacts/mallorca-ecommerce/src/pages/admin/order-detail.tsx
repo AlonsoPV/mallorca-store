@@ -53,7 +53,6 @@ import {
   formatOrderTime,
   formatPriceMx,
   getPrimaryNextStatus,
-  getValidNextStatuses,
   ORDER_STATUS_ACTION_LABELS,
   ORDER_STATUS_LABELS,
   ORDER_STATUS_PIPELINE,
@@ -114,6 +113,10 @@ export default function AdminOrderDetail() {
   const [payOpen, setPayOpen] = useState(false);
   const [unpaidOpen, setUnpaidOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [customerNotes, setCustomerNotes] = useState("");
+  const [productionNotes, setProductionNotes] = useState("");
+  const [internalNotes, setInternalNotes] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payNote, setPayNote] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("CASH");
@@ -122,7 +125,6 @@ export default function AdminOrderDetail() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const primary = order ? getPrimaryNextStatus(order.status) : null;
-  const nextStatuses = order ? getValidNextStatuses(order.status) : [];
   const pendingAmount = order ? pendingPaymentAmount(order.total, order.amountPaid) : 0;
   const unpaid =
     order != null &&
@@ -178,6 +180,37 @@ export default function AdminOrderDetail() {
       const code = coded.code || coded.data?.code;
       toast({
         title: code === "UNPAID_ON_COMPLETE" ? "Pago pendiente" : "No se pudo actualizar el estado",
+        description: coded.error || coded.data?.error || coded.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openNotes = () => {
+    if (!order) return;
+    setCustomerNotes(order.customerNotes ?? "");
+    setProductionNotes(order.productionNotes ?? "");
+    setInternalNotes(order.internalNotes ?? "");
+    setNotesOpen(true);
+  };
+
+  const saveNotes = async () => {
+    try {
+      await updateOrder.mutateAsync({
+        id,
+        data: {
+          customerNotes: customerNotes.trim() || null,
+          productionNotes: productionNotes.trim() || null,
+          internalNotes: internalNotes.trim() || null,
+        },
+      });
+      toast({ title: "Notas guardadas" });
+      setNotesOpen(false);
+      refresh();
+    } catch (error) {
+      const coded = error as { error?: string; message?: string; data?: { error?: string } };
+      toast({
+        title: "No se pudieron guardar las notas",
         description: coded.error || coded.data?.error || coded.message,
         variant: "destructive",
       });
@@ -315,7 +348,7 @@ export default function AdminOrderDetail() {
                       Generar link de pago
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {nextStatuses.includes("cancelled") ? (
+                    {order.status !== "cancelled" ? (
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onClick={() => setCancelOpen(true)}
@@ -338,7 +371,13 @@ export default function AdminOrderDetail() {
                 {/* Mobile: status first */}
                 <div className="lg:hidden">
                   <Section title="Estado">
-                    <StatusPipeline current={pipelineCurrent} status={order.status} />
+                    <StatusPipeline
+                      current={pipelineCurrent}
+                      status={order.status}
+                      paymentStatus={order.paymentStatus}
+                      pending={updateOrder.isPending}
+                      onSelect={(next) => advance(next)}
+                    />
                   </Section>
                 </div>
 
@@ -492,15 +531,15 @@ export default function AdminOrderDetail() {
                   ) : null}
                 </Section>
 
-                {(order.customerNotes || order.productionNotes || order.internalNotes) ? (
-                  <Section title="Notas">
+                <Section title="Notas">
+                  {order.customerNotes || order.productionNotes || order.internalNotes ? (
                     <div className="space-y-3 text-sm">
                       {order.customerNotes ? (
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             Nota del cliente
                           </p>
-                          <p className="mt-0.5">{order.customerNotes}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap">{order.customerNotes}</p>
                         </div>
                       ) : null}
                       {order.productionNotes ? (
@@ -508,7 +547,7 @@ export default function AdminOrderDetail() {
                           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             Nota para producción
                           </p>
-                          <p className="mt-0.5">{order.productionNotes}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap">{order.productionNotes}</p>
                         </div>
                       ) : null}
                       {order.internalNotes ? (
@@ -516,12 +555,27 @@ export default function AdminOrderDetail() {
                           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             Nota interna
                           </p>
-                          <p className="mt-0.5">{order.internalNotes}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap">{order.internalNotes}</p>
                         </div>
                       ) : null}
                     </div>
-                  </Section>
-                ) : null}
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Sin notas. Agrégalas para producción, el equipo o el cliente.
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 h-8 rounded-none"
+                    onClick={openNotes}
+                  >
+                    {order.customerNotes || order.productionNotes || order.internalNotes
+                      ? "Editar notas"
+                      : "Añadir nota"}
+                  </Button>
+                </Section>
 
                 <Collapsible open={historyOpen} onOpenChange={setHistoryOpen} className="py-5">
                   <CollapsibleTrigger className="flex w-full items-center justify-between text-left">
@@ -567,7 +621,13 @@ export default function AdminOrderDetail() {
               <aside className="border-t border-border bg-muted/20 px-4 py-5 md:px-6 lg:sticky lg:top-0 lg:h-fit lg:border-t-0 lg:self-start">
                 <div className="hidden lg:block">
                   <Section title="Estado" className="border-b-0 pt-0">
-                    <StatusPipeline current={pipelineCurrent} status={order.status} />
+                    <StatusPipeline
+                      current={pipelineCurrent}
+                      status={order.status}
+                      paymentStatus={order.paymentStatus}
+                      pending={updateOrder.isPending}
+                      onSelect={(next) => advance(next)}
+                    />
                   </Section>
                 </div>
 
@@ -697,6 +757,58 @@ export default function AdminOrderDetail() {
                 ) : null}
               </div>
             ) : null}
+
+            <Dialog open={notesOpen} onOpenChange={setNotesOpen}>
+              <DialogContent className="rounded-none sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Notas del pedido</DialogTitle>
+                  <DialogDescription>
+                    Visibles para el equipo. La nota del cliente también queda en el pedido.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="production-notes">Producción</Label>
+                    <Textarea
+                      id="production-notes"
+                      className="mt-1 rounded-none"
+                      value={productionNotes}
+                      onChange={(e) => setProductionNotes(e.target.value)}
+                      placeholder="Mensaje en el pastel, decoración, alérgenos…"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="internal-notes">Interna</Label>
+                    <Textarea
+                      id="internal-notes"
+                      className="mt-1 rounded-none"
+                      value={internalNotes}
+                      onChange={(e) => setInternalNotes(e.target.value)}
+                      placeholder="Solo para el equipo"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customer-notes">Cliente</Label>
+                    <Textarea
+                      id="customer-notes"
+                      className="mt-1 rounded-none"
+                      value={customerNotes}
+                      onChange={(e) => setCustomerNotes(e.target.value)}
+                      placeholder="Instrucciones que dejó el cliente"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" className="rounded-none" onClick={() => setNotesOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button className="rounded-none" disabled={updateOrder.isPending} onClick={() => void saveNotes()}>
+                    {updateOrder.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Guardar notas
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={payOpen} onOpenChange={setPayOpen}>
               <DialogContent className="rounded-none sm:max-w-md">
@@ -874,35 +986,74 @@ export default function AdminOrderDetail() {
   );
 }
 
-function StatusPipeline({ current, status }: { current: OrderStatus; status: string }) {
-  if (status === "cancelled") {
-    return <p className="text-sm font-medium text-destructive">Cancelado</p>;
+function statusForPipelineStep(step: OrderStatus, paymentStatus?: string | null): OrderStatus {
+  if (
+    step === "confirmed" &&
+    (paymentStatus === "paid" || paymentStatus === "partially_paid")
+  ) {
+    return "paid";
   }
+  return step;
+}
+
+function StatusPipeline({
+  current,
+  status,
+  paymentStatus,
+  pending,
+  onSelect,
+}: {
+  current: OrderStatus;
+  status: string;
+  paymentStatus?: string | null;
+  pending?: boolean;
+  onSelect: (status: OrderStatus) => void;
+}) {
   return (
-    <ol className="flex flex-col gap-1">
-      {ORDER_STATUS_PIPELINE.map((step, idx) => {
-        const active = step === current;
-        const past =
-          ORDER_STATUS_PIPELINE.indexOf(current) > idx ||
-          (status === "completed" && step !== "completed");
-        return (
-          <li key={step} className="flex items-center gap-2 text-sm">
-            <span
-              className={cn(
-                "flex h-5 w-5 items-center justify-center border text-[10px]",
-                active && "border-foreground bg-foreground text-background",
-                past && !active && "border-muted-foreground/40 text-muted-foreground",
-                !past && !active && "border-border text-muted-foreground",
-              )}
-            >
-              {idx + 1}
-            </span>
-            <span className={cn(active ? "font-semibold" : "text-muted-foreground")}>
-              {ORDER_STATUS_LABELS[step]}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+    <div className="space-y-2">
+      {status === "cancelled" ? (
+        <p className="text-sm font-medium text-destructive">Cancelado. Elige un estado para reabrirlo.</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">Selecciona un estado para cambiarlo.</p>
+      )}
+      <ol className="flex flex-col gap-1">
+        {ORDER_STATUS_PIPELINE.map((step, idx) => {
+          const active = status !== "cancelled" && step === current;
+          const past =
+            status !== "cancelled" &&
+            (ORDER_STATUS_PIPELINE.indexOf(current) > idx ||
+              (status === "completed" && step !== "completed"));
+          const target = statusForPipelineStep(step, paymentStatus);
+          return (
+            <li key={step}>
+              <button
+                type="button"
+                disabled={active || pending}
+                onClick={() => onSelect(target)}
+                className={cn(
+                  "flex w-full items-center gap-2 px-1 py-1 text-left text-sm",
+                  !active && "hover:bg-muted",
+                  active && "cursor-default",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center border text-[10px]",
+                    active && "border-foreground bg-foreground text-background",
+                    past && !active && "border-muted-foreground/40 text-muted-foreground",
+                    !past && !active && "border-border text-muted-foreground",
+                  )}
+                >
+                  {idx + 1}
+                </span>
+                <span className={cn(active ? "font-semibold" : "text-muted-foreground")}>
+                  {ORDER_STATUS_LABELS[step]}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }

@@ -27,6 +27,7 @@ import type { FulfillmentPreview } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
 import { track } from "@/lib/analytics";
+import { formatSlotTime, mexicoTodayLocalDate, sameSlot, slotToIso } from "@/lib/slot-time";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -35,19 +36,15 @@ interface FulfillmentSelectorProps {
   required?: boolean;
 }
 
-const today = startOfDay(new Date());
 const dayLabels = ["L", "M", "M", "J", "V", "S", "D"];
-
-function displayTime(value: string) {
-  return new Date(value).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-}
 
 export function FulfillmentSelector({ required = false }: FulfillmentSelectorProps) {
   const { branchId, cartId, selectedDate, selectedTime, fulfillmentMethod, setFulfillmentContext } = useCart();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const today = startOfDay(mexicoTodayLocalDate());
   const [isOpen, setIsOpen] = useState(false);
-  const [month, setMonth] = useState(startOfMonth(new Date()));
+  const [month, setMonth] = useState(() => startOfMonth(mexicoTodayLocalDate()));
   const [draftDate, setDraftDate] = useState<string | null>(selectedDate);
   const [draftTime, setDraftTime] = useState<string | null>(selectedTime);
   const [preview, setPreview] = useState<FulfillmentPreview | null>(null);
@@ -191,7 +188,7 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
 
   const shouldBlockClose = Boolean(required && branchId && (!selectedDate || !selectedTime));
   const currentLabel = selectedDate && selectedTime
-    ? `${format(parseISO(selectedDate), "d MMM", { locale: es })} · ${displayTime(selectedTime)}`
+    ? `${format(parseISO(selectedDate), "d MMM", { locale: es })} · ${formatSlotTime(selectedTime)}`
     : "Elegir fecha y hora";
 
   return (
@@ -309,21 +306,23 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
                     ) : slots?.length ? (
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {slots.map((slot) => {
-                          const value = slot.start;
+                          const value = slotToIso(slot.start);
                           const available = slot.available;
+                          const selected = sameSlot(draftTime, value);
                           return (
                             <button
                               type="button"
                               key={value}
                               disabled={!available}
+                              aria-pressed={selected}
                               onClick={() => {
                                 setDraftTime(value);
                                 track("time_selected", { time: value, method: fulfillmentMethod, source: "header" });
                               }}
-                              className={`border px-3 py-3 text-sm transition-colors ${draftTime === value ? "border-primary bg-primary text-white" : available ? "border-border hover:border-primary" : "cursor-not-allowed border-border/50 text-muted-foreground/50"}`}
+                              className={`border px-3 py-3 text-sm transition-colors ${selected ? "border-primary bg-primary text-white" : available ? "border-border hover:border-primary" : "cursor-not-allowed border-border/50 text-muted-foreground/50"}`}
                             >
                               <Clock className="mx-auto mb-1 h-3.5 w-3.5" />
-                              {displayTime(value)}
+                              {formatSlotTime(value)}
                               {!available ? <span className="mt-1 block text-[10px]">No disponible</span> : null}
                             </button>
                           );

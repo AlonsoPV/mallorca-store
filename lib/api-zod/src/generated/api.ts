@@ -258,6 +258,7 @@ export const ListProductsQueryParams = zod.object({
   "categorySlug": zod.coerce.string().optional(),
   "search": zod.coerce.string().optional(),
   "featured": zod.coerce.boolean().optional(),
+  "seasonal": zod.coerce.boolean().optional(),
   "scheduledStart": zod.date().optional(),
   "includeUnavailable": zod.coerce.boolean().optional()
 })

@@ -1,3 +1,6 @@
+import { buildReceiptPdf, receiptFilename } from "../../order-receipt.mjs";
+import { receiptSnapshot } from "../../../../lib/purchase-result.mjs";
+import { orderEmailStatus, processOrderEmails } from "../lib/order-emails";
 import { Router, type IRouter } from "express";
 import { and, eq, sql, desc } from "drizzle-orm";
 import {
@@ -441,6 +444,7 @@ router.post("/orders", async (req, res): Promise<void> => {
     if (!result.order) { res.status(500).json({ error: "Order create failed" }); return; }
     const full = await findOrderWithItems(result.order.id);
     res.status(201).json(CreateOrderResponse.parse(orderShape(full!)));
+    void processOrderEmails();
   } catch (error) {
     if (error instanceof OrderCreateError) {
       res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
@@ -463,12 +467,31 @@ router.post("/orders/:id/payment", async (req, res): Promise<void> => {
   res.status(503).json(StartOrderPaymentResponse.parse({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" }));
 });
 
-async function sendOrder(req: any, res: any, guest = false): Promise<void> {
+async function sendOrder(req: any, res: any, guest = false, mode: "details" | "receipt" | "confirmation" = "details"): Promise<void> {
   const p = (guest ? GetGuestOrderDetailsParams : GetOrderDetailsParams).safeParse(req.params); if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
   const token = guest ? (p.data as { id: string; token: string }).token : undefined;
   const order = await findOrderWithItems(p.data.id); if (!order || (guest ? order.guestAccessToken !== token : (await getRequestUser(req))?.id !== order.userId)) { res.status(404).json({ error: "Order not found" }); return; }
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  if (mode !== "details") {
+    const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, order.branchId));
+    if (mode === "confirmation") {
+      let notifications;
+      try { notifications = await orderEmailStatus(order.id); }
+      catch { notifications = { customer: { status: "unavailable" }, branch: { status: "unavailable" } }; }
+      res.json({ branchName: branch?.name, branchAddress: branch?.address, branchPhone: branch?.phone, notifications }); return;
+    }
+    const pdf = await buildReceiptPdf(receiptSnapshot(order, branch));
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${receiptFilename(order)}"`);
+    res.send(pdf); return;
+  }
   res.json((guest ? GetGuestOrderDetailsResponse : GetOrderDetailsResponse).parse(order));
 }
+router.get("/orders/:id/receipt.pdf", requireAuth, (req, res) => sendOrder(req, res, false, "receipt"));
+router.get("/guest/orders/:id/:token/receipt.pdf", (req, res) => sendOrder(req, res, true, "receipt"));
+router.get("/orders/:id/confirmation", requireAuth, (req, res) => sendOrder(req, res, false, "confirmation"));
+router.get("/guest/orders/:id/:token/confirmation", (req, res) => sendOrder(req, res, true, "confirmation"));
 router.get("/orders/:id", requireAuth, (req, res) => sendOrder(req, res));
 router.get("/guest/orders/:id/:token", (req, res) => sendOrder(req, res, true));
 router.get("/me", requireAuth, async (req, res): Promise<void> => { const u = await getRequestUser(req); res.json(GetMeResponse.parse(u)); });

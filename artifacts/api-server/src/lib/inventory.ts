@@ -50,6 +50,8 @@ export const productImportFields = [
   "available",
   "inventory",
   "minStock",
+  "criticalStock",
+  "autoAlertEnabled",
   "priceOverride",
   "salePriceOverride",
   "preparationTimeMinutes",
@@ -88,6 +90,8 @@ export type ProductImportRecord = {
   available?: boolean;
   inventory?: number;
   minStock?: number;
+  criticalStock?: number;
+  autoAlertEnabled?: boolean;
   priceOverride?: number;
   salePriceOverride?: number;
   preparationTimeMinutes?: number;
@@ -150,6 +154,8 @@ const importHeaderAliases: Partial<Record<ProductImportField, string[]>> = {
   salePrice: ["sale_price", "precio_oferta"],
   minimumLeadTimeHours: ["minimum_lead_time_hours", "horas_preparacion"],
   minStock: ["min_stock", "stock_minimo", "stock_mínimo"],
+  criticalStock: ["critical_stock"],
+  autoAlertEnabled: ["auto_alert", "auto_alert_enabled"],
   priceOverride: ["price_override", "precio_sucursal"],
   salePriceOverride: ["sale_price_override", "precio_oferta_sucursal"],
   preparationTimeMinutes: ["preparation_time_minutes", "minutos_preparacion"],
@@ -169,6 +175,7 @@ function fieldIndex(
   mapping: ProductImportMapping,
 ): number {
   const mapped = mapping[field];
+  if (mapped === "") return -1;
   if (mapped) {
     const mappedIndex = headers.findIndex((header) => header === mapped);
     if (mappedIndex >= 0) return mappedIndex;
@@ -217,6 +224,26 @@ function readBoolean(
   return undefined;
 }
 
+function productCsvLines(csv: string): string[] {
+  const lines: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let i = 0; i < csv.length; i++) {
+    const char = csv[i];
+    if (char === '"') {
+      if (quoted && csv[i + 1] === '"') { value += '""'; i++; continue; }
+      quoted = !quoted;
+    }
+    if (char === "\n" && !quoted) {
+      if (value.trim()) lines.push(value.replace(/\r$/, ""));
+      value = "";
+    } else value += char;
+  }
+  if (quoted) throw new Error("Unclosed CSV quote");
+  if (value.trim()) lines.push(value);
+  return lines;
+}
+
 /**
  * Parses the complete product import contract. The parser only validates
  * cell types; database-backed validation (categories, branches and access)
@@ -226,7 +253,9 @@ export function parseProductImportCsv(
   csv: string,
   mapping: ProductImportMapping = {},
 ): { rows: ProductImportRecord[]; errors: ProductImportIssue[]; headers: string[] } {
-  const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  let lines: string[];
+  try { lines = productCsvLines(csv.replace(/^\uFEFF/, "")); }
+  catch { return { rows: [], errors: [{ row: 1, message: "Unclosed CSV quote" }], headers: [] }; }
   if (!lines.length) return { rows: [], errors: [{ row: 1, message: "CSV is empty" }], headers: [] };
   const headers = parseCsvLine(lines[0]);
   if (!mapping.sku && !headers.some((header) => normalizeImportHeader(header) === "sku")) {
@@ -295,6 +324,8 @@ export function parseProductImportCsv(
       available: readBoolean(values, indices.available, row, "available", errors),
       inventory: readNumber(values, indices.inventory, row, "inventory", errors),
       minStock: readNumber(values, indices.minStock, row, "minStock", errors),
+      criticalStock: readNumber(values, indices.criticalStock, row, "criticalStock", errors),
+      autoAlertEnabled: readBoolean(values, indices.autoAlertEnabled, row, "autoAlertEnabled", errors),
       priceOverride: readNumber(values, indices.priceOverride, row, "priceOverride", errors),
       salePriceOverride: readNumber(values, indices.salePriceOverride, row, "salePriceOverride", errors),
       preparationTimeMinutes: readNumber(values, indices.preparationTimeMinutes, row, "preparationTimeMinutes", errors),
@@ -309,6 +340,11 @@ export function parseProductImportCsv(
       discountBranches: splitPipeList(readText(values, indices.discountBranches)),
       crossSellSkus: splitPipeList(readText(values, indices.crossSellSkus)),
     };
+    for (const field of ["inventory", "minStock", "criticalStock", "preparationTimeMinutes"] as const) {
+      if (record[field] != null && !Number.isSafeInteger(record[field])) errors.push({ row, message: `${field} must be an integer` });
+    }
+    if (record.criticalStock != null && record.minStock != null && record.criticalStock > record.minStock) errors.push({ row, message: "criticalStock must not exceed minStock" });
+    if (!branchCode && [record.inventory, record.minStock, record.criticalStock, record.autoAlertEnabled].some(value => value !== undefined)) errors.push({ row, message: "branchCode is required for inventory" });
     if (errors.length === rowErrorsBefore) rows.push(record);
   });
   return { rows, errors, headers };
