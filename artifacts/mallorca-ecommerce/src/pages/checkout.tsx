@@ -5,6 +5,7 @@ import {
   useValidateDelivery,
   useListFulfillmentSlots,
   useCreateOrder,
+  startOrderPayment,
   usePreviewOrder,
   useListCheckoutPaymentMethods,
   OrderInputFulfillmentMethod,
@@ -311,6 +312,11 @@ export default function CheckoutPage() {
 
     if (isSubmitting || createOrder.isPending) return;
     setIsSubmitting(true);
+    const selectedPayment = paymentMethods.some((method) => method.code === paymentMethod)
+      ? paymentMethod
+      : fulfillmentMethod === "pickup"
+        ? "CASH_ON_PICKUP"
+        : "PENDING";
     try {
       const order = await createOrder.mutateAsync({
         data: {
@@ -321,7 +327,7 @@ export default function CheckoutPage() {
           customerName,
           customerPhone,
           notes,
-          paymentMethod: fulfillmentMethod === "pickup" ? paymentMethod : "PENDING",
+          paymentMethod: selectedPayment,
           deliveryAddress: fulfillmentMethod === "delivery" ? deliveryAddress : undefined,
           deliveryAddressSnapshot: deliverySnapshot,
           deliveryLatitude: fulfillmentMethod === "delivery" ? lat ?? undefined : undefined,
@@ -332,7 +338,7 @@ export default function CheckoutPage() {
       try { track("purchase", {
         orderId: order.id,
         value: order.total,
-        payment_type: fulfillmentMethod === "pickup" ? paymentMethod : "PENDING",
+        payment_type: selectedPayment,
         fulfillmentMethod,
       }); } catch { /* Analytics must not interrupt an already-created order. */ }
 
@@ -342,6 +348,21 @@ export default function CheckoutPage() {
         sessionStorage.removeItem("mallorca_checkout_draft");
       } catch { /* Receipt remains accessible when browser storage is unavailable. */ }
       try { clearCartSession(); } catch { /* Always show the created order. */ }
+      if (selectedPayment === "MERCADO_PAGO" || selectedPayment === "PAYPAL" || selectedPayment === "ONLINE") {
+        try {
+          const session = await startOrderPayment(order.id, { guestAccessToken: order.guestAccessToken });
+          if (session.redirectUrl) {
+            window.location.assign(session.redirectUrl);
+            return;
+          }
+        } catch {
+          toast({
+            title: "No se pudo abrir el pago",
+            description: "El pedido quedó creado. Puedes revisarlo en el recibo.",
+            variant: "destructive",
+          });
+        }
+      }
       setLocation(orderUrl);
     } catch (err: any) {
       setIsSubmitting(false);
@@ -531,7 +552,7 @@ export default function CheckoutPage() {
               )}
             </section>
 
-            {fulfillmentMethod === "pickup" && paymentMethods.length > 0 ? (
+            {paymentMethods.length > 0 ? (
               <section>
                 <h2 className="font-serif text-xl mb-4">3. Forma de pago</h2>
                 <RadioGroup
@@ -561,7 +582,7 @@ export default function CheckoutPage() {
             <section>
               <h2 className="font-serif text-xl mb-4 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-primary" />
-                {fulfillmentMethod === "pickup" && paymentMethods.length > 0 ? "4. Fecha y horario" : "3. Fecha y horario"}
+                {paymentMethods.length > 0 ? "4. Fecha y horario" : "3. Fecha y horario"}
               </h2>
               <div className="flex min-w-0 gap-2 overflow-x-auto pb-2">
                 {upcomingDays.map((day) => {

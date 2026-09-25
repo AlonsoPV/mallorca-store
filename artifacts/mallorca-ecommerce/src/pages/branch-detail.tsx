@@ -2,12 +2,15 @@ import { StoreLayout } from "@/components/layout/store-layout";
 import { useGetBranch } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ExternalLink, Mail, MapPin, MessageCircle, Phone, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, ExternalLink, Instagram, Mail, MapPin, MessageCircle, Phone, type LucideIcon } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel";
 import { ImageWithFallback } from "@/components/image-with-fallback";
 import { formatBranchPostalLines } from "@/lib/availability-copy";
 import { cn } from "@/lib/utils";
 import { branchGalleryFallback, branchGalleryFor, branchImageFor, branchLocalImage } from "@/lib/store-media";
+import { branchLinks } from "@/lib/branch-links";
 
 const WEEKDAY_INDEX: Record<string, number> = {
   sunday: 0,
@@ -41,6 +44,28 @@ function formatMxPhone(raw: string) {
 export default function BranchDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { data: branch, isLoading, isError } = useGetBranch(slug || "");
+  const [productsApi, setProductsApi] = useState<CarouselApi>();
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+  const [snapCount, setSnapCount] = useState(0);
+  const [selectedSnap, setSelectedSnap] = useState(0);
+
+  useEffect(() => {
+    if (!productsApi) return;
+    const sync = () => {
+      setCanPrev(productsApi.canScrollPrev());
+      setCanNext(productsApi.canScrollNext());
+      setSnapCount(productsApi.scrollSnapList().length);
+      setSelectedSnap(productsApi.selectedScrollSnap());
+    };
+    sync();
+    productsApi.on("reInit", sync);
+    productsApi.on("select", sync);
+    return () => {
+      productsApi.off("reInit", sync);
+      productsApi.off("select", sync);
+    };
+  }, [productsApi]);
 
   if (isLoading) {
     return (
@@ -77,8 +102,9 @@ export default function BranchDetail() {
     );
   }
 
-  const reservationUrl = (branch as any).reservationUrl || branch.openTableUrl;
-  const reservationCta = (branch as any).reservationCta || "Reservar mesa";
+  const links = branchLinks(branch);
+  const reservationLinks = links.filter((link) => link.kind !== "instagram");
+  const instagramLink = links.find((link) => link.kind === "instagram");
   const whatsappHref = branch.whatsapp
     ? `https://wa.me/${branch.whatsapp.replace(/\D/g, "")}${
         (branch as any).whatsappDefaultMessage
@@ -120,6 +146,16 @@ export default function BranchDetail() {
           href: whatsappHref,
           external: true,
           icon: MessageCircle,
+        }
+      : null,
+    instagramLink
+      ? {
+          key: "instagram",
+          label: "Instagram",
+          value: `@${new URL(instagramLink.href).pathname.split("/").filter(Boolean)[0] ?? ""}`,
+          href: instagramLink.href,
+          external: true,
+          icon: Instagram,
         }
       : null,
   ].filter((item): item is ContactRow => item != null);
@@ -177,11 +213,16 @@ export default function BranchDetail() {
             <p className="mt-3 max-w-2xl text-foreground/80">{(branch as any).shortDescription}</p>
           )}
           <div className="mt-6 flex flex-wrap gap-3">
-            {reservationUrl && (
-              <Button asChild className="rounded-none">
-                <a href={reservationUrl} target="_blank" rel="noopener noreferrer">{reservationCta}</a>
+            {reservationLinks.map((link, index) => (
+              <Button
+                key={link.kind}
+                asChild
+                variant={index === 0 ? "default" : "outline"}
+                className={cn("rounded-none", index > 0 && "bg-background/80")}
+              >
+                <a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
               </Button>
-            )}
+            ))}
             <Button asChild variant="outline" className="rounded-none bg-background/80">
               <Link href={`/tienda?branch=${branch.slug}`}>Pedir</Link>
             </Button>
@@ -334,13 +375,23 @@ export default function BranchDetail() {
                       ))}
                     </div>
 
-                    {reservationUrl ? (
-                      <div className="border-t border-border p-6 sm:p-7">
-                        <Button asChild className="h-12 w-full rounded-none bg-foreground text-background hover:bg-foreground/90">
-                          <a href={reservationUrl} target="_blank" rel="noopener noreferrer">
-                            {reservationCta}
-                          </a>
-                        </Button>
+                    {reservationLinks.length > 0 ? (
+                      <div className="space-y-2.5 border-t border-border p-6 sm:p-7">
+                        {reservationLinks.map((link, index) => (
+                          <Button
+                            key={link.kind}
+                            asChild
+                            variant={index === 0 ? "default" : "outline"}
+                            className={cn(
+                              "h-12 w-full rounded-none",
+                              index === 0 && "bg-foreground text-background hover:bg-foreground/90",
+                            )}
+                          >
+                            <a href={link.href} target="_blank" rel="noopener noreferrer">
+                              {link.label}
+                            </a>
+                          </Button>
+                        ))}
                       </div>
                     ) : null}
             </div>
@@ -370,24 +421,78 @@ export default function BranchDetail() {
           </aside>
 
           {/* Branch Products */}
-          <div className="flex-1">
-            <div className="flex items-end justify-between mb-8 pb-4 border-b border-border">
-              <h2 className="font-serif text-3xl">Disponible en esta sucursal</h2>
-              <span className="text-sm text-muted-foreground hidden sm:block">
-                {branch.products?.length || 0} productos
-              </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8 pb-4 border-b border-border">
+              <div>
+                <h2 className="font-serif text-2xl sm:text-3xl">Disponible en esta sucursal</h2>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  {branch.products?.length || 0} productos
+                </span>
+              </div>
+              {branch.products && branch.products.length > 0 && (canPrev || canNext) ? (
+                <div className="flex items-center gap-2">
+                  {[
+                    { label: "Productos anteriores", enabled: canPrev, onClick: () => productsApi?.scrollPrev(), Icon: ArrowLeft },
+                    { label: "Productos siguientes", enabled: canNext, onClick: () => productsApi?.scrollNext(), Icon: ArrowRight },
+                  ].map(({ label, enabled, onClick, Icon }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-label={label}
+                      disabled={!enabled}
+                      onClick={onClick}
+                      className={cn(
+                        "flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-[var(--mallorca-cacao)]/20 text-[var(--mallorca-cacao)] transition-colors",
+                        enabled
+                          ? "hover:border-[var(--mallorca-red)] hover:bg-[var(--mallorca-red)] hover:text-white"
+                          : "cursor-not-allowed opacity-35",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             {branch.products && branch.products.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {branch.products.map(product => (
-                  <ProductCard 
-                    key={product.id} 
-                    product={product} 
-                    showBranchAvailability={true}
-                  />
-                ))}
-              </div>
+              <Carousel
+                setApi={setProductsApi}
+                opts={{ align: "start", containScroll: "trimSnaps" }}
+              >
+                <CarouselContent className="-ml-4 md:-ml-6">
+                  {branch.products.map(product => (
+                    <CarouselItem
+                      key={product.id}
+                      className="basis-[82%] pl-4 sm:basis-1/2 md:pl-6 xl:basis-1/3"
+                    >
+                      <ProductCard
+                        product={product}
+                        showBranchAvailability={true}
+                      />
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                {snapCount > 1 ? (
+                  <div className="mt-8 flex justify-center gap-2">
+                    {Array.from({ length: snapCount }, (_, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        aria-label={`Ir al grupo ${index + 1}`}
+                        aria-current={index === selectedSnap}
+                        onClick={() => productsApi?.scrollTo(index)}
+                        className={cn(
+                          "h-1.5 rounded-full transition-all",
+                          index === selectedSnap
+                            ? "w-6 bg-[var(--mallorca-red)]"
+                            : "w-1.5 bg-[var(--mallorca-cacao)]/25 hover:bg-[var(--mallorca-cacao)]/50",
+                        )}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </Carousel>
             ) : (
               <div className="py-20 text-center bg-secondary/20 border border-border">
                 <p className="text-muted-foreground">No hay productos listados para esta sucursal.</p>

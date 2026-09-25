@@ -1,11 +1,12 @@
 import { StoreLayout } from "@/components/layout/store-layout";
 import { useListBranches } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { ArrowUpRight, Clock, MapPin, Phone } from "lucide-react";
+import { ArrowUpRight, CalendarCheck, Clock, Instagram, MapPin, Phone } from "lucide-react";
 import { ImageWithFallback } from "@/components/image-with-fallback";
 import { formatBranchPostalLines } from "@/lib/availability-copy";
 import { branchImageFor, branchLocalImage, storeBranchesHero } from "@/lib/store-media";
 import { cn } from "@/lib/utils";
+import { branchLinks } from "@/lib/branch-links";
 
 const WEEKDAY_INDEX: Record<string, number> = {
   sunday: 0,
@@ -97,12 +98,13 @@ export default function Branches() {
                   branch.deliveryAvailable ? "Entrega" : null,
                 ].filter(Boolean);
 
+                const links = branchLinks(branch);
+
                 return (
-                  <Link
+                  <article
                     key={branch.id}
-                    href={`/sucursales/${branch.slug}`}
                     className={cn(
-                      "group flex flex-col overflow-hidden border border-[var(--mallorca-cacao)]/12 bg-[var(--mallorca-white)]",
+                      "group relative flex flex-col overflow-hidden border border-[var(--mallorca-cacao)]/12 bg-[var(--mallorca-white)]",
                       "transition-colors duration-300 hover:border-[var(--mallorca-red)]/45",
                     )}
                   >
@@ -193,13 +195,45 @@ export default function Branches() {
                           </p>
                         ) : null}
 
-                        <span className="inline-flex items-center gap-2 pt-1 text-[0.72rem] font-bold uppercase tracking-[0.16em] text-[var(--mallorca-red)]">
+                        {links.length > 0 ? (
+                          <div className="relative z-10 flex flex-wrap gap-2 pt-1">
+                            {links.map((link) => (
+                              <a
+                                key={link.kind}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={link.kind === "instagram" ? `Instagram de ${branch.name}` : undefined}
+                                className={cn(
+                                  "inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] transition-colors",
+                                  link.kind === "instagram"
+                                    ? "w-9 justify-center border-[var(--mallorca-cacao)]/20 px-0 text-[var(--mallorca-cacao)] hover:border-[var(--mallorca-red)] hover:text-[var(--mallorca-red)]"
+                                    : "border-[var(--mallorca-red)] bg-[var(--mallorca-red)] text-white hover:bg-[var(--mallorca-red-dark)]",
+                                )}
+                              >
+                                {link.kind === "instagram" ? (
+                                  <Instagram className="h-4 w-4" />
+                                ) : (
+                                  <>
+                                    <CalendarCheck className="h-3.5 w-3.5" />
+                                    {link.label}
+                                  </>
+                                )}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <Link
+                          href={`/sucursales/${branch.slug}`}
+                          className="inline-flex items-center gap-2 pt-1 text-[0.72rem] font-bold uppercase tracking-[0.16em] text-[var(--mallorca-red)] after:absolute after:inset-0 after:content-['']"
+                        >
                           Ver detalles
                           <ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                        </span>
+                        </Link>
                       </div>
                     </div>
-                  </Link>
+                  </article>
                 );
               })}
             </div>

@@ -10,7 +10,9 @@ export type StorefrontPaymentMethod =
   | "PAYMENT_LINK"
   | "PENDING"
   | "COURTESY"
-  | "CASH_ON_PICKUP";
+  | "CASH_ON_PICKUP"
+  | "MERCADO_PAGO"
+  | "PAYPAL";
 
 export type PaymentMethodConfig = {
   code: string;

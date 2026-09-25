@@ -1082,6 +1082,8 @@ export const PaymentMethod = {
   PENDING: 'PENDING',
   COURTESY: 'COURTESY',
   CASH_ON_PICKUP: 'CASH_ON_PICKUP',
+  MERCADO_PAGO: 'MERCADO_PAGO',
+  PAYPAL: 'PAYPAL',
 } as const;
 
 export interface CheckoutPaymentMethod {
@@ -1566,8 +1568,12 @@ export const PaymentStartCode = {
 } as const;
 
 export interface PaymentStart {
-  error: string;
-  code: PaymentStartCode;
+  error?: string;
+  code?: PaymentStartCode;
+  provider?: "MERCADO_PAGO" | "PAYPAL";
+  redirectUrl?: string;
+  providerReference?: string;
+  mode?: "redirect";
 }
 
 export interface PaymentStartInput {

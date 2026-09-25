@@ -1969,7 +1969,7 @@ export const PreviewOrderBody = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "notes": zod.string().nullish(),
-  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP']).optional(),
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP', 'MERCADO_PAGO', 'PAYPAL']).optional(),
   "deliveryAddress": zod.string().nullish(),
   "deliveryAddressSnapshot": zod.object({
   "street": zod.string().nullish(),
@@ -2023,7 +2023,7 @@ export const CreateOrderBody = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "notes": zod.string().nullish(),
-  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP']).optional(),
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP', 'MERCADO_PAGO', 'PAYPAL']).optional(),
   "deliveryAddress": zod.string().nullish(),
   "deliveryAddressSnapshot": zod.object({
   "street": zod.string().nullish(),
@@ -2126,8 +2126,12 @@ export const StartOrderPaymentBody = zod.object({
 })
 
 export const StartOrderPaymentResponse = zod.object({
-  "error": zod.string(),
-  "code": zod.enum(['PAYMENT_PROVIDER_NOT_CONFIGURED'])
+  "error": zod.string().optional(),
+  "code": zod.enum(['PAYMENT_PROVIDER_NOT_CONFIGURED']).optional(),
+  "provider": zod.enum(['MERCADO_PAGO', 'PAYPAL']).optional(),
+  "redirectUrl": zod.string().optional(),
+  "providerReference": zod.string().optional(),
+  "mode": zod.enum(['redirect']).optional()
 })
 
 
@@ -2429,7 +2433,7 @@ export const CreateAdminOrderBody = zod.object({
   "reason": zod.string().min(1)
 }).optional(),
   "couponCode": zod.string().nullish(),
-  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP']).optional(),
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP', 'MERCADO_PAGO', 'PAYPAL']).optional(),
   "markPaid": zod.boolean().optional(),
   "paymentReference": zod.string().nullish(),
   "paymentNote": zod.string().nullish(),
@@ -2567,7 +2571,7 @@ export const PreviewAdminOrderBody = zod.object({
   "reason": zod.string().min(1)
 }).optional(),
   "couponCode": zod.string().nullish(),
-  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP']).optional(),
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP', 'MERCADO_PAGO', 'PAYPAL']).optional(),
   "markPaid": zod.boolean().optional(),
   "paymentReference": zod.string().nullish(),
   "paymentNote": zod.string().nullish(),
@@ -5378,7 +5382,7 @@ export const RecordAdminOrderPaymentParams = zod.object({
 export const recordAdminOrderPaymentBodyMarkPaidDefault = true;
 
 export const RecordAdminOrderPaymentBody = zod.object({
-  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP']),
+  "paymentMethod": zod.enum(['ONLINE', 'CASH', 'TERMINAL', 'TRANSFER', 'PAYMENT_LINK', 'PENDING', 'COURTESY', 'CASH_ON_PICKUP', 'MERCADO_PAGO', 'PAYPAL']),
   "paymentReference": zod.string().nullish(),
   "paymentNote": zod.string().nullish(),
   "amountPaid": zod.number().nullish(),

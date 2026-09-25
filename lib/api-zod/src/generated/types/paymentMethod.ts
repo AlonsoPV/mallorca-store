@@ -18,4 +18,6 @@ export const PaymentMethod = {
   PENDING: 'PENDING',
   COURTESY: 'COURTESY',
   CASH_ON_PICKUP: 'CASH_ON_PICKUP',
+  MERCADO_PAGO: 'MERCADO_PAGO',
+  PAYPAL: 'PAYPAL',
 } as const;

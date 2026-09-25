@@ -218,9 +218,6 @@ export function StoreLayout({ children }: { children: ReactNode }) {
 
         {isMobileMenuOpen && (
           <div className="flex flex-col gap-2 border-b border-border bg-background px-5 py-4 text-foreground animate-in slide-in-from-top-2 lg:hidden">
-            <Link href="/tienda" className="block border-b border-border py-2 text-lg font-serif text-foreground transition-colors hover:text-primary" onClick={toggleMenu}>
-              Descubre la pastelería
-            </Link>
             <Link href="/sucursales" className="block border-b border-border py-2 text-lg font-serif text-foreground transition-colors hover:text-primary" onClick={toggleMenu}>
               Sucursales
             </Link>
@@ -274,32 +271,20 @@ export function StoreLayout({ children }: { children: ReactNode }) {
       </main>
 
       <footer className="mt-auto bg-black text-white">
-        <div className="mx-auto max-w-[1180px] px-5 py-10 sm:px-8 sm:py-12 md:px-10 md:py-14">
-          <div className="grid gap-10 md:grid-cols-2 md:gap-x-10 md:gap-y-12 lg:grid-cols-[minmax(9rem,0.7fr)_minmax(0,0.95fr)_minmax(0,1.55fr)] lg:items-start lg:gap-x-10 xl:gap-x-14">
-            <div className="flex flex-col items-start gap-4 md:col-span-2 lg:col-span-1">
+        <div className="mx-auto max-w-[1180px] px-5 pb-6 pt-10 sm:px-8 md:px-10 md:pt-12">
+          <div className="grid gap-9 sm:grid-cols-2 sm:gap-x-8 md:grid-cols-4 md:gap-x-6 lg:gap-x-8">
+            <div className="flex flex-col items-start gap-5">
               <Link href="/" aria-label="Pastelería Mallorca" className="inline-flex items-center">
                 <img
                   src={footerLogo}
                   alt="Mallorca Pastelería"
-                  className="h-auto w-[120px] max-w-full object-contain sm:w-[140px]"
+                  className="h-auto w-[128px] max-w-full object-contain"
                 />
               </Link>
-              <a
-                href="https://www.tripadvisor.com.mx/Restaurant_Review-g150800-d11706469-Reviews-Pasteleria_Mallorca-Mexico_City_Central_Mexico_and_Gulf_Coast.html"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/55 px-3 py-1.5 text-[10px] font-medium tracking-wide text-white/90 transition-colors hover:border-[var(--mallorca-red)] hover:text-[var(--mallorca-red)]"
-              >
-                <MessageCircle className="h-3 w-3" />
-                Déjanos tus comentarios
-              </a>
-            </div>
-
-            <div className="min-w-0">
-              <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                Conoce más
-              </h2>
-              <ul className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:gap-x-6 sm:gap-y-3 lg:grid-cols-1 xl:grid-cols-2 xl:gap-x-5">
+              <p className="max-w-[16rem] text-[13px] leading-relaxed text-white/55">
+                Pastelería europea hecha cada mañana en la Ciudad de México.
+              </p>
+              <div className="flex items-center gap-2">
                 {[
                   { href: "https://www.instagram.com/mallorcamx/?hl=es", icon: Instagram, label: "Instagram" },
                   { href: "https://www.linkedin.com/company/55180564/admin/", icon: Linkedin, label: "LinkedIn" },
@@ -308,8 +293,30 @@ export function StoreLayout({ children }: { children: ReactNode }) {
                     icon: MessageCircle,
                     label: "Trip Advisor",
                   },
+                ].map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={item.label}
+                    title={item.label}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-[var(--mallorca-red)] hover:bg-[var(--mallorca-red)] hover:text-white"
+                  >
+                    <item.icon className="h-4 w-4" />
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <nav aria-label="Enlaces" className="min-w-0">
+              <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                Enlaces
+              </h2>
+              <ul className="space-y-2.5">
+                {[
                   { href: "https://www.pasteleria-mallorca.com/", icon: Globe2, label: "Mallorca España" },
-                  { href: "https://xetux-e.com/facturacion/webFact", icon: FileText, label: "Factura" },
+                  { href: "https://xetux-e.com/facturacion/webFact", icon: FileText, label: "Facturación" },
                   {
                     href: "https://pasteleria-mallorca.mx/bolsa-de-trabajo",
                     icon: BriefcaseBusiness,
@@ -321,32 +328,35 @@ export function StoreLayout({ children }: { children: ReactNode }) {
                       href={item.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex max-w-full items-center gap-2 text-[13px] leading-snug text-white/80 transition-colors hover:text-[var(--mallorca-red)]"
+                      className="inline-flex items-center gap-2.5 text-[13px] text-white/80 transition-colors hover:text-[var(--mallorca-red)]"
                     >
-                      <item.icon className="h-3.5 w-3.5 shrink-0 text-white/55" />
-                      <span className="min-w-0">{item.label}</span>
+                      <item.icon className="h-3.5 w-3.5 shrink-0 text-white/45" />
+                      {item.label}
                     </a>
                   </li>
                 ))}
               </ul>
-            </div>
+            </nav>
 
-            <div className="min-w-0 border-t border-white/10 pt-8 md:border-t-0 md:pt-0">
+            <div className="min-w-0 sm:col-span-2">
               <div className="mb-4 flex items-baseline justify-between gap-3">
                 <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
                   Sucursales
                 </h2>
                 <Link
                   href="/sucursales"
-                  className="text-[10px] font-medium text-white/45 transition-colors hover:text-[var(--mallorca-red)]"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-white/55 transition-colors hover:text-[var(--mallorca-red)]"
                 >
-                  Ver todas
+                  Ver todas <ArrowUpRight className="h-3 w-3" />
                 </Link>
               </div>
-              <div className="grid grid-cols-1 gap-6 min-[480px]:grid-cols-2 min-[480px]:gap-x-6 min-[480px]:gap-y-7 sm:gap-x-8">
+              <div className="grid gap-3 sm:grid-cols-2 md:gap-6">
                 {(footerBranches || []).slice(0, 4).map((branch) => (
-                  <div key={branch.id} className="min-w-0">
-                    <h3 className="mb-2 text-[14px] font-semibold tracking-tight">
+                  <div
+                    key={branch.id}
+                    className="min-w-0 rounded-lg border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-white/20"
+                  >
+                    <h3 className="text-[14px] font-semibold tracking-tight">
                       <Link
                         href={`/sucursales/${branch.slug}`}
                         className="transition-colors hover:text-[var(--mallorca-red)]"
@@ -354,34 +364,37 @@ export function StoreLayout({ children }: { children: ReactNode }) {
                         {branch.name.replace(/^Mallorca\s+/i, "")}
                       </Link>
                     </h3>
-                    <div className="space-y-1.5 text-[12px] leading-snug text-white/65">
+                    <div className="mt-2.5 space-y-1.5 text-[12px] leading-snug text-white/65">
+                      <a
+                        href={branch.mapsUrl || `/sucursales/${branch.slug}`}
+                        target={branch.mapsUrl ? "_blank" : undefined}
+                        rel={branch.mapsUrl ? "noreferrer" : undefined}
+                        className="flex items-start gap-2 transition-colors hover:text-[var(--mallorca-red)]"
+                      >
+                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 opacity-60" />
+                        <span className="line-clamp-2">{branch.address}</span>
+                      </a>
                       {branch.phone && (
                         <a
                           href={`tel:${branch.phone}`}
-                          className="flex items-center gap-1.5 transition-colors hover:text-[var(--mallorca-red)]"
+                          className="flex items-center gap-2 transition-colors hover:text-[var(--mallorca-red)]"
                         >
                           <Phone className="h-3 w-3 shrink-0 opacity-60" />
-                          <span className="break-words">{branch.phone}</span>
+                          <span>{branch.phone}</span>
                         </a>
                       )}
                       {branch.email && (
                         <a
                           href={`mailto:${branch.email}`}
-                          className="flex items-start gap-1.5 transition-colors hover:text-[var(--mallorca-red)]"
+                          className="flex min-w-0 items-start gap-2 transition-colors hover:text-[var(--mallorca-red)]"
                         >
                           <Mail className="mt-0.5 h-3 w-3 shrink-0 opacity-60" />
-                          <span className="break-all">{branch.email}</span>
+                          <span className="min-w-0 break-words">
+                            {branch.email.split("@")[0]}@<wbr />
+                            {branch.email.split("@").slice(1).join("@").replace(/-/g, "\u2011")}
+                          </span>
                         </a>
                       )}
-                      <a
-                        href={branch.mapsUrl || `/sucursales/${branch.slug}`}
-                        target={branch.mapsUrl ? "_blank" : undefined}
-                        rel={branch.mapsUrl ? "noreferrer" : undefined}
-                        className="flex items-start gap-1.5 transition-colors hover:text-[var(--mallorca-red)]"
-                      >
-                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 opacity-60" />
-                        <span className="line-clamp-3 sm:line-clamp-2">{branch.address}</span>
-                      </a>
                     </div>
                   </div>
                 ))}
@@ -389,16 +402,21 @@ export function StoreLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col gap-3 border-t border-white/15 pt-5 text-[10px] text-white/40 sm:mt-8 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
-            <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-              <span>Aviso de Privacidad</span>
-              <span>Términos y condiciones</span>
+          <div className="mt-10 flex items-center gap-4 border-t border-white/10 pr-16 pt-5 text-[11px] text-white/40 sm:pr-20 xl:pr-0">
+            <div className="flex flex-1 flex-wrap gap-x-5 gap-y-1.5">
+              <span>© {new Date().getFullYear()} Pastelería Mallorca</span>
+              <Link href="/aviso-de-privacidad" className="transition-colors hover:text-white">
+                Aviso de Privacidad
+              </Link>
+              <Link href="/terminos-y-condiciones" className="transition-colors hover:text-white">
+                Términos y condiciones
+              </Link>
             </div>
             <button
               type="button"
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
               aria-label="Volver arriba"
-              className="inline-flex h-8 w-8 items-center justify-center self-end rounded-full border border-white/20 text-white/60 transition-colors hover:border-[var(--mallorca-red)] hover:text-[var(--mallorca-red)] sm:ml-auto sm:h-7 sm:w-7 sm:self-auto"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/20 text-white/60 transition-colors hover:border-[var(--mallorca-red)] hover:text-[var(--mallorca-red)]"
             >
               <ChevronUp className="h-3.5 w-3.5" />
             </button>

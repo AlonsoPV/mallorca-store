@@ -9,7 +9,7 @@ import {
   CarouselItem,
   type CarouselApi,
 } from "@/components/ui/carousel";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Clock, MapPin } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Clock, MapPin, Plus } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
 import { ImageWithFallback } from "@/components/image-with-fallback";
@@ -24,6 +24,23 @@ import {
 } from "@/lib/store-media";
 
 const HERO_SLIDES = storeHeroSlides;
+
+const HISTORY_MILESTONES: { year?: string; title: string; body: string }[] = [
+  {
+    year: "1931",
+    title: "Madrid",
+    body: "Nace Mallorca en Madrid: pastelería y bollería hechas cada mañana.",
+  },
+  {
+    year: "2016",
+    title: "Ciudad de México",
+    body: "Mallorca cruza el Atlántico y abre en Lomas de Chapultepec su casa original en México.",
+  },
+  {
+    title: "Hoy",
+    body: "También nos encuentras en Paseo de la Reforma, con la misma tradición y la hospitalidad de compartir algo bueno.",
+  },
+];
 
 const WEEKDAY_INDEX: Record<string, number> = {
   sunday: 0,
@@ -72,6 +89,7 @@ export default function Home() {
   });
   const [heroShift, setHeroShift] = useState({ x: 0, y: 0 });
   const [heroIndex, setHeroIndex] = useState(0);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [featuredApi, setFeaturedApi] = useState<CarouselApi>();
   const [featuredCanPrev, setFeaturedCanPrev] = useState(false);
   const [featuredCanNext, setFeaturedCanNext] = useState(false);
@@ -577,17 +595,58 @@ export default function Home() {
                 Para encontrarse con la Ciudad de México: su luz, sus sobremesas y la hospitalidad de compartir algo bueno.
               </p>
 
-              <Link
-                href="/nosotros"
-                className="group mt-7 inline-flex max-w-full items-center gap-3 self-start sm:mt-9"
+              <button
+                type="button"
+                aria-expanded={historyOpen}
+                aria-controls="mallorca-historia"
+                onClick={() => setHistoryOpen((open) => !open)}
+                className="group mt-7 inline-flex max-w-full items-center gap-3 self-start text-left sm:mt-9"
               >
                 <span className="border-b border-[var(--mallorca-red)]/35 pb-1 text-[0.68rem] font-bold uppercase tracking-[0.16em] text-[var(--mallorca-red)] transition-colors group-hover:border-[var(--mallorca-red)] sm:text-[0.72rem] sm:tracking-[0.18em]">
-                  Conoce nuestra historia
+                  {historyOpen ? "Ocultar historia" : "Conoce nuestra historia"}
                 </span>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white transition-transform duration-300 group-hover:scale-105 group-hover:bg-[var(--mallorca-red-dark)] sm:h-10 sm:w-10">
-                  <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white transition-colors duration-300 group-hover:bg-[var(--mallorca-red-dark)] sm:h-10 sm:w-10">
+                  <Plus
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform duration-300 sm:h-4 sm:w-4",
+                      historyOpen && "rotate-45",
+                    )}
+                  />
                 </span>
-              </Link>
+              </button>
+
+              <div
+                id="mallorca-historia"
+                role="region"
+                aria-label="Nuestra historia"
+                className={cn(
+                  "grid transition-[grid-template-rows,opacity] duration-500 ease-out",
+                  historyOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                )}
+              >
+                <div className="min-h-0 overflow-hidden" inert={!historyOpen}>
+                  <ol className="ml-3 mt-7 max-w-md border-l border-[var(--mallorca-red)]/25 pl-5 sm:mt-8">
+                    {HISTORY_MILESTONES.map((item) => (
+                      <li key={item.title} className="relative pb-6 last:pb-0">
+                        <span className="absolute -left-[1.6rem] top-1.5 h-2 w-2 rounded-full bg-[var(--mallorca-red)] ring-4 ring-[var(--mallorca-cream)]" />
+                        {item.year ? (
+                          <p className="font-serif text-2xl leading-none text-[var(--mallorca-red)]">{item.year}</p>
+                        ) : null}
+                        <p className={cn("text-sm font-semibold text-foreground", item.year && "mt-1.5")}>
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+                      </li>
+                    ))}
+                  </ol>
+                  <Link
+                    href="/sucursales"
+                    className="editorial-link mt-6 text-sm font-bold text-[var(--mallorca-red)]"
+                  >
+                    Visita nuestras sucursales <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </div>

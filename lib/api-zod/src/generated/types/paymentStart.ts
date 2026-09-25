@@ -8,6 +8,10 @@
 import type { PaymentStartCode } from './paymentStartCode';
 
 export interface PaymentStart {
-  error: string;
-  code: PaymentStartCode;
+  error?: string;
+  code?: PaymentStartCode;
+  provider?: "MERCADO_PAGO" | "PAYPAL";
+  redirectUrl?: string;
+  providerReference?: string;
+  mode?: "redirect";
 }

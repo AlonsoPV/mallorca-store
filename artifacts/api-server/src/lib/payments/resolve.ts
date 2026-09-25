@@ -11,8 +11,9 @@ import {
   providerAvailabilityMap,
   resolveAvailableMethods as resolveAvailableMethodsPure,
 } from "./catalog.ts";
-import { getPaymentProvider, setMercadoPagoConfigured } from "./providers.ts";
-import { decryptSecret, isProviderConfigured } from "./secrets.ts";
+import { gatewayCredentialsReady, isGatewayCode, type GatewayCredentials } from "./gateways/types.ts";
+import { getPaymentProvider, setOnlineProviderConfigured } from "./providers.ts";
+import { decryptSecret } from "./secrets.ts";
 import type { CheckoutPaymentMethod, FulfillmentMethod, PaymentMethodConfig } from "./types.ts";
 
 function mapConfig(row: typeof paymentMethodConfigsTable.$inferSelect): PaymentMethodConfig {
@@ -52,16 +53,27 @@ async function loadBranchOverlay(branchId: number): Promise<Record<string, boole
   }
 }
 
-export async function loadMercadoPagoConfigured(): Promise<boolean> {
+export async function loadGatewayCredentials(provider: string): Promise<GatewayCredentials | null> {
+  if (!isGatewayCode(provider)) return null;
   try {
     const [row] = await db
       .select()
       .from(paymentProviderSettingsTable)
-      .where(eq(paymentProviderSettingsTable.provider, "MERCADO_PAGO"));
-    return isProviderConfigured(decryptSecret(row?.accessTokenEncrypted));
+      .where(eq(paymentProviderSettingsTable.provider, provider));
+    return {
+      provider,
+      sandbox: row?.sandbox ?? true,
+      publicKey: row?.publicKey ?? null,
+      secret: decryptSecret(row?.accessTokenEncrypted),
+      webhookSecret: decryptSecret(row?.webhookSecretEncrypted),
+    };
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function loadMercadoPagoConfigured(): Promise<boolean> {
+  return gatewayCredentialsReady(await loadGatewayCredentials("MERCADO_PAGO"));
 }
 
 export async function resolveAvailableMethods(input: {
@@ -71,8 +83,9 @@ export async function resolveAvailableMethods(input: {
 }): Promise<CheckoutPaymentMethod[]> {
   const configs = await loadPaymentMethodConfigs();
   const overlay = await loadBranchOverlay(input.branchId);
-  const mpConfigured = await loadMercadoPagoConfigured();
-  setMercadoPagoConfigured(mpConfigured);
+  for (const provider of ["MERCADO_PAGO", "PAYPAL"] as const) {
+    setOnlineProviderConfigured(provider, gatewayCredentialsReady(await loadGatewayCredentials(provider)));
+  }
 
   const uniqueProviders = [...new Set(configs.map((row) => row.provider))];
   const availability = await Promise.all(

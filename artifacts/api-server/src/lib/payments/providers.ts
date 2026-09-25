@@ -1,13 +1,5 @@
 import type { PaymentProvider, ProviderAvailability } from "./types.ts";
 
-export class PaymentProviderNotImplementedError extends Error {
-  code = "PAYMENT_PROVIDER_NOT_IMPLEMENTED";
-  status = 503;
-  constructor(provider: string, action: string) {
-    super(`${provider} ${action} is not implemented`);
-  }
-}
-
 export const CashOnPickupProvider: PaymentProvider = {
   code: "CASH_ON_PICKUP",
   getAvailability(): ProviderAvailability {
@@ -42,14 +34,20 @@ export function createMercadoPagoProvider(settings?: {
         reason: configured ? undefined : "not_configured",
       };
     },
-    async createPayment() {
-      throw new PaymentProviderNotImplementedError("MERCADO_PAGO", "createPayment");
-    },
-    async handleWebhook() {
-      throw new PaymentProviderNotImplementedError("MERCADO_PAGO", "handleWebhook");
-    },
-    async cancelPayment() {
-      throw new PaymentProviderNotImplementedError("MERCADO_PAGO", "cancelPayment");
+  };
+}
+
+export function createPayPalProvider(settings?: { configured?: boolean }): PaymentProvider {
+  const configured = Boolean(settings?.configured);
+  return {
+    code: "PAYPAL",
+    getAvailability(): ProviderAvailability {
+      return {
+        provider: "PAYPAL",
+        available: configured,
+        configurationStatus: configured ? "configured" : "not_configured",
+        reason: configured ? undefined : "not_configured",
+      };
     },
   };
 }
@@ -57,6 +55,7 @@ export function createMercadoPagoProvider(settings?: {
 const providers = new Map<string, PaymentProvider>([
   ["CASH_ON_PICKUP", CashOnPickupProvider],
   ["MERCADO_PAGO", createMercadoPagoProvider()],
+  ["PAYPAL", createPayPalProvider()],
   ["TERMINAL", { code: "TERMINAL", getAvailability: () => ({ provider: "TERMINAL", available: true, configurationStatus: "configured" }) }],
   ["TRANSFER", { code: "TRANSFER", getAvailability: () => ({ provider: "TRANSFER", available: true, configurationStatus: "configured" }) }],
 ]);
@@ -75,4 +74,9 @@ export function listPaymentProviders(): PaymentProvider[] {
 
 export function setMercadoPagoConfigured(configured: boolean): void {
   registerPaymentProvider(createMercadoPagoProvider({ configured }));
+}
+
+export function setOnlineProviderConfigured(provider: string, configured: boolean): void {
+  if (provider === "MERCADO_PAGO") setMercadoPagoConfigured(configured);
+  if (provider === "PAYPAL") registerPaymentProvider(createPayPalProvider({ configured }));
 }

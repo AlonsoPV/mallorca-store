@@ -46,7 +46,12 @@ import {
   type OrderTotals,
 } from "./order-pricing";
 import { getActivePromotion, resolveCatalogPrice } from "./catalog";
-import { resolveAvailableMethods, resolveCreateOrderPaymentState } from "./payments";
+import {
+  providerCodeForMethod,
+  resolveAvailableMethods,
+  resolveCreateOrderPaymentState,
+  type StorefrontPaymentMethod,
+} from "./payments";
 
 const id = () => crypto.randomUUID();
 
@@ -119,16 +124,7 @@ export type CreateOrderInput = {
   lines?: OrderLineRequest[];
   manualDiscount?: ManualDiscountInput | null;
   couponCode?: string | null;
-  paymentMethod?:
-    | "ONLINE"
-    | "CASH"
-    | "TERMINAL"
-    | "TRANSFER"
-    | "PAYMENT_LINK"
-    | "PENDING"
-    | "COURTESY"
-    | "CASH_ON_PICKUP"
-    | null;
+  paymentMethod?: StorefrontPaymentMethod | null;
   markPaid?: boolean;
   paymentReference?: string | null;
   paymentNote?: string | null;
@@ -518,7 +514,7 @@ export async function createOrder(
       await tx.insert(orderPaymentsTable).values({
         orderId,
         method: paymentState.paymentMethod,
-        provider: paymentState.paymentMethod === "CASH_ON_PICKUP" ? "CASH_ON_PICKUP" : "MANUAL",
+        provider: providerCodeForMethod(paymentState.paymentMethod),
         amount: priced.total,
         currency: "MXN",
         status: immediatePaid ? "paid" : "unpaid",

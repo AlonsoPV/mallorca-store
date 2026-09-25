@@ -77,6 +77,8 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "PENDING",
   "COURTESY",
   "CASH_ON_PICKUP",
+  "MERCADO_PAGO",
+  "PAYPAL",
 ]);
 export const reservationStatusEnum = pgEnum("reservation_status", [
   "active",
@@ -537,6 +539,7 @@ export const orderPaymentsTable = pgTable("order_payments", {
   currency: text("currency").notNull().default("MXN"),
   status: paymentStatusEnum("status").notNull().default("unpaid"),
   providerPaymentId: text("provider_payment_id"),
+  providerCheckoutId: text("provider_checkout_id"),
   recordedByUserId: text("recorded_by_user_id").references(() => usersTable.id, {
     onDelete: "set null",
   }),

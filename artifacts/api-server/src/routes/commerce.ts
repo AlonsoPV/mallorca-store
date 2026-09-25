@@ -45,7 +45,15 @@ import {
   releaseExpiredReservations,
 } from "../lib/order-create";
 import { loadReservedByBranchProductIds, sellableUnits } from "../lib/reserved-stock";
-import { resolveAvailableMethods } from "../lib/payments";
+import {
+  applyGatewayWebhook,
+  gatewayCodeFromPath,
+  loadGatewayCredentials,
+  PaymentGatewayError,
+  resolveAvailableMethods,
+  startGatewayCheckout,
+  type StorefrontPaymentMethod,
+} from "../lib/payments";
 
 const router: IRouter = Router();
 const id = () => crypto.randomUUID();
@@ -352,7 +360,7 @@ function storefrontOrderInput(
     customerName: string;
     customerPhone: string;
     notes?: string | null;
-    paymentMethod?: "ONLINE" | "CASH" | "TERMINAL" | "TRANSFER" | "PAYMENT_LINK" | "PENDING" | "COURTESY" | "CASH_ON_PICKUP" | null;
+    paymentMethod?: StorefrontPaymentMethod | null;
     deliveryAddress?: string | null;
     deliveryAddressSnapshot?: {
       street?: string | null;
@@ -454,17 +462,100 @@ router.post("/orders", async (req, res): Promise<void> => {
   }
 });
 
+function publicBase(req: { protocol: string; get(name: string): string | undefined }, envName: string): string {
+  const configured = process.env[envName]?.replace(/\/$/, "");
+  if (configured) return configured;
+  const host = req.get("host");
+  return `${req.protocol}://${host}`;
+}
+
 router.post("/orders/:id/payment", async (req, res): Promise<void> => {
   const body = StartOrderPaymentBody.safeParse(req.body ?? {});
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-  const order = await findOrderWithItems(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const order = await findOrderWithItems(orderId);
   const user = await getRequestUser(req);
   const canAccess =
     order &&
     ((order.userId != null && order.userId === user?.id) ||
       order.guestAccessToken === body.data.guestAccessToken);
-  if (!canAccess) { res.status(404).json({ error: "Order not found" }); return; }
-  res.status(503).json(StartOrderPaymentResponse.parse({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" }));
+  if (!canAccess || !order) { res.status(404).json({ error: "Order not found" }); return; }
+  const provider = order.paymentMethod === "PAYPAL"
+    ? "PAYPAL"
+    : order.paymentMethod === "MERCADO_PAGO" || order.paymentMethod === "ONLINE"
+      ? "MERCADO_PAGO"
+      : null;
+  if (!provider) {
+    res.status(400).json({ error: "This order does not use an online payment provider", code: "PAYMENT_METHOD_NOT_ONLINE" });
+    return;
+  }
+  const credentials = await loadGatewayCredentials(provider);
+  if (!credentials) {
+    res.status(503).json(StartOrderPaymentResponse.parse({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" }));
+    return;
+  }
+  try {
+    const session = await startGatewayCheckout({
+      orderId: order.id,
+      storefrontBase: publicBase(req, "STOREFRONT_PUBLIC_URL"),
+      apiBase: publicBase(req, "PUBLIC_APP_URL"),
+      credentials,
+    });
+    res.json(StartOrderPaymentResponse.parse(session));
+  } catch (error) {
+    if (error instanceof PaymentGatewayError) {
+      if (error.code === "PAYMENT_PROVIDER_NOT_CONFIGURED") {
+        res.status(503).json(StartOrderPaymentResponse.parse({ error: error.message, code: "PAYMENT_PROVIDER_NOT_CONFIGURED" }));
+        return;
+      }
+      res.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    throw error;
+  }
+});
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+router.post("/webhooks/payments/:provider", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.provider) ? req.params.provider[0] : req.params.provider;
+  const provider = gatewayCodeFromPath(raw ?? "");
+  if (!provider) { res.status(404).json({ error: "Unknown provider" }); return; }
+  const credentials = await loadGatewayCredentials(provider);
+  if (!credentials) {
+    res.status(503).json({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" });
+    return;
+  }
+  const headers = Object.fromEntries(
+    Object.entries(req.headers).map(([key, value]) => [key.toLowerCase(), headerValue(value)]),
+  );
+  const query = Object.fromEntries(
+    Object.entries(req.query).flatMap(([key, value]) => {
+      if (typeof value === "string") return [[key, value]];
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        return Object.entries(value).flatMap(([child, nested]) =>
+          typeof nested === "string" ? [[`${key}.${child}`, nested]] : [],
+        );
+      }
+      return [];
+    }),
+  );
+  try {
+    const result = await applyGatewayWebhook({
+      provider,
+      credentials,
+      request: { headers, body: req.body, query },
+    });
+    res.json({ received: true, applied: result.applied });
+  } catch (error) {
+    if (error instanceof PaymentGatewayError) {
+      res.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    throw error;
+  }
 });
 
 async function sendOrder(req: any, res: any, guest = false, mode: "details" | "receipt" | "confirmation" = "details"): Promise<void> {

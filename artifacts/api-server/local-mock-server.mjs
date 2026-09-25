@@ -779,11 +779,23 @@ const paymentMethodConfigs = [
     customerLabel: "Mercado Pago",
     customerDescription: "Pago en línea. Disponible cuando el comercio lo configure.",
   },
+  {
+    code: "PAYPAL",
+    name: "PayPal",
+    provider: "PAYPAL",
+    enabled: false,
+    sortOrder: 25,
+    allowPickup: true,
+    allowDelivery: true,
+    configurationStatus: "not_configured",
+    customerLabel: "PayPal",
+    customerDescription: "Pago en línea con PayPal. Disponible cuando el comercio lo configure.",
+  },
 ];
 
-const paymentProviders = {
-  MERCADO_PAGO: {
-    provider: "MERCADO_PAGO",
+function blankProvider(provider) {
+  return {
+    provider,
     sandbox: true,
     configured: false,
     publicKeyMasked: null,
@@ -792,7 +804,12 @@ const paymentProviders = {
     publicKey: "",
     accessToken: "",
     webhookSecret: "",
-  },
+  };
+}
+
+const paymentProviders = {
+  MERCADO_PAGO: blankProvider("MERCADO_PAGO"),
+  PAYPAL: blankProvider("PAYPAL"),
 };
 
 function send(res, status, body) {
@@ -888,7 +905,7 @@ const server = http.createServer(async (req, res) => {
     const fulfillmentMethod = url.searchParams.get("fulfillmentMethod") || "pickup";
     const methods = paymentMethodConfigs.filter((method) => {
       if (!method.enabled || method.configurationStatus !== "configured") return false;
-      if (!["CASH_ON_PICKUP", "MERCADO_PAGO", "ONLINE"].includes(method.code)) return false;
+      if (!["CASH_ON_PICKUP", "MERCADO_PAGO", "ONLINE", "PAYPAL"].includes(method.code)) return false;
       if (fulfillmentMethod === "pickup" && !method.allowPickup) return false;
       if (fulfillmentMethod === "delivery" && !method.allowDelivery) return false;
       return true;
@@ -1234,6 +1251,34 @@ const server = http.createServer(async (req, res) => {
         send(res, 201, order);
       })
       .catch(() => send(res, 400, { error: "Invalid body" }));
+    return;
+  }
+
+  const startPaymentMatch = path.match(/^\/api\/orders\/([^/]+)\/payment$/);
+  if (startPaymentMatch && req.method === "POST") {
+    const order = orders.find((item) => item.id === startPaymentMatch[1]);
+    if (!order) {
+      send(res, 404, { error: "Order not found" });
+      return;
+    }
+    const provider = order.paymentMethod === "PAYPAL"
+      ? "PAYPAL"
+      : order.paymentMethod === "MERCADO_PAGO" || order.paymentMethod === "ONLINE"
+        ? "MERCADO_PAGO"
+        : null;
+    if (!provider) {
+      send(res, 400, { error: "This order does not use an online payment provider", code: "PAYMENT_METHOD_NOT_ONLINE" });
+      return;
+    }
+    const settings = paymentProviders[provider];
+    if (!settings?.configured) {
+      send(res, 503, { error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" });
+      return;
+    }
+    const redirectUrl = provider === "PAYPAL"
+      ? "https://www.sandbox.paypal.com/checkoutnow?token=local-mock"
+      : "https://sandbox.mercadopago.com/checkout/v1/redirect?pref_id=local-mock";
+    send(res, 200, { provider, redirectUrl, providerReference: "local-mock", mode: "redirect" });
     return;
   }
 
@@ -1881,12 +1926,12 @@ const server = http.createServer(async (req, res) => {
   if (providerMatch) {
     if (!requireLocalAuth(req, res)) return;
     const provider = decodeURIComponent(providerMatch[1]).toUpperCase();
-    if (provider !== "MERCADO_PAGO") {
+    const row = paymentProviders[provider];
+    if (!row) {
       send(res, 404, { error: "Unknown provider" });
       return;
     }
     if (req.method === "GET") {
-      const row = paymentProviders.MERCADO_PAGO;
       send(res, 200, {
         provider: row.provider,
         sandbox: row.sandbox,
@@ -1900,7 +1945,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "PUT") {
       readJson(req)
         .then((body) => {
-          const row = paymentProviders.MERCADO_PAGO;
           row.sandbox = body?.sandbox ?? row.sandbox;
           if (body?.publicKey) {
             row.publicKey = body.publicKey;
@@ -1909,11 +1953,18 @@ const server = http.createServer(async (req, res) => {
           if (body?.accessToken) {
             row.accessToken = body.accessToken;
             row.accessTokenConfigured = true;
-            row.configured = true;
           }
           if (body?.webhookSecret) {
             row.webhookSecret = body.webhookSecret;
             row.webhookSecretConfigured = true;
+          }
+          row.configured = provider === "PAYPAL"
+            ? Boolean(row.publicKey && row.accessToken)
+            : Boolean(row.accessToken);
+          if (row.configured) {
+            for (const method of paymentMethodConfigs) {
+              if (method.provider === provider) method.configurationStatus = "configured";
+            }
           }
           send(res, 200, {
             provider: row.provider,

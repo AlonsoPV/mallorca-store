@@ -29,6 +29,7 @@ import Cart from '@/pages/cart';
 import Checkout from '@/pages/checkout';
 import OrderDetails from '@/pages/order-details';
 import Account from '@/pages/account';
+import { PrivacyPage, TermsPage } from '@/pages/legal';
 
 import AdminDashboard from '@/pages/admin/dashboard';
 import AdminProductsList from '@/pages/admin/products-list';
@@ -211,6 +212,8 @@ function AppRoutes() {
       <Route path="/producto/:slug" component={ProductDetail} />
       <Route path="/sucursales" component={Branches} />
       <Route path="/sucursales/:slug" component={BranchDetail} />
+      <Route path="/terminos-y-condiciones" component={TermsPage} />
+      <Route path="/aviso-de-privacidad" component={PrivacyPage} />
 
       <Route path="/carrito" component={Cart} />
       <Route path="/checkout" component={Checkout} />

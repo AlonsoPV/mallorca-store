@@ -2334,7 +2334,7 @@ components:
       enum: [STOREFRONT, PHONE, WHATSAPP, POS, CORPORATE, ADMIN, OTHER]
     PaymentMethod:
       type: string
-      enum: [ONLINE, CASH, TERMINAL, TRANSFER, PAYMENT_LINK, PENDING, COURTESY, CASH_ON_PICKUP]
+      enum: [ONLINE, CASH, TERMINAL, TRANSFER, PAYMENT_LINK, PENDING, COURTESY, CASH_ON_PICKUP, MERCADO_PAGO, PAYPAL]
     CheckoutPaymentMethod:
       type: object
       properties:
@@ -2678,10 +2678,14 @@ components:
       required: [id, orderNumber, status, total, createdAt, scheduledStart, branchId, customerName, customerEmail, fulfillmentMethod]
     PaymentStart:
       type: object
+      description: Error when the provider is not configured, or the checkout session when it is.
       properties:
         error: { type: string }
         code: { type: string, enum: [PAYMENT_PROVIDER_NOT_CONFIGURED] }
-      required: [error, code]
+        provider: { type: string, enum: [MERCADO_PAGO, PAYPAL] }
+        redirectUrl: { type: string }
+        providerReference: { type: string }
+        mode: { type: string, enum: [redirect] }
     PaymentStartInput:
       type: object
       properties:

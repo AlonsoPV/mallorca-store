@@ -17,6 +17,8 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
   COURTESY: "Cortesía / Interno",
   CASH_ON_PICKUP: "Efectivo al recoger",
+  MERCADO_PAGO: "Mercado Pago",
+  PAYPAL: "PayPal",
 };
 
 export const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -40,6 +42,7 @@ export const ORDER_AUDIT_ACTION_LABELS: Record<string, string> = {
   ORDER_CREATED: "Pedido creado",
   STATUS_CHANGED: "Cambio de estado",
   PAYMENT_RECORDED: "Pago registrado",
+  PAYMENT_GATEWAY_STARTED: "Pago en línea iniciado",
   PAYMENT_LINK_CREATED: "Link de pago generado",
   CANCELLED: "Pedido cancelado",
   ORDER_CANCELLED: "Pedido cancelado",

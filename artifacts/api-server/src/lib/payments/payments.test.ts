@@ -4,7 +4,7 @@ import {
   DEFAULT_PAYMENT_METHOD_CONFIGS,
   resolveAvailableMethods,
 } from "./catalog.ts";
-import { createMercadoPagoProvider, PaymentProviderNotImplementedError } from "./providers.ts";
+import { createMercadoPagoProvider, createPayPalProvider } from "./providers.ts";
 import {
   decideCancelPayment,
   decideCompleteUnpaid,
@@ -151,13 +151,27 @@ describe("inventory hold with cash reservation", () => {
   });
 });
 
-describe("Mercado Pago placeholder", () => {
-  it("reports not_configured and refuses create/webhook", async () => {
-    const provider = createMercadoPagoProvider({ configured: false });
-    const availability = await provider.getAvailability();
-    assert.equal(availability.available, false);
-    assert.equal(availability.configurationStatus, "not_configured");
-    await assert.rejects(() => provider.createPayment!({}), PaymentProviderNotImplementedError);
-    await assert.rejects(() => provider.handleWebhook!({}), PaymentProviderNotImplementedError);
+describe("online providers", () => {
+  it("stays unavailable until credentials exist", async () => {
+    const mercadoPago = await createMercadoPagoProvider({ configured: false }).getAvailability();
+    const paypal = await createPayPalProvider({ configured: false }).getAvailability();
+    assert.equal(mercadoPago.available, false);
+    assert.equal(paypal.configurationStatus, "not_configured");
+    const ready = await createPayPalProvider({ configured: true }).getAvailability();
+    assert.equal(ready.available, true);
+  });
+
+  it("keeps Mercado Pago and PayPal unpaid until the gateway confirms", () => {
+    for (const paymentMethod of ["MERCADO_PAGO", "PAYPAL"] as const) {
+      const state = resolveCreateOrderPaymentState({
+        orderSource: "STOREFRONT",
+        fulfillmentMethod: "delivery",
+        paymentMethod,
+        total: 100,
+      });
+      assert.equal(state.immediatePaid, false);
+      assert.equal(state.status, "pending_payment");
+      assert.equal(state.paymentStatus, "unpaid");
+    }
   });
 });

@@ -271,19 +271,21 @@ export default function AdminBranches() {
           />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <SummaryStat label="Total" value={summary.total} />
-              <SummaryStat label="Activas" value={summary.active} />
-              <SummaryStat label="Pedidos hoy" value={summary.ordersToday} />
-              <SummaryStat
-                label="Alertas abiertas"
-                value={summary.alertsOpen}
-                alert={summary.alertsOpen > 0}
-                hint={summary.withAlerts > 0 ? `${summary.withAlerts} sucursales` : undefined}
-              />
+            <div className="@container">
+              <div className="grid grid-cols-2 gap-2 @min-[42rem]:grid-cols-4 @min-[42rem]:gap-3">
+                <SummaryStat label="Total" value={summary.total} />
+                <SummaryStat label="Activas" value={summary.active} />
+                <SummaryStat label="Pedidos hoy" value={summary.ordersToday} />
+                <SummaryStat
+                  label="Alertas abiertas"
+                  value={summary.alertsOpen}
+                  alert={summary.alertsOpen > 0}
+                  hint={summary.withAlerts > 0 ? `${summary.withAlerts} sucursales` : undefined}
+                />
+              </div>
             </div>
 
-            <div className="sticky top-0 z-10 -mx-6 space-y-3 border-b border-border bg-background/95 px-6 py-3 backdrop-blur md:-mx-10 md:px-10">
+            <div className="sticky top-0 z-10 -mx-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 md:-mx-10 md:px-10">
               <AdminFilterBar>
                 {STATUS_CHIPS.map((chip) => (
                   <button
@@ -291,7 +293,7 @@ export default function AdminBranches() {
                     type="button"
                     onClick={() => setStatusFilter(chip.id)}
                     className={cn(
-                      "h-9 rounded-none border px-3 text-sm transition-colors",
+                      "h-9 shrink-0 rounded-none border px-3 text-sm transition-colors",
                       statusFilter === chip.id
                         ? "border-foreground bg-foreground text-background"
                         : "border-border bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground",
@@ -300,7 +302,7 @@ export default function AdminBranches() {
                     {chip.label}
                   </button>
                 ))}
-                <div className="relative min-w-[14rem] flex-1">
+                <div className="relative min-w-0 w-full flex-1 basis-full sm:basis-[14rem]">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={search}
@@ -344,7 +346,7 @@ export default function AdminBranches() {
                   return (
                     <article
                       key={branch.id}
-                      className="group relative overflow-hidden border border-border bg-background transition-colors hover:border-foreground/30"
+                      className="@container group relative overflow-hidden border border-border bg-background transition-colors hover:border-foreground/30"
                     >
                       <div
                         className={cn(
@@ -356,16 +358,16 @@ export default function AdminBranches() {
                         aria-hidden
                       />
 
-                      <div className="flex flex-col pl-1 md:flex-row md:items-stretch">
-                        <div className="min-w-0 flex-1 space-y-3 px-4 py-4 md:px-5 md:py-5">
+                      <div className="flex flex-col pl-1 @min-[40rem]:flex-row @min-[40rem]:items-stretch">
+                        <div className="min-w-0 flex-1 space-y-3 px-4 py-4 sm:px-5 sm:py-5">
                           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                             <Link
                               href={`/admin/sucursales/${branch.id}`}
-                              className="font-serif text-[1.35rem] leading-none tracking-tight text-foreground transition-colors hover:text-primary"
+                              className="min-w-0 break-words font-serif text-xl leading-tight tracking-tight text-foreground transition-colors hover:text-primary sm:text-[1.35rem] sm:leading-none"
                             >
                               {branch.name}
                             </Link>
-                            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                               <span
                                 className={cn(
                                   "font-medium uppercase tracking-[0.12em]",
@@ -387,7 +389,7 @@ export default function AdminBranches() {
 
                           <p className="flex items-start gap-2 text-sm leading-snug text-muted-foreground">
                             <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-70" />
-                            <span>
+                            <span className="min-w-0 break-words">
                               {street ? (
                                 <>
                                   <span className="text-foreground/90">{street}</span>
@@ -401,24 +403,24 @@ export default function AdminBranches() {
 
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
                             {branch.phone ? (
-                              <span className="inline-flex items-center gap-1.5">
-                                <Phone className="h-3.5 w-3.5 opacity-70" />
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                                <Phone className="h-3.5 w-3.5 shrink-0 opacity-70" />
                                 {branch.phone}
                               </span>
                             ) : null}
                             {branch.phone ? <span className="hidden text-border sm:inline">·</span> : null}
                             <span>{fulfillment}</span>
-                            <span className="text-border">·</span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <User className="h-3.5 w-3.5 opacity-70" />
-                              <span className={cn(!responsible && "italic")}>
+                            <span className="hidden text-border sm:inline">·</span>
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <User className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                              <span className={cn("break-words", !responsible && "italic")}>
                                 {responsible || "Sin responsable"}
                               </span>
                             </span>
                           </div>
                         </div>
 
-                        <div className="flex shrink-0 flex-col border-t border-border md:w-[19.5rem] md:border-l md:border-t-0">
+                        <div className="flex w-full shrink-0 flex-col border-t border-border @min-[40rem]:w-[19.5rem] @min-[40rem]:border-l @min-[40rem]:border-t-0">
                           <div className="grid grid-cols-2 divide-x divide-border border-b border-border">
                             <Metric
                               label="Pedidos hoy"
@@ -433,11 +435,11 @@ export default function AdminBranches() {
                             />
                           </div>
 
-                          <div className="flex flex-1 items-center gap-2 bg-muted/20 px-3 py-3">
-                            <Button asChild className="h-9 flex-1 rounded-none">
+                          <div className="flex flex-wrap items-center gap-2 bg-muted/20 px-3 py-3 @min-[40rem]:mt-auto">
+                            <Button asChild className="h-9 min-w-[9rem] flex-1 rounded-none">
                               <Link href={`/admin/sucursales/${branch.id}`}>Ver operación</Link>
                             </Button>
-                            <Button asChild variant="outline" className="h-9 rounded-none bg-background">
+                            <Button asChild variant="outline" className="h-9 shrink-0 rounded-none bg-background">
                               <Link href={`/admin/sucursales/${branch.id}/editar`}>Editar</Link>
                             </Button>
                             <DropdownMenu>
@@ -446,7 +448,7 @@ export default function AdminBranches() {
                                   type="button"
                                   variant="outline"
                                   size="icon"
-                                  className="h-9 w-9 rounded-none bg-background"
+                                  className="h-9 w-9 shrink-0 rounded-none bg-background"
                                   aria-label={`Más acciones para ${branch.name}`}
                                 >
                                   <MoreHorizontal className="h-4 w-4" />
@@ -569,16 +571,16 @@ function SummaryStat({
   return (
     <div
       className={cn(
-        "border border-border bg-background px-4 py-3",
+        "min-w-0 border border-border bg-background px-3 py-2.5 sm:px-4 sm:py-3",
         alert && "border-amber-300/80 bg-amber-50/40",
       )}
     >
-      <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
-        {alert ? <AlertTriangle className="h-3.5 w-3.5 text-amber-700" /> : null}
-        {label}
+      <div className="flex items-start gap-1.5 text-[11px] font-medium uppercase leading-tight tracking-wide text-muted-foreground sm:text-xs">
+        {alert ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" /> : null}
+        <span className="min-w-0 break-words">{label}</span>
       </div>
-      <div className="mt-1 font-serif text-2xl tracking-tight tabular-nums">{value}</div>
-      {hint ? <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div> : null}
+      <div className="mt-1 font-serif text-xl tracking-tight tabular-nums sm:text-2xl">{value}</div>
+      {hint ? <div className="mt-0.5 text-xs leading-snug text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
@@ -598,17 +600,17 @@ function Metric({
     <Link
       href={href}
       className={cn(
-        "block px-4 py-3 transition-colors hover:bg-muted/40",
+        "block min-w-0 px-3 py-2.5 transition-colors hover:bg-muted/40 sm:px-4 sm:py-3",
         alert && "bg-amber-50/70 hover:bg-amber-50",
       )}
     >
-      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        {alert ? <AlertTriangle className="h-3 w-3 text-amber-700" /> : null}
-        {label}
+      <div className="flex items-center gap-1 text-[10px] font-medium uppercase leading-tight tracking-[0.14em] text-muted-foreground">
+        {alert ? <AlertTriangle className="h-3 w-3 shrink-0 text-amber-700" /> : null}
+        <span className="min-w-0 break-words">{label}</span>
       </div>
       <div
         className={cn(
-          "mt-1 font-serif text-2xl leading-none tabular-nums tracking-tight",
+          "mt-1 font-serif text-xl leading-none tabular-nums tracking-tight sm:text-2xl",
           alert ? "text-amber-950" : "text-foreground",
         )}
       >

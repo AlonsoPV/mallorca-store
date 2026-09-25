@@ -20,6 +20,14 @@ export type OrderPaymentCreateState = {
 };
 
 const AUTO_PAID = new Set(["CASH", "TERMINAL", "COURTESY"]);
+const DEFERRED_PAYMENT = new Set([
+  "PENDING",
+  "ONLINE",
+  "PAYMENT_LINK",
+  "CASH_ON_PICKUP",
+  "MERCADO_PAGO",
+  "PAYPAL",
+]);
 
 export function resolveCreateOrderPaymentState(
   input: OrderPaymentCreateInput,
@@ -41,10 +49,7 @@ export function resolveCreateOrderPaymentState(
 
   const autoPaid =
     input.orderSource !== "STOREFRONT" &&
-    paymentMethod !== "PENDING" &&
-    paymentMethod !== "ONLINE" &&
-    paymentMethod !== "PAYMENT_LINK" &&
-    paymentMethod !== "CASH_ON_PICKUP" &&
+    !DEFERRED_PAYMENT.has(paymentMethod) &&
     (input.markPaid === true || (input.markPaid !== false && AUTO_PAID.has(paymentMethod)));
 
   const immediatePaid = Boolean(input.markPaid === true || autoPaid);

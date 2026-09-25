@@ -66,9 +66,30 @@ export const DEFAULT_PAYMENT_METHOD_CONFIGS: PaymentMethodConfig[] = [
     customerLabel: "Transferencia",
     customerDescription: null,
   },
+  {
+    code: "PAYPAL",
+    name: "PayPal",
+    provider: "PAYPAL",
+    enabled: false,
+    sortOrder: 25,
+    allowPickup: true,
+    allowDelivery: true,
+    configurationStatus: "not_configured",
+    customerLabel: "PayPal",
+    customerDescription: "Pago en línea con PayPal. Disponible cuando el comercio lo configure.",
+  },
 ];
 
-const STOREFRONT_CODES = new Set(["CASH_ON_PICKUP", "MERCADO_PAGO", "ONLINE"]);
+const STOREFRONT_CODES = new Set(["CASH_ON_PICKUP", "MERCADO_PAGO", "ONLINE", "PAYPAL"]);
+
+export function providerCodeForMethod(method: string | null | undefined): string {
+  if (method === "CASH" || method === "CASH_ON_PICKUP") return "CASH_ON_PICKUP";
+  if (method === "PAYPAL") return "PAYPAL";
+  if (method === "MERCADO_PAGO" || method === "ONLINE") return "MERCADO_PAGO";
+  if (method === "TERMINAL") return "TERMINAL";
+  if (method === "TRANSFER") return "TRANSFER";
+  return "MANUAL";
+}
 
 export function mergePaymentConfigs(
   stored: PaymentMethodConfig[],

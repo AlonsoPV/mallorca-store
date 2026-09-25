@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "pretypecheck": "pnpm -w exec tsc --build --force",
     "test": "pnpm run test:unit && pnpm run test:integration",
-    "test:unit": "node --experimental-strip-types --test src/lib/inventory.test.ts src/lib/inventory-status.test.ts src/lib/notification-prefs.test.ts src/lib/branch-preview.test.ts src/lib/branch-address.test.ts src/lib/branch-satellite.test.ts src/lib/catalog.test.ts src/lib/catalog-cross-sell.test.ts src/lib/promotion-validation.test.ts src/lib/product-aggregate.test.ts src/lib/order-manual.test.ts src/lib/delivery-address.test.ts src/lib/admin-product-serialize.test.ts src/lib/inventory-hold.test.ts src/lib/purchase-integrity.test.ts src/lib/payments/payments.test.ts",
+    "test:unit": "node --experimental-strip-types --test src/lib/inventory.test.ts src/lib/inventory-status.test.ts src/lib/notification-prefs.test.ts src/lib/branch-preview.test.ts src/lib/branch-address.test.ts src/lib/branch-satellite.test.ts src/lib/catalog.test.ts src/lib/catalog-cross-sell.test.ts src/lib/promotion-validation.test.ts src/lib/product-aggregate.test.ts src/lib/order-manual.test.ts src/lib/delivery-address.test.ts src/lib/admin-product-serialize.test.ts src/lib/inventory-hold.test.ts src/lib/purchase-integrity.test.ts src/lib/payments/payments.test.ts src/lib/payments/gateways/gateways.test.ts",
     "test:integration": "esbuild src/routes/admin-promotions.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/mallorca-admin-promotions.test.cjs && NODE_ENV=production node --test /tmp/mallorca-admin-promotions.test.cjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "dev:mock": "node ./local-mock-server.mjs",

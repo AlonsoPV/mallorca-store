@@ -89,10 +89,11 @@ import {
   decideCompleteUnpaid,
   decideRecordPayment,
   encryptSecret,
-  loadMercadoPagoConfigured,
+  gatewayCredentialsReady,
+  loadGatewayCredentials,
   loadPaymentMethodConfigs,
   maskSecret,
-  setMercadoPagoConfigured,
+  setOnlineProviderConfigured,
 } from "../lib/payments";
 import { fulfillmentSchedule, isValidSlotTime, mexicoDate } from "../lib/fulfillment-schedule";
 import {
@@ -1138,14 +1139,14 @@ router.patch("/admin/payment-methods/:code", async (req, res): Promise<void> => 
   }));
 });
 
+const ONLINE_PROVIDERS = new Set(["MERCADO_PAGO", "PAYPAL"]);
+
 async function paymentProviderPayload(provider: string) {
   const [row] = await db
     .select()
     .from(paymentProviderSettingsTable)
     .where(eq(paymentProviderSettingsTable.provider, provider));
-  const configured = provider === "MERCADO_PAGO"
-    ? await loadMercadoPagoConfigured()
-    : Boolean(row?.accessTokenEncrypted);
+  const configured = gatewayCredentialsReady(await loadGatewayCredentials(provider));
   return {
     provider,
     sandbox: row?.sandbox ?? true,
@@ -1162,7 +1163,7 @@ router.get("/admin/payment-providers/:provider", async (req, res): Promise<void>
   const p = GetAdminPaymentProviderParams.safeParse(req.params);
   if (!p.success) { res.status(400).json({ error: "Invalid provider" }); return; }
   const provider = p.data.provider.toUpperCase();
-  if (provider !== "MERCADO_PAGO") { res.status(404).json({ error: "Unknown provider" }); return; }
+  if (!ONLINE_PROVIDERS.has(provider)) { res.status(404).json({ error: "Unknown provider" }); return; }
   res.json(GetAdminPaymentProviderResponse.parse(await paymentProviderPayload(provider)));
 });
 
@@ -1173,7 +1174,7 @@ router.put("/admin/payment-providers/:provider", async (req, res): Promise<void>
   const b = UpdateAdminPaymentProviderBody.safeParse(req.body);
   if (!p.success || !b.success) { res.status(400).json({ error: "Invalid provider settings" }); return; }
   const provider = p.data.provider.toUpperCase();
-  if (provider !== "MERCADO_PAGO") { res.status(404).json({ error: "Unknown provider" }); return; }
+  if (!ONLINE_PROVIDERS.has(provider)) { res.status(404).json({ error: "Unknown provider" }); return; }
   const [existing] = await db
     .select()
     .from(paymentProviderSettingsTable)
@@ -1204,13 +1205,16 @@ router.put("/admin/payment-providers/:provider", async (req, res): Promise<void>
         updatedAt: new Date(),
       },
     });
-  const configured = Boolean(accessTokenEncrypted);
-  setMercadoPagoConfigured(configured);
+  const configured = gatewayCredentialsReady(await loadGatewayCredentials(provider))
+    || (provider === "PAYPAL"
+      ? Boolean(publicKey && accessTokenEncrypted)
+      : Boolean(accessTokenEncrypted));
+  setOnlineProviderConfigured(provider, configured);
   if (configured) {
     await db
       .update(paymentMethodConfigsTable)
       .set({ configurationStatus: "configured", updatedAt: new Date() })
-      .where(eq(paymentMethodConfigsTable.provider, "MERCADO_PAGO"));
+      .where(eq(paymentMethodConfigsTable.provider, provider));
   }
   res.json(UpdateAdminPaymentProviderResponse.parse(await paymentProviderPayload(provider)));
 });
