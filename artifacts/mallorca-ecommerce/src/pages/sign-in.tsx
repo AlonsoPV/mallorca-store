@@ -3,6 +3,7 @@ import { SignIn } from "@clerk/react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAppAuth, useAppSignInLocalDev } from "@/lib/app-auth";
+import { storeLogo } from "@/lib/store-media";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const clerkConfigured = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
@@ -45,8 +46,14 @@ export default function SignInPage() {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-background px-4 py-10">
       <div className="w-full max-w-[440px] text-center">
-        <p className="font-serif text-2xl font-bold tracking-tight text-foreground">MALLORCA</p>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <Link href="/" className="inline-flex justify-center" aria-label="Pastelería Mallorca">
+          <img
+            src={storeLogo}
+            alt="Mallorca"
+            className="mx-auto h-14 w-auto object-contain brightness-0 sm:h-16"
+          />
+        </Link>
+        <p className="mt-4 text-sm text-muted-foreground">
           Inicia sesión para continuar
         </p>
       </div>

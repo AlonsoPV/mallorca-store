@@ -7,6 +7,7 @@ import { Search, Filter, X } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
+import { storeBannerImage } from "@/lib/store-media";
 
 export default function Store() {
   const [, setLocation] = useLocation();
@@ -70,7 +71,7 @@ export default function Store() {
       <section className="relative isolate overflow-hidden bg-[var(--mallorca-burgundy)] text-primary-foreground">
         <div className="absolute inset-y-0 right-0 hidden w-[46%] md:block">
           <img
-            src="/images/mallorca-panettone-hero.jpg"
+            src={storeBannerImage}
             alt=""
             aria-hidden="true"
             className="mallorca-image h-full w-full object-cover object-center opacity-90"

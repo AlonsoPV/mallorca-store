@@ -21,14 +21,25 @@ export function formatBranchPostalLines(branch: {
   ]
     .filter(Boolean)
     .join(" ");
-  const lines = [
-    line1 || null,
+  const locality = [
     branch.neighborhood || null,
     branch.borough || null,
     [branch.city, [branch.state, branch.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ") || null,
   ].filter((line): line is string => Boolean(line));
-  if (lines.length) return lines;
-  return branch.address ? [branch.address] : [];
+
+  // Older rows keep the street only in `address` while neighborhood/city are filled.
+  // Without this, the storefront drops the street the admin actually saved.
+  const legacyAddress = !line1 && branch.address
+    ? branch.address.split(/\n+/).map((line) => line.trim()).filter(Boolean)
+    : [];
+
+  const seen = new Set<string>();
+  return [...legacyAddress, ...(line1 ? [line1] : []), ...locality].filter((line) => {
+    const key = line.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function productAvailabilityCopy(input: {

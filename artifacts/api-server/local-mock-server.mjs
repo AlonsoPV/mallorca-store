@@ -10,8 +10,11 @@ import { handleRoleAccess } from "./local-role-access.mjs";
  *
  *   node artifacts/api-server/local-mock-server.mjs
  */
+import fs from "node:fs";
 import http from "node:http";
-import { URL } from "node:url";
+import path from "node:path";
+import { createRequire } from "node:module";
+import { fileURLToPath, URL } from "node:url";
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -45,6 +48,14 @@ function branch(id, name, slug, shortName, neighborhood) {
   const country = "MX";
   const address = [street, externalNumber].filter(Boolean).join(" ")
     + `, ${neighborhood}, ${borough}, ${city}, ${state}, ${postalCode}, ${country}`;
+  const branchImages = {
+    lomas: "/images/lomas-sucursal.webp",
+    reforma: "/images/reforma-sucursal.webp",
+  };
+  const branchGalleries = {
+    lomas: ["/images/lomas-sucursal.webp", "/images/pasteleria-mallorca-1.webp", "/images/pasteleria-mallorca-4.webp"],
+    reforma: ["/images/reforma-sucursal.webp", "/images/reforma-sucursal-alt.webp", "/images/pasteleria-mallorca-2.webp"],
+  };
   return {
     id,
     name,
@@ -69,8 +80,8 @@ function branch(id, name, slug, shortName, neighborhood) {
     mapsUrl: "https://maps.google.com",
     openTableUrl: null,
     instagramUrl: null,
-    imageUrl: "/images/mallorca-panettone-hero.jpg",
-    gallery: [],
+    imageUrl: branchImages[slug] || "/images/pasteleria-mallorca-3.webp",
+    gallery: branchGalleries[slug] || [],
     hours,
     pickupAvailable: true,
     deliveryAvailable: true,
@@ -182,7 +193,7 @@ const products = [
     ],
     tags: ["Chocolate", "Regalo"],
     crossSellProductIds: [3],
-    imageUrl: "/images/mallorca-chocolate-cake.jpg",
+    imageUrl: "/images/panettone-chocolate.webp",
     featured: true,
     seasonal: false,
     minimumLeadTimeHours: 4,
@@ -204,7 +215,7 @@ const products = [
     categories: [{ id: 1, name: "Pasteles", slug: "pasteles", isPrimary: true }],
     tags: ["Navidad", "Temporada"],
     crossSellProductIds: [1, 3],
-    imageUrl: "/images/mallorca-panettone-hero.jpg",
+    imageUrl: "/images/panettone-tradicional.webp",
     featured: true,
     seasonal: true,
     minimumLeadTimeHours: 6,
@@ -226,7 +237,7 @@ const products = [
     categories: [{ id: 2, name: "Bollería", slug: "bolleria", isPrimary: true }],
     tags: [],
     crossSellProductIds: [],
-    imageUrl: "/images/mallorca-bolleria.jpg",
+    imageUrl: "/images/pasteleria-mallorca-4.webp",
     featured: true,
     seasonal: false,
     minimumLeadTimeHours: 0,
@@ -2605,7 +2616,114 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`[local-mock-api] listening on http://127.0.0.1:${server.address().port}`);
-  console.log(`[local-mock-api] auth: Authorization: Bearer local-dev`);
-});
+function readDatabaseUrl() {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  const mockDir = path.dirname(fileURLToPath(import.meta.url));
+  for (const file of [".env", ".env.example"]) {
+    const full = path.join(mockDir, file);
+    if (!fs.existsSync(full)) continue;
+    const line = fs.readFileSync(full, "utf8").split(/\r?\n/).find((entry) => entry.startsWith("DATABASE_URL="));
+    if (!line) continue;
+    let value = line.slice("DATABASE_URL=".length).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (value) return value;
+  }
+  return null;
+}
+
+function branchFromDatabaseRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    shortName: row.short_name,
+    shortDescription: row.short_description,
+    description: row.description,
+    street: row.street,
+    externalNumber: row.external_number,
+    internalNumber: row.internal_number,
+    address: row.address,
+    neighborhood: row.neighborhood,
+    borough: row.borough,
+    city: row.city,
+    state: row.state,
+    postalCode: row.postal_code,
+    country: row.country,
+    latitude: row.latitude == null ? null : Number(row.latitude),
+    longitude: row.longitude == null ? null : Number(row.longitude),
+    phone: row.phone,
+    secondaryPhone: row.secondary_phone,
+    whatsapp: row.whatsapp,
+    whatsappDefaultMessage: row.whatsapp_default_message,
+    email: row.email,
+    ordersEmail: row.orders_email,
+    reservationsEmail: row.reservations_email,
+    mapsUrl: row.maps_url,
+    openTableUrl: row.open_table_url,
+    instagramUrl: row.instagram_url,
+    reservationProvider: row.reservation_provider,
+    reservationUrl: row.reservation_url,
+    reservationCta: row.reservation_cta,
+    imageUrl: row.image_url,
+    gallery: Array.isArray(row.gallery) ? row.gallery : [],
+    hours: Array.isArray(row.hours) ? row.hours : [],
+    pickupAvailable: row.pickup_available,
+    deliveryAvailable: row.delivery_available,
+    deliveryRadiusKm: row.delivery_radius_km == null ? null : Number(row.delivery_radius_km),
+    minimumOrder: row.minimum_order == null ? null : Number(row.minimum_order),
+    freeDeliveryFrom: row.free_delivery_from == null ? null : Number(row.free_delivery_from),
+    preparationTimeMinutes: row.preparation_time_minutes,
+    deliveryTimeMinutes: row.delivery_time_minutes,
+    pickupSlotIntervalMinutes: row.pickup_slot_interval_minutes,
+    pickupSlotCapacity: row.pickup_slot_capacity,
+    deliveryFee: row.delivery_fee == null ? null : Number(row.delivery_fee),
+    active: row.active,
+    status: row.status,
+    branchCode: row.branch_code,
+    featured: row.featured,
+  };
+}
+
+async function hydrateBranchesFromDatabase() {
+  if (process.env.PORT === "0") return;
+  const connectionString = readDatabaseUrl();
+  if (!connectionString) {
+    console.log("[local-mock-api] no DATABASE_URL; storefront branches stay on local seed");
+    return;
+  }
+  const requireFromDb = createRequire(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../lib/db/package.json"),
+  );
+  const { Client } = requireFromDb("pg");
+  const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    const { rows } = await client.query("select * from branches order by id");
+    if (!rows.length) return;
+    for (const row of rows) {
+      const mapped = branchFromDatabaseRow(row);
+      const idx = branches.findIndex((item) => item.id === mapped.id || item.slug === mapped.slug);
+      if (idx >= 0) {
+        branches[idx] = { ...branches[idx], ...mapped };
+      } else {
+        branches.push(mapped);
+      }
+    }
+    console.log(`[local-mock-api] storefront branches loaded from database (${rows.length})`);
+  } finally {
+    await client.end();
+  }
+}
+
+hydrateBranchesFromDatabase()
+  .catch((err) => {
+    console.error("[local-mock-api] could not load branches from database; using seed", err.message);
+  })
+  .finally(() => {
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`[local-mock-api] listening on http://127.0.0.1:${server.address().port}`);
+      console.log(`[local-mock-api] auth: Authorization: Bearer local-dev`);
+    });
+  });
