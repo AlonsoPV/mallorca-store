@@ -1,0 +1,72 @@
+-- Manual orders schema extensions (apply with drizzle-kit push or migrate)
+-- Enums and columns added in lib/db/src/schema/commerce.ts
+
+ALTER TYPE payment_status ADD VALUE IF NOT EXISTS 'partially_paid';
+ALTER TYPE payment_status ADD VALUE IF NOT EXISTS 'partially_refunded';
+
+DO $$ BEGIN
+  CREATE TYPE order_source AS ENUM ('STOREFRONT','PHONE','WHATSAPP','POS','CORPORATE','ADMIN','OTHER');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE payment_method AS ENUM ('ONLINE','CASH','TERMINAL','TRANSFER','PAYMENT_LINK','PENDING','COURTESY');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE order_audit_action AS ENUM (
+    'CREATED_MANUAL','CREATED_STOREFRONT','MANUAL_DISCOUNT','AVAILABILITY_OVERRIDE',
+    'PAYMENT_RECORDED','PAYMENT_LINK_CREATED','CANCELLED','LINES_CHANGED','SCHEDULE_CHANGED',
+    'DUPLICATED','STATUS_CHANGED'
+  );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by_user_id text REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_source order_source NOT NULL DEFAULT 'STOREFRONT';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method payment_method;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reference text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_note text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_link_url text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_paid numeric NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS production_notes text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS internal_notes text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS promotion_discount_total numeric NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount numeric NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_percent numeric;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_reason text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_applied_by text REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_discount numeric NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS availability_override boolean NOT NULL DEFAULT false;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS override_reason text;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS override_by_user_id text REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS override_at timestamptz;
+
+ALTER TABLE order_items ALTER COLUMN product_id DROP NOT NULL;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS list_unit_price numeric;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS promotion_id integer;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS manual_line_item boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS order_audit_logs (
+  id serial PRIMARY KEY,
+  order_id text NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  actor_user_id text REFERENCES users(id) ON DELETE SET NULL,
+  action order_audit_action NOT NULL,
+  reason text,
+  payload text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id serial PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  type text NOT NULL,
+  value numeric NOT NULL,
+  active boolean NOT NULL DEFAULT true,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  max_redemptions integer,
+  redemption_count integer NOT NULL DEFAULT 0,
+  min_subtotal numeric,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
