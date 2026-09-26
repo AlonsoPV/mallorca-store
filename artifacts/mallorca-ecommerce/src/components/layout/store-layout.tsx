@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ShoppingBag, Menu, X, User, Search, MapPin, ArrowUpRight, Instagram, Linkedin, Phone, Mail, MessageCircle, BriefcaseBusiness, FileText, Globe2, ChevronUp, Info } from "lucide-react";
+import { ShoppingBag, Menu, X, User, Search, MapPin, ArrowUpRight, Instagram, Phone, Mail, MessageCircle, BriefcaseBusiness, FileText, Globe2, ChevronUp, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 import { BranchSelector } from "@/components/branch-selector";
@@ -287,7 +287,6 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               <div className="flex items-center gap-2">
                 {[
                   { href: "https://www.instagram.com/mallorcamx/?hl=es", icon: Instagram, label: "Instagram" },
-                  { href: "https://www.linkedin.com/company/55180564/admin/", icon: Linkedin, label: "LinkedIn" },
                   {
                     href: "https://www.tripadvisor.com.mx/Restaurant_Review-g150800-d11706469-Reviews-Pasteleria_Mallorca-Mexico_City_Central_Mexico_and_Gulf_Coast.html",
                     icon: MessageCircle,
