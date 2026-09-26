@@ -9,7 +9,7 @@ import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/com
 import { ImageWithFallback } from "@/components/image-with-fallback";
 import { formatBranchPostalLines } from "@/lib/availability-copy";
 import { cn } from "@/lib/utils";
-import { branchGalleryFallback, branchGalleryFor, branchImageFor, branchLocalImage } from "@/lib/store-media";
+import { branchGalleryFallback, branchImageFor, branchLocalImage } from "@/lib/store-media";
 import { branchLinks } from "@/lib/branch-links";
 
 const WEEKDAY_INDEX: Record<string, number> = {
@@ -112,7 +112,9 @@ export default function BranchDetail() {
           : ""
       }`
     : null;
-  const gallery = branchGalleryFor(branch.slug, Array.isArray(branch.gallery) ? branch.gallery : []);
+  const gallery = Array.isArray(branch.gallery)
+    ? branch.gallery.filter((url) => typeof url === "string" && url.trim().length > 0)
+    : [];
   const heroImage = branchImageFor(branch.slug, branch.imageUrl);
   const addressLines = formatBranchPostalLines(branch);
   const [streetLine, ...restLines] = addressLines;
