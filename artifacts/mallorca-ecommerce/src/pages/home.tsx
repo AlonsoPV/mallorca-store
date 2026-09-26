@@ -9,7 +9,7 @@ import {
   CarouselItem,
   type CarouselApi,
 } from "@/components/ui/carousel";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Clock, MapPin, Plus } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Clock, MapPin, Pause, Play, Plus } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { cn } from "@/lib/utils";
 import { ImageWithFallback } from "@/components/image-with-fallback";
@@ -89,6 +89,8 @@ export default function Home() {
   });
   const [heroShift, setHeroShift] = useState({ x: 0, y: 0 });
   const [heroIndex, setHeroIndex] = useState(0);
+  const [seasonalIndex, setSeasonalIndex] = useState(0);
+  const [seasonalPaused, setSeasonalPaused] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [featuredApi, setFeaturedApi] = useState<CarouselApi>();
   const [featuredCanPrev, setFeaturedCanPrev] = useState(false);
@@ -99,7 +101,9 @@ export default function Home() {
 
   const featuredList = useMemo(() => featuredProducts ?? [], [featuredProducts]);
   const seasonalList = useMemo(() => seasonalProducts ?? [], [seasonalProducts]);
-  const seasonalHero = seasonalList[0];
+  const seasonalHero = seasonalList.length
+    ? seasonalList[seasonalIndex % seasonalList.length]
+    : undefined;
   const extraSeasonal = seasonalList.slice(1, 4);
   const showFeatured = isLoadingFeatured || featuredList.length > 0;
   const showSeasonal = isLoadingSeasonal || seasonalList.length > 0;
@@ -140,6 +144,21 @@ export default function Home() {
     }, 5600);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (
+      seasonalList.length < 2 ||
+      seasonalPaused ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setSeasonalIndex((current) => (current + 1) % seasonalList.length);
+    }, 5600);
+    return () => window.clearInterval(timer);
+  }, [seasonalList.length, seasonalPaused]);
 
   const handleHeroMove = (event: React.MouseEvent<HTMLElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -346,16 +365,22 @@ export default function Home() {
               </Link>
             </div>
 
-            <div className="relative order-1 min-w-0 md:order-2">
+            <div
+              className="group relative order-1 min-w-0 md:order-2"
+              role="region"
+              aria-roledescription="carrusel"
+              aria-label="Productos de temporada"
+            >
               {isLoadingSeasonal || !seasonalHero ? (
                 <div className="aspect-[5/4] max-h-[22rem] animate-pulse bg-[var(--mallorca-sand)] sm:max-h-[26rem] md:aspect-[4/3] md:max-h-none md:min-h-[18rem] lg:min-h-[22rem] xl:min-h-[26rem]" />
               ) : (
                 <Link
                   href={`/producto/${seasonalHero.slug}`}
-                  className="group relative block overflow-hidden bg-[var(--mallorca-sand)]"
+                  className="relative block overflow-hidden bg-[var(--mallorca-sand)]"
                 >
                   <div className="aspect-[5/4] max-h-[22rem] sm:max-h-[26rem] md:aspect-[4/3] md:max-h-none md:min-h-[18rem] lg:min-h-[22rem] xl:min-h-[26rem]">
                     <ImageWithFallback
+                      key={seasonalHero.id}
                       src={seasonalHero.imageUrl || storeSeasonalFallback}
                       alt={seasonalHero.name}
                       className="mallorca-image h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
@@ -394,6 +419,38 @@ export default function Home() {
                   </div>
                 </Link>
               )}
+              {!isLoadingSeasonal && seasonalList.length > 1 ? (
+                <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-full border border-white/20 bg-[var(--mallorca-cacao)]/70 p-1 text-white shadow-sm backdrop-blur-sm sm:right-4 sm:top-4">
+                  <span aria-hidden="true" className="px-1 text-[10px] font-semibold tabular-nums">
+                    {seasonalIndex % seasonalList.length + 1} / {seasonalList.length}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={seasonalPaused ? "Reanudar carrusel de temporada" : "Pausar carrusel de temporada"}
+                    aria-pressed={seasonalPaused}
+                    onClick={() => setSeasonalPaused((paused) => !paused)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  >
+                    {seasonalPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Producto de temporada anterior"
+                    onClick={() => setSeasonalIndex((current) => (current + seasonalList.length - 1) % seasonalList.length)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Siguiente producto de temporada"
+                    onClick={() => setSeasonalIndex((current) => (current + 1) % seasonalList.length)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  >
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
 
