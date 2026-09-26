@@ -16,6 +16,8 @@ import {
   getListAdminProductsQueryKey,
   getListAdminInventoryQueryKey,
   getGetInventoryMatrixQueryKey,
+  getListProductsQueryKey,
+  getGetProductQueryKey,
   type AdminProduct,
   type ListAdminProductsStatus,
   type ProductBulkInputAction,
@@ -26,7 +28,7 @@ import {
   Download,
   Upload,
   Copy,
-  Archive,
+  Trash2,
   MoreHorizontal,
   Package,
   Pencil,
@@ -54,6 +56,7 @@ import { ImageWithFallback } from "@/components/image-with-fallback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -169,14 +172,14 @@ function ProductRowActions({
   fullWidth = false,
   onQuickEdit,
   onDuplicate,
-  onArchive,
+  onRemove,
 }: {
   product: AdminProduct;
   size?: "sm" | "md";
   fullWidth?: boolean;
   onQuickEdit: () => void;
   onDuplicate: () => void;
-  onArchive: () => void;
+  onRemove: () => void;
 }) {
   const btn = size === "md" ? "h-9 w-9" : "h-8 w-8";
   return (
@@ -231,10 +234,11 @@ function ProductRowActions({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
-            onClick={onArchive}
+            onClick={onRemove}
+            disabled={product.status === "inactive"}
           >
-            <Archive className="mr-2 h-4 w-4" />
-            Archivar
+            <Trash2 className="mr-2 h-4 w-4" />
+            {product.status === "inactive" ? "Ya está fuera del catálogo" : "Eliminar del catálogo"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -273,6 +277,8 @@ export default function AdminProductsList() {
   const [importOpen, setImportOpen] = useState(false);
   const [stockTarget, setStockTarget] = useState<{ product: AdminProduct; branchId: number } | null>(null);
   const [quickEditId, setQuickEditId] = useState<number | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ id: number; name: string; slug: string } | null>(null);
+  const [removalResult, setRemovalResult] = useState<{ success: boolean; message: string } | null>(null);
   const [bulkAction, setBulkAction] = useState("none");
   const [bulkValue, setBulkValue] = useState("none");
   const [bulkTagValue, setBulkTagValue] = useState("");
@@ -401,6 +407,7 @@ export default function AdminProductsList() {
     queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() }),
     queryClient.invalidateQueries({ queryKey: getListAdminInventoryQueryKey() }),
     queryClient.invalidateQueries({ queryKey: getGetInventoryMatrixQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() }),
   ]);
 
   const toggleAll = (checked: boolean) => {
@@ -411,15 +418,19 @@ export default function AdminProductsList() {
     setSelected((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
   };
 
-  const archive = async (id: number, name?: string) => {
-    const label = name ? `“${name}”` : "este producto";
-    if (!window.confirm(`¿Archivar ${label}? Dejará de mostrarse en el catálogo.`)) return;
+  const removeFromCatalog = async () => {
+    if (!removeTarget || updateProduct.isPending) return;
+    const { id, name, slug } = removeTarget;
     try {
       await updateProduct.mutateAsync({ id, data: { status: "inactive" } as any });
-      toast({ title: "Producto archivado" });
-      invalidate();
+      await invalidate();
+      await queryClient.invalidateQueries({ queryKey: getGetProductQueryKey(slug) });
+      setSelected((current) => current.filter((selectedId) => selectedId !== id));
+      setRemovalResult({ success: true, message: `“${name}” se eliminó del catálogo de la tienda. Su registro se conserva para el historial de pedidos.` });
     } catch {
-      toast({ title: "No se pudo archivar", variant: "destructive" });
+      setRemovalResult({ success: false, message: `No se pudo eliminar “${name}” del catálogo. Inténtalo de nuevo.` });
+    } finally {
+      setRemoveTarget(null);
     }
   };
 
@@ -646,6 +657,24 @@ export default function AdminProductsList() {
             </>
           }
         />
+
+        {removalResult ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className={cn(
+              "fixed bottom-5 left-4 right-4 z-[60] flex items-start justify-between gap-3 border px-4 py-3 text-sm shadow-lg sm:left-auto sm:right-6 sm:w-[28rem]",
+              removalResult.success
+                ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                : "border-destructive/40 bg-destructive/5 text-destructive",
+            )}
+          >
+            <span>{removalResult.message}</span>
+            <button type="button" onClick={() => setRemovalResult(null)} aria-label="Cerrar mensaje" className="shrink-0">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
 
         <div className="sticky top-0 z-10 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:-mx-10 md:px-10">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1009,7 +1038,10 @@ export default function AdminProductsList() {
                       fullWidth
                       onQuickEdit={() => setQuickEditId(product.id)}
                       onDuplicate={() => handleDuplicate(product.id)}
-                      onArchive={() => archive(product.id, product.name)}
+                      onRemove={() => {
+                        setRemovalResult(null);
+                        setRemoveTarget({ id: product.id, name: product.name, slug: product.slug });
+                      }}
                     />
                   </div>
                 </article>
@@ -1112,7 +1144,10 @@ export default function AdminProductsList() {
                       product={product}
                       onQuickEdit={() => setQuickEditId(product.id)}
                       onDuplicate={() => handleDuplicate(product.id)}
-                      onArchive={() => archive(product.id, product.name)}
+                      onRemove={() => {
+                        setRemovalResult(null);
+                        setRemoveTarget({ id: product.id, name: product.name, slug: product.slug });
+                      }}
                     />
                   </AdminTableCell>
                 </AdminTableRow>
@@ -1122,6 +1157,25 @@ export default function AdminProductsList() {
           </>
         ) : null}
       </AdminPageShell>
+
+      <Dialog open={removeTarget !== null} onOpenChange={(open) => {
+        if (!open && !updateProduct.isPending) setRemoveTarget(null);
+      }}>
+        <DialogContent className="rounded-none">
+          <DialogHeader>
+            <DialogTitle>Eliminar del catálogo</DialogTitle>
+            <DialogDescription>
+              {removeTarget ? `“${removeTarget.name}” dejará de aparecer en la tienda. Se conservará su registro para el historial de pedidos y podrás reactivarlo desde su ficha.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setRemoveTarget(null)} disabled={updateProduct.isPending}>Cancelar</Button>
+            <Button type="button" variant="destructive" onClick={() => void removeFromCatalog()} disabled={updateProduct.isPending}>
+              {updateProduct.isPending ? "Eliminando..." : "Eliminar del catálogo"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Sheet open={importOpen} onOpenChange={setImportOpen}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
