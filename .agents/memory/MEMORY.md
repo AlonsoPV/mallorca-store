@@ -7,3 +7,4 @@
 - [OpenAPI query generation](openapi-query-generation.md) — A path plus query parameter can collide in Orval's Zod barrel; keep query params typed without duplicate exports.
 - [API integration test runner](api-integration-test-runner.md) — Bundle route tests with esbuild before running them when workspace TypeScript imports cannot load directly in Node.
 - [Fulfillment lead time](fulfillment-lead-time.md) — Measure cart-item notice from order time, not from each future day's opening; keep the branch's daily floor separate.
+- [GitHub connector push safety](github-connector-push-safety.md) — Keep exact Git IDs and fast-forward only; text shell output can alter commit bytes.
