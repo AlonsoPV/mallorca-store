@@ -68,12 +68,13 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ProductQuickEdit } from "@/pages/admin/product-quick-edit";
 
-type ViewChip = "all" | "active" | "draft" | "low" | "out" | "critical" | "normal";
+type ViewChip = "all" | "active" | "draft" | "inactive" | "low" | "out" | "critical" | "normal";
 
 const VIEW_CHIPS: { id: ViewChip; label: string }[] = [
   { id: "all", label: "Todos" },
   { id: "active", label: "Activos" },
   { id: "draft", label: "Borradores" },
+  { id: "inactive", label: "Inactivos" },
   { id: "normal", label: "Stock normal" },
   { id: "low", label: "Stock bajo" },
   { id: "critical", label: "Crítico" },
@@ -89,7 +90,7 @@ const STATUS_LABEL: Record<string, string> = {
 const PRODUCTS_LIST_QUERY_KEY = "admin.productos.search";
 
 function parseView(value: string | null): ViewChip {
-  if (value === "active" || value === "draft" || value === "low" || value === "out" || value === "critical" || value === "normal") {
+  if (value === "active" || value === "draft" || value === "inactive" || value === "low" || value === "out" || value === "critical" || value === "normal") {
     return value;
   }
   return "all";
@@ -317,7 +318,7 @@ export default function AdminProductsList() {
   }, [view, debouncedSearch, categoryId, branchId, setLocation, urlSearch]);
 
   const statusFilter: ListAdminProductsStatus | undefined =
-    view === "active" ? "active" : view === "draft" ? "draft" : undefined;
+    view === "active" ? "active" : view === "draft" ? "draft" : view === "inactive" ? "inactive" : undefined;
 
   const { data: products, isLoading: productsLoading, isError: productsError, refetch } = useListAdminProducts({
     search: debouncedSearch || undefined,
@@ -346,6 +347,9 @@ export default function AdminProductsList() {
 
   const filtered = useMemo(() => {
     let list = products ?? [];
+    if (view === "all") {
+      list = list.filter((product) => product.status !== "inactive");
+    }
     const catId = categoryId !== "all" ? Number(categoryId) : null;
     const brId = branchId !== "all" ? Number(branchId) : null;
 
@@ -362,7 +366,7 @@ export default function AdminProductsList() {
       list = list.filter(product => ids.has(product.id));
     }
     return list;
-  }, [products, inventoryState, inventory.data, categoryId, branchId, categoryList]);
+  }, [products, view, inventoryState, inventory.data, categoryId, branchId, categoryList]);
 
   const activeFilterChips = useMemo(() => {
     const chips: { key: string; label: string; clear: () => void }[] = [];
