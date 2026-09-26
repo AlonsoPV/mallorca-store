@@ -7,8 +7,9 @@ import {
   getGetGuestOrderDetailsQueryKey,
   getGetOrderDetailsQueryKey,
   customFetch,
+  startOrderPayment,
 } from "@workspace/api-client-react";
-import { useParams, Link, Redirect } from "wouter";
+import { useParams, useSearch, Link, Redirect } from "wouter";
 import {
   CheckCircle,
   Clock,
@@ -17,6 +18,7 @@ import {
   Download,
   Loader2,
   CircleAlert,
+  CreditCard,
   Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +30,14 @@ import {
   scheduleLabel,
   paymentLabels,
   statusLabels,
+  canRetryOnlinePayment,
 } from "../../../../lib/purchase-result.mjs";
+
+const PAYMENT_RETURN_COPY: Record<string, string> = {
+  ok: "Recibimos tu regreso de la pasarela. Estamos confirmando el pago; esta página se actualiza sola.",
+  pendiente: "Tu pago quedó pendiente en la pasarela. Te avisaremos cuando se confirme.",
+  cancelado: "No se completó el pago. Tu pedido sigue guardado y puedes intentarlo de nuevo.",
+};
 
 type Confirmation = {
   branchName?: string;
@@ -56,20 +65,23 @@ export default function OrderDetailsPage() {
   const { isSignedIn, isLoaded } = useAppAuth();
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
+  const [startingPayment, setStartingPayment] = useState(false);
+  const paymentReturn = new URLSearchParams(useSearch()).get("pago") ?? "";
+  const refetchInterval = paymentReturn === "ok" || paymentReturn === "pendiente" ? 5000 : 30000;
   // A valid guest link remains usable even when the customer has signed in meanwhile.
   const isGuest = !!token && token !== "user";
   const guest = useGetGuestOrderDetails(id!, token!, {
     query: {
       enabled: !!id && isGuest,
       queryKey: getGetGuestOrderDetailsQueryKey(id!, token!),
-      refetchInterval: 30000,
+      refetchInterval,
     },
   });
   const account = useGetOrderDetails(id!, {
     query: {
       enabled: !!id && !isGuest && !!isSignedIn,
       queryKey: getGetOrderDetailsQueryKey(id!),
-      refetchInterval: 30000,
+      refetchInterval,
     },
   });
   const query = isGuest ? guest : account;
@@ -116,6 +128,24 @@ export default function OrderDetailsPage() {
       setDownloading(false);
     }
   }
+  async function payOnline() {
+    if (!order || startingPayment) return;
+    setStartingPayment(true);
+    try {
+      const session = await startOrderPayment(order.id, {
+        guestAccessToken: isGuest ? token : undefined,
+      });
+      if (!session.redirectUrl) throw new Error("missing redirect");
+      window.location.assign(session.redirectUrl);
+    } catch {
+      setStartingPayment(false);
+      toast({
+        title: "No se pudo abrir el pago",
+        description: "Intenta de nuevo en unos minutos. Tu pedido sigue guardado.",
+        variant: "destructive",
+      });
+    }
+  }
   if (!isGuest && isLoaded && !isSignedIn)
     return (
       <Redirect
@@ -157,6 +187,9 @@ export default function OrderDetailsPage() {
     );
   const result = purchaseResult(order);
   const branch = confirmation.data;
+  const canPayOnline = canRetryOnlinePayment(order);
+  const returnNotice = order.paymentStatus === "paid" ? null : PAYMENT_RETURN_COPY[paymentReturn];
+  const payLabel = paymentLabels[order.paymentMethod || ""] || "en línea";
   const Icon =
     result.tone === "success"
       ? CheckCircle
@@ -188,8 +221,36 @@ export default function OrderDetailsPage() {
               Pago: {result.paymentStatus}
             </span>
           </div>
+          {returnNotice ? (
+            <p
+              role="status"
+              className="mx-auto mt-5 max-w-xl border bg-background px-4 py-3 text-sm"
+            >
+              {returnNotice}
+            </p>
+          ) : null}
+          <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+          {canPayOnline ? (
+            <Button
+              className="h-12 px-7"
+              onClick={payOnline}
+              disabled={startingPayment}
+            >
+              {startingPayment ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CreditCard className="mr-2 h-4 w-4" />
+              )}
+              {startingPayment
+                ? "Abriendo el pago…"
+                : order.paymentStatus === "processing"
+                  ? `Continuar pago con ${payLabel}`
+                  : `Pagar con ${payLabel}`}
+            </Button>
+          ) : null}
           <Button
-            className="mt-6 h-12 px-7"
+            variant={canPayOnline ? "outline" : "default"}
+            className="h-12 px-7"
             onClick={download}
             disabled={downloading}
           >
@@ -202,6 +263,7 @@ export default function OrderDetailsPage() {
               ? "Preparando comprobante…"
               : "Descargar comprobante PDF"}
           </Button>
+          </div>
           <p className="mt-2 text-xs text-muted-foreground">
             Comprobante de pedido; no es factura fiscal.
           </p>

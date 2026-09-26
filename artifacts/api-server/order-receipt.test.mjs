@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import {
+  canRetryOnlinePayment,
   money,
   purchaseResult,
   receiptSnapshot,
@@ -79,8 +80,19 @@ test("purchase result distinguishes paid, unpaid, processing, cancellation and r
   );
   assert.match(
     purchaseResult({ ...order, paymentMethod: "ONLINE" }).message,
+    /pago en línea/,
+  );
+  assert.match(
+    purchaseResult({ ...order, paymentMethod: "PAYPAL", paymentStatus: "failed" }).message,
+    /intentarlo de nuevo/,
+  );
+  assert.match(
+    purchaseResult({ ...order, paymentMethod: "TRANSFER" }).message,
     /completarlo/,
   );
+  assert.equal(canRetryOnlinePayment({ ...order, paymentMethod: "PAYPAL", paymentStatus: "failed" }), true);
+  assert.equal(canRetryOnlinePayment({ ...order, paymentMethod: "PAYPAL", paymentStatus: "paid" }), false);
+  assert.equal(canRetryOnlinePayment(order), false);
   assert.match(scheduleLabel(order.scheduledStart), /11:30/);
 });
 test("branch recipient uses only assigned active responsibles and prefers primary", () => {

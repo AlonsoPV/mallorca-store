@@ -1,6 +1,8 @@
 export function money(value: number | null | undefined): string;
 export const paymentLabels: Record<string, string>;
 export const statusLabels: Record<string, string>;
+export const ONLINE_PAYMENT_METHODS: string[];
+export function canRetryOnlinePayment(order: any): boolean;
 export function purchaseResult(order: any): {
   title: string;
   message: string;
