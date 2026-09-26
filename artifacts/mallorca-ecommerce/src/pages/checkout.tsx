@@ -130,7 +130,7 @@ export default function CheckoutPage() {
   const validateDelivery = useValidateDelivery();
   const [deliveryInfo, setDeliveryInfo] = useState<{ eligible: boolean; fee: number; reason: string | null } | null>(null);
 
-  const { data: slots, isLoading: isLoadingSlots } = useListFulfillmentSlots({
+  const { data: slots, isLoading: isLoadingSlots, isError: isSlotsError, refetch: refetchSlots } = useListFulfillmentSlots({
     branchId: branchId!,
     date: checkoutDate,
     method: fulfillmentMethod,
@@ -377,12 +377,12 @@ export default function CheckoutPage() {
   const total = preview?.total ?? fallbackTotal;
   const minimumOrder = cart?.branch.minimumOrder ?? 0;
   const minimumRemaining = Math.max(0, minimumOrder - (preview?.subtotal ?? cart?.subtotal ?? 0));
-  const selectedSlotAvailable = Boolean(
+  const selectedSlotAvailable = !isSlotsError && Boolean(
     slots?.some((slot) => sameSlot(slot.start, selectedSlot) && slot.available),
   );
 
   useEffect(() => {
-    if (isLoadingSlots || !slots || !selectedSlot) return;
+    if (isLoadingSlots || isSlotsError || !slots || !selectedSlot) return;
     const match = slots.find((slot) => sameSlot(slot.start, selectedSlot));
     if (!match?.available) {
       setSelectedSlot("");
@@ -394,7 +394,7 @@ export default function CheckoutPage() {
       setSelectedSlot(iso);
       setFulfillmentContext(checkoutDate, iso);
     }
-  }, [checkoutDate, isLoadingSlots, selectedSlot, setFulfillmentContext, slots]);
+  }, [checkoutDate, isLoadingSlots, isSlotsError, selectedSlot, setFulfillmentContext, slots]);
   const priceChanges = (preview?.lines ?? []).flatMap((line) => {
     const cartLine = cart?.items.find((item) => item.productId === line.productId && item.quantity === line.quantity)
       ?? cart?.items.find((item) => item.productId === line.productId);
@@ -608,6 +608,11 @@ export default function CheckoutPage() {
               </div>
               {isLoadingSlots ? (
                 <div className="mt-4 flex items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando horarios {fulfillmentMethod}</div>
+              ) : isSlotsError ? (
+                <div role="alert" className="mt-4 space-y-2 text-sm text-destructive">
+                  <p>No pudimos consultar los horarios de la sucursal. Inténtalo de nuevo.</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void refetchSlots()}>Reintentar</Button>
+                </div>
               ) : slots?.length ? (
                 <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {slots.map((slot) => {
@@ -636,6 +641,9 @@ export default function CheckoutPage() {
                   {checkoutDate === mexicoToday()
                     ? "Ya no hay horarios disponibles para hoy. Elige otro día."
                     : `Esta fecha no tiene horarios disponibles para ${fulfillmentMethod === "delivery" ? "envío" : "recolección"}. Prueba con otro día.`}
+                  {cart && cart.maxLeadTimeMinutes >= 60 ? (
+                    <span className="mt-1 block">Los productos de tu bolsa requieren hasta {Math.ceil(cart.maxLeadTimeMinutes / 60)} horas de anticipación.</span>
+                  ) : null}
                 </p>
               )}
               {selectedSlot && !selectedSlotAvailable && !isLoadingSlots && (

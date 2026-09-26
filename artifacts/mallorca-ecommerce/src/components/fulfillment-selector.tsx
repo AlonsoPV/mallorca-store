@@ -60,7 +60,7 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
   const branch = branches?.find((item) => item.id === branchId);
 
   const draftDateObject = draftDate ? parseISO(draftDate) : null;
-  const { data: slots, isLoading: isLoadingSlots } = useListFulfillmentSlots(
+  const { data: slots, isLoading: isLoadingSlots, isError: isSlotsError, refetch: refetchSlots } = useListFulfillmentSlots(
     {
       branchId: branchId!,
       date: draftDate || format(today, "yyyy-MM-dd"),
@@ -303,6 +303,11 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
                       <p className="text-sm leading-relaxed text-muted-foreground">Selecciona un día para consultar los horarios disponibles en tu sucursal.</p>
                     ) : isLoadingSlots ? (
                       <div className="flex items-center py-8 text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando horarios</div>
+                    ) : isSlotsError ? (
+                      <div role="alert" className="space-y-2 text-sm text-destructive">
+                        <p>No pudimos consultar los horarios de la sucursal. Inténtalo de nuevo.</p>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void refetchSlots()}>Reintentar</Button>
+                      </div>
                     ) : slots?.length ? (
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {slots.map((slot) => {
@@ -329,12 +334,17 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
                         })}
                       </div>
                     ) : (
-                      <p className="text-sm leading-relaxed text-muted-foreground">Esta fecha no tiene horarios disponibles para la sucursal. Prueba con otro día.</p>
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        Esta fecha no tiene horarios disponibles para la sucursal. Prueba con otro día.
+                        {cart && cart.maxLeadTimeMinutes >= 60 ? (
+                          <span className="mt-1 block">Los productos de tu bolsa requieren hasta {Math.ceil(cart.maxLeadTimeMinutes / 60)} horas de anticipación.</span>
+                        ) : null}
+                      </p>
                     )}
                   </div>
                 </div>
                 <div className="mt-8 flex justify-end border-t border-border pt-6">
-                  <Button type="button" onClick={applySelection} disabled={!draftDate || !draftTime || isApplying} className="rounded-none bg-primary text-primary-foreground hover:bg-primary/90">
+                  <Button type="button" onClick={applySelection} disabled={!draftDate || !draftTime || isApplying || isSlotsError} className="rounded-none bg-primary text-primary-foreground hover:bg-primary/90">
                     {isApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Ver productos disponibles
                   </Button>

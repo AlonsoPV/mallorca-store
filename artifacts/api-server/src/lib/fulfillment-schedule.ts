@@ -55,10 +55,10 @@ export function fulfillmentSchedule(
   const open = parseMexicoDateTime(date, hours.open);
   const close = parseMexicoDateTime(date, hours.close);
   if (!Number.isFinite(open) || !Number.isFinite(close) || close <= open) return undefined;
-  const leadMinutes =
-    Math.max(cartLeadMinutes, branch.preparationTimeMinutes) +
-    (method === "delivery" ? branch.deliveryTimeMinutes : 0);
-  const anchor = open + leadMinutes * 60_000;
+  const deliveryMinutes = method === "delivery" ? branch.deliveryTimeMinutes : 0;
+  const leadMinutes = Math.max(cartLeadMinutes, branch.preparationTimeMinutes) + deliveryMinutes;
+  // Product lead time starts when the order is placed, not at each future day's opening.
+  const anchor = open + (branch.preparationTimeMinutes + deliveryMinutes) * 60_000;
   const earliest = Math.max(anchor, now + leadMinutes * 60_000);
   const first =
     anchor + Math.max(0, Math.ceil((earliest - anchor) / intervalMs)) * intervalMs;

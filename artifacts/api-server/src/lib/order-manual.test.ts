@@ -134,6 +134,28 @@ describe("fulfillment-schedule", () => {
     assert.ok(pickup && delivery);
     assert.ok(delivery.first > pickup.first);
   });
+
+  it("allows future slots when a cart item needs 24 hours of notice", () => {
+    const branch = {
+      hours: [
+        { day: "monday", label: "Monday", open: "09:00", close: "18:00", closed: false },
+        { day: "tuesday", label: "Tuesday", open: "09:00", close: "18:00", closed: false },
+      ],
+      pickupSlotIntervalMinutes: 30,
+      preparationTimeMinutes: 60,
+      deliveryTimeMinutes: 30,
+      pickupSlotCapacity: 5,
+    } as any;
+    const now = Date.parse("2026-09-14T08:00:00-06:00");
+    const today = fulfillmentSchedule(branch, "2026-09-14", "pickup", 1440, now);
+    const tomorrow = fulfillmentSchedule(branch, "2026-09-15", "pickup", 1440, now);
+    const delivery = fulfillmentSchedule(branch, "2026-09-15", "delivery", 1440, now);
+    assert.ok(today && tomorrow && delivery);
+    assert.ok(today.first + today.intervalMs > today.close);
+    assert.equal(new Date(tomorrow.first).toISOString(), "2026-09-15T16:00:00.000Z");
+    assert.ok(isValidSlotTime(tomorrow, new Date(tomorrow.first)));
+    assert.equal(new Date(delivery.first).toISOString(), "2026-09-15T16:30:00.000Z");
+  });
 });
 
 describe("reservation TTL", () => {
