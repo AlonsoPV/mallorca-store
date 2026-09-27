@@ -34,7 +34,19 @@ function readBearerToken(req: Request): string | undefined {
 
 async function provisionLocalDevUser(req: Request): Promise<User | undefined> {
   if (!isLocalDevAuthEnabled()) return undefined;
-  if (readBearerToken(req) !== LOCAL_DEV_AUTH_TOKEN) return undefined;
+  const token = readBearerToken(req);
+  if (!token) return undefined;
+
+  if (token.startsWith("local-dev:")) {
+    const userId = token.slice("local-dev:".length);
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user) return undefined;
+    req.userId = user.id;
+    req.localUser = user;
+    return user;
+  }
+
+  if (token !== LOCAL_DEV_AUTH_TOKEN) return undefined;
 
   const userId = process.env.LOCAL_DEV_USER_ID?.trim() || "user_local_dev_admin";
   const email = (

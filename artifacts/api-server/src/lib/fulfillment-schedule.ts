@@ -1,7 +1,75 @@
-import type { branchesTable } from "@workspace/db";
 import { WEEKDAY_KEYS, weekdayFromHour } from "./branch-legacy.ts";
 
-export type BranchHoursRow = typeof branchesTable.$inferSelect;
+export type FulfillmentHours = {
+  date?: string;
+  day: string;
+  label: string;
+  open: string;
+  close: string;
+  closed: boolean;
+};
+
+export type FulfillmentBranch = {
+  hours: FulfillmentHours[];
+  pickupSlotIntervalMinutes: number;
+  preparationTimeMinutes: number;
+  deliveryTimeMinutes: number;
+  pickupSlotCapacity: number;
+};
+
+/** @deprecated Use FulfillmentBranch. Kept so existing call sites type-check. */
+export type BranchHoursRow = FulfillmentBranch;
+
+export function itemLeadMinutes(input: {
+  minimumLeadTimeHours?: number | null;
+  itemPreparationTimeMinutes?: number | null;
+  branchPreparationTimeMinutes?: number | null;
+}): number {
+  const fromHours = Math.max(0, Math.round((input.minimumLeadTimeHours ?? 0) * 60));
+  const fromPrep = Math.max(
+    0,
+    input.itemPreparationTimeMinutes ?? input.branchPreparationTimeMinutes ?? 0,
+  );
+  return Math.max(fromHours, fromPrep);
+}
+
+export function cartLeadMinutes(
+  items: Array<{
+    minimumLeadTimeHours?: number | null;
+    itemPreparationTimeMinutes?: number | null;
+  }>,
+  branchPreparationTimeMinutes: number,
+): number {
+  const floor = Math.max(0, branchPreparationTimeMinutes);
+  return items.reduce(
+    (max, item) =>
+      Math.max(
+        max,
+        itemLeadMinutes({
+          minimumLeadTimeHours: item.minimumLeadTimeHours,
+          itemPreparationTimeMinutes: item.itemPreparationTimeMinutes,
+          branchPreparationTimeMinutes: floor,
+        }),
+      ),
+    floor,
+  );
+}
+
+export function isReadyForLead(
+  scheduledStart: Date | number,
+  leadMinutes: number,
+  now = Date.now(),
+): boolean {
+  const at = typeof scheduledStart === "number" ? scheduledStart : scheduledStart.getTime();
+  if (!Number.isFinite(at)) return false;
+  return at >= now + Math.max(0, leadMinutes) * 60_000;
+}
+
+export function leadRequirementReason(leadMinutes: number): string {
+  const minutes = Math.max(0, Math.round(leadMinutes));
+  if (minutes < 60) return `Requiere ${minutes} min de preparación.`;
+  return `Requiere ${Math.ceil(minutes / 60)} h de preparación.`;
+}
 
 export function mexicoDate(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -33,7 +101,7 @@ export type FulfillmentSchedule = {
 };
 
 export function fulfillmentSchedule(
-  branch: BranchHoursRow,
+  branch: FulfillmentBranch,
   date: string,
   method: "pickup" | "delivery",
   cartLeadMinutes: number,

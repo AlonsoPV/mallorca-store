@@ -29,12 +29,18 @@ import {
 } from "../lib/catalog";
 import { buildBranchPreviewItems } from "../lib/branch-preview";
 import { getRequestUser, requireAuth } from "../middlewares/auth";
+import { findUserByIdentifier } from "../lib/admin-users";
+import { verifyPassword } from "../lib/password";
 import crypto from "node:crypto";
 import { applyInventoryAlert } from "../lib/inventory-alerts";
 import { validateDeliveryCoverage } from "../lib/delivery-validation";
 import {
+  cartLeadMinutes,
   fulfillmentSchedule,
+  isReadyForLead,
   isValidSlotTime,
+  itemLeadMinutes,
+  leadRequirementReason,
   mexicoDate,
   reservationTtlMinutesUntil,
 } from "../lib/fulfillment-schedule";
@@ -99,11 +105,14 @@ async function cartView(cartId: string): Promise<CartShape | undefined> {
   }));
   return { id: cartId, branch: serializeBranch(row.branch), items: lines, subtotal: lines.reduce((s, x) => s + x.lineTotal, 0),
     quantity: lines.reduce((s, x) => s + x.quantity, 0),
-    maxLeadTimeMinutes: items.reduce((s, x) => Math.max(
-      s,
-      (x.product.minimumLeadTimeHours ?? 0) * 60,
-      x.branchProduct?.preparationTimeMinutes ?? 0,
-    ), 0) };
+    maxLeadTimeMinutes: cartLeadMinutes(
+      items.map(({ product, branchProduct }) => ({
+        minimumLeadTimeHours: product.minimumLeadTimeHours,
+        itemPreparationTimeMinutes: branchProduct?.preparationTimeMinutes,
+      })),
+      row.branch.preparationTimeMinutes,
+    ),
+  };
 }
 
 router.post("/cart/session", async (req, res): Promise<void> => {
@@ -310,17 +319,19 @@ router.post("/fulfillment/preview", async (req, res): Promise<void> => {
   const reservedByBp = await loadReservedByBranchProductIds(rows.map(({ branchProduct }) => branchProduct.id));
 
   const items = rows.map(({ item, product, branchProduct }) => {
-    const requiredLeadMinutes = Math.max(
-      product.minimumLeadTimeHours * 60,
-      branchProduct.preparationTimeMinutes ?? branch.preparationTimeMinutes,
-    );
+    const requiredLeadMinutes = itemLeadMinutes({
+      minimumLeadTimeHours: product.minimumLeadTimeHours,
+      itemPreparationTimeMinutes: branchProduct.preparationTimeMinutes,
+      branchPreparationTimeMinutes: branch.preparationTimeMinutes,
+    });
     const sellable = sellableUnits(branchProduct.inventory, reservedByBp.get(branchProduct.id) ?? 0);
+    const leadReady = isReadyForLead(scheduled, requiredLeadMinutes);
     const available = Boolean(
       slotAvailable &&
       product.status === "active" &&
       branchProduct.available &&
       sellable >= item.quantity &&
-      scheduled.getTime() >= Date.now() + requiredLeadMinutes * 60_000,
+      leadReady,
     );
     return {
       cartItemId: item.id,
@@ -332,8 +343,8 @@ router.post("/fulfillment/preview", async (req, res): Promise<void> => {
         ? null
         : !slotAvailable
           ? slotReason
-          : scheduled.getTime() < Date.now() + requiredLeadMinutes * 60_000
-          ? `Requiere ${Math.ceil(requiredLeadMinutes / 60)} h de preparación.`
+          : !leadReady
+          ? leadRequirementReason(requiredLeadMinutes)
             : "No disponible para esta sucursal.",
     };
   });
@@ -585,6 +596,30 @@ router.get("/orders/:id/confirmation", requireAuth, (req, res) => sendOrder(req,
 router.get("/guest/orders/:id/:token/confirmation", (req, res) => sendOrder(req, res, true, "confirmation"));
 router.get("/orders/:id", requireAuth, (req, res) => sendOrder(req, res));
 router.get("/guest/orders/:id/:token", (req, res) => sendOrder(req, res, true));
+router.post("/auth/local-login", async (req, res): Promise<void> => {
+  const identifier = String(req.body?.identifier ?? "").trim();
+  const password = String(req.body?.password ?? "");
+  if (!identifier || !password) {
+    res.status(400).json({ error: "Escribe usuario y contraseña." });
+    return;
+  }
+  const user = await findUserByIdentifier(identifier);
+  if (!user || user.role === "customer" || !verifyPassword(password, user.passwordHash)) {
+    res.status(401).json({ error: "Usuario o contraseña incorrectos." });
+    return;
+  }
+  res.json({
+    token: `local-dev:${user.id}`,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username ?? null,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+    },
+  });
+});
 router.get("/me", requireAuth, async (req, res): Promise<void> => { const u = await getRequestUser(req); res.json(GetMeResponse.parse(u)); });
 router.patch("/me", requireAuth, async (req, res): Promise<void> => { const b = UpdateMeBody.safeParse(req.body); if (!b.success) { res.status(400).json({ error: b.error.message }); return; } const u = await getRequestUser(req); const [updated] = await db.update(usersTable).set(b.data).where(eq(usersTable.id, u!.id)).returning(); res.json(UpdateMeResponse.parse(updated)); });
 router.get("/me/orders", requireAuth, async (req, res): Promise<void> => {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil, UserPlus, Users } from "lucide-react";
+import { Copy, Eye, EyeOff, KeyRound, Pencil, RefreshCw, UserPlus, Users } from "lucide-react";
 import { readSearchParam, withSearchParams } from "@/lib/admin-search-params";
 import AdminAssignmentsPanel from "@/pages/admin/responsibles";
 import {
@@ -43,6 +43,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { generatePassword, generateUsername } from "@/lib/staff-credentials";
 import { cn } from "@/lib/utils";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -65,6 +66,8 @@ const CREATABLE_ROLES: AdminStaffRole[] = [
 
 type CreateForm = {
   email: string;
+  username: string;
+  password: string;
   firstName: string;
   lastName: string;
   phone: string;
@@ -77,6 +80,8 @@ type CreateForm = {
 
 const emptyCreate = (): CreateForm => ({
   email: "",
+  username: generateUsername(),
+  password: generatePassword(),
   firstName: "",
   lastName: "",
   phone: "",
@@ -84,7 +89,7 @@ const emptyCreate = (): CreateForm => ({
   branchId: "none",
   branchRole: "staff",
   isPrimary: false,
-  sendInvite: true,
+  sendInvite: false,
 });
 
 function errorMessage(error: unknown) {
@@ -120,8 +125,13 @@ export default function AdminUsers() {
     firstName: "",
     lastName: "",
     phone: "",
+    username: "",
+    password: "",
     role: "staff" as AdminStaffRole,
   });
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [issued, setIssued] = useState<{ username: string; password: string; name: string } | null>(null);
 
   const canManage =
     me.data?.role === "admin" || me.data?.role === "operations_manager";
@@ -136,7 +146,7 @@ export default function AdminUsers() {
     const needle = q.trim().toLowerCase();
     if (needle) {
       list = list.filter((u) =>
-        [u.name, u.email, u.role, u.phone].filter(Boolean).join(" ").toLowerCase().includes(needle),
+        [u.name, u.email, u.username, u.role, u.phone].filter(Boolean).join(" ").toLowerCase().includes(needle),
       );
     }
     return list;
@@ -147,7 +157,12 @@ export default function AdminUsers() {
   };
 
   const openCreate = () => {
-    setForm(emptyCreate());
+    setForm({
+      ...emptyCreate(),
+      username: generateUsername(),
+      password: generatePassword(),
+    });
+    setShowCreatePassword(true);
     setCreateOpen(true);
   };
 
@@ -157,11 +172,23 @@ export default function AdminUsers() {
       firstName: user.firstName ?? "",
       lastName: user.lastName ?? "",
       phone: user.phone ?? "",
+      username: user.username ?? "",
+      password: "",
       role: (CREATABLE_ROLES.includes(user.role as AdminStaffRole)
         ? user.role
         : "staff") as AdminStaffRole,
     });
+    setShowEditPassword(false);
     setEditOpen(true);
+  };
+
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: `${label} copiado` });
+    } catch {
+      toast({ title: `No se pudo copiar ${label.toLowerCase()}`, variant: "destructive" });
+    }
   };
 
   const submitCreate = async () => {
@@ -171,17 +198,22 @@ export default function AdminUsers() {
     }
     const payload: AdminUserCreate = {
       email: form.email.trim(),
+      username: form.username.trim() || null,
+      password: form.password.trim() || null,
+      generatePassword: !form.password.trim(),
       firstName: form.firstName.trim() || null,
       lastName: form.lastName.trim() || null,
       phone: form.phone.trim() || null,
       role: form.role,
-      sendInvite: form.sendInvite,
+      sendInvite: form.sendInvite && !form.password.trim(),
       branchId: form.branchId !== "none" ? Number(form.branchId) : null,
       branchRole: form.branchRole,
       isPrimary: form.isPrimary,
     };
     try {
       const result = await createUser.mutateAsync({ data: payload });
+      const username = result.username || result.user.username || form.username;
+      const password = result.temporaryPassword || form.password;
       toast({
         title: result.promoted
           ? "Cliente promovido a staff"
@@ -189,6 +221,9 @@ export default function AdminUsers() {
         description: result.message ?? undefined,
       });
       setCreateOpen(false);
+      if (username && password) {
+        setIssued({ username, password, name: result.user.name });
+      }
       refresh();
     } catch (e) {
       toast({ title: errorMessage(e), variant: "destructive" });
@@ -204,11 +239,21 @@ export default function AdminUsers() {
           firstName: editForm.firstName.trim() || null,
           lastName: editForm.lastName.trim() || null,
           phone: editForm.phone.trim() || null,
+          username: editForm.username.trim() || null,
+          password: editForm.password.trim() || null,
+          generatePassword: false,
           role: editForm.role,
         },
       });
-      toast({ title: "Usuario actualizado" });
+      toast({ title: "Cambios guardados" });
       setEditOpen(false);
+      if (editForm.password.trim()) {
+        setIssued({
+          username: editForm.username.trim() || editing.username || editing.email,
+          password: editForm.password.trim(),
+          name: [editForm.firstName, editForm.lastName].filter(Boolean).join(" ") || editing.name,
+        });
+      }
       refresh();
     } catch (e) {
       toast({ title: errorMessage(e), variant: "destructive" });
@@ -220,7 +265,7 @@ export default function AdminUsers() {
       <AdminPageShell>
         <AdminPageHeader
           title="Usuarios"
-          description="Crea el equipo operativo y asígnalo a sucursales o categorías. El acceso usa Clerk (o local-dev)."
+          description="Genera usuario y contraseña, y guarda los cambios del equipo."
           actions={
             canManage ? (
               <Button className="rounded-none" onClick={openCreate}>
@@ -286,7 +331,7 @@ export default function AdminUsers() {
                 />
                 <Input
                   className="h-9 max-w-sm rounded-none"
-                  placeholder="Buscar nombre, correo o teléfono…"
+                  placeholder="Buscar nombre, usuario, correo o teléfono…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -316,7 +361,7 @@ export default function AdminUsers() {
               <AdminTable>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    {["Nombre", "Correo", "Teléfono", "Rol", "Acciones"].map((h) => (
+                    {["Nombre", "Usuario", "Correo", "Teléfono", "Rol", "Acciones"].map((h) => (
                       <AdminTableHead key={h}>{h}</AdminTableHead>
                     ))}
                   </AdminTableRow>
@@ -325,6 +370,7 @@ export default function AdminUsers() {
                   {filtered.map((user) => (
                     <AdminTableRow key={user.id}>
                       <AdminTableCell className="font-medium">{user.name}</AdminTableCell>
+                      <AdminTableCell className="font-mono text-sm">{user.username || "—"}</AdminTableCell>
                       <AdminTableCell className="text-sm text-muted-foreground">{user.email}</AdminTableCell>
                       <AdminTableCell className="text-sm">{user.phone || "—"}</AdminTableCell>
                       <AdminTableCell>
@@ -360,21 +406,10 @@ export default function AdminUsers() {
             <DialogHeader>
               <DialogTitle>Nuevo usuario</DialogTitle>
               <DialogDescription>
-                Crea un usuario operativo o promociona un cliente existente con el mismo correo.
-                No se guarda contraseña en la base de datos.
+                Genera usuario y contraseña. Cópialos al crear; la contraseña no se vuelve a mostrar.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2 space-y-1">
-                <Label>Correo *</Label>
-                <Input
-                  type="email"
-                  className="rounded-none"
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  placeholder="nombre@mallorca.mx"
-                />
-              </div>
               <div className="space-y-1">
                 <Label>Nombre</Label>
                 <Input
@@ -390,6 +425,78 @@ export default function AdminUsers() {
                   value={form.lastName}
                   onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
                 />
+              </div>
+              <div className="sm:col-span-2 space-y-1">
+                <Label>Correo *</Label>
+                <Input
+                  type="email"
+                  className="rounded-none"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="nombre@mallorca.mx"
+                />
+              </div>
+              <div className="sm:col-span-2 space-y-1">
+                <Label>Usuario</Label>
+                <div className="flex gap-2">
+                  <Input
+                    className="rounded-none font-mono"
+                    value={form.username}
+                    onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                    placeholder="usuario"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-none shrink-0"
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        username: generateUsername({
+                          firstName: f.firstName,
+                          lastName: f.lastName,
+                          email: f.email,
+                        }),
+                      }))
+                    }
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Generar
+                  </Button>
+                </div>
+              </div>
+              <div className="sm:col-span-2 space-y-1">
+                <Label>Contraseña</Label>
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Input
+                      type={showCreatePassword ? "text" : "password"}
+                      className="rounded-none font-mono pr-10"
+                      value={form.password}
+                      onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center text-muted-foreground"
+                      onClick={() => setShowCreatePassword((open) => !open)}
+                      aria-label={showCreatePassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      {showCreatePassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-none shrink-0"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, password: generatePassword() }));
+                      setShowCreatePassword(true);
+                    }}
+                  >
+                    <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                    Generar
+                  </Button>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label>Teléfono</Label>
@@ -465,8 +572,7 @@ export default function AdminUsers() {
                   onChange={(e) => setForm((f) => ({ ...f, sendInvite: e.target.checked }))}
                 />
                 <span>
-                  Enviar invitación de acceso (Clerk). En local-dev se omite y el usuario queda
-                  disponible de inmediato en el directorio.
+                  Enviar invitación por correo (solo si no se genera contraseña).
                 </span>
               </label>
             </div>
@@ -489,7 +595,9 @@ export default function AdminUsers() {
           <DialogContent className="rounded-none sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Editar usuario</DialogTitle>
-              <DialogDescription>{editing?.email}</DialogDescription>
+              <DialogDescription>
+                {editing?.email}. Genera una contraseña nueva solo si quieres cambiarla.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
@@ -507,6 +615,68 @@ export default function AdminUsers() {
                   value={editForm.lastName}
                   onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
                 />
+              </div>
+              <div className="sm:col-span-2 space-y-1">
+                <Label>Usuario</Label>
+                <div className="flex gap-2">
+                  <Input
+                    className="rounded-none font-mono"
+                    value={editForm.username}
+                    onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-none shrink-0"
+                    onClick={() =>
+                      setEditForm((f) => ({
+                        ...f,
+                        username: generateUsername({
+                          firstName: f.firstName,
+                          lastName: f.lastName,
+                          email: editing?.email,
+                        }),
+                      }))
+                    }
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Generar
+                  </Button>
+                </div>
+              </div>
+              <div className="sm:col-span-2 space-y-1">
+                <Label>Contraseña nueva</Label>
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Input
+                      type={showEditPassword ? "text" : "password"}
+                      className="rounded-none font-mono pr-10"
+                      value={editForm.password}
+                      onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
+                      placeholder="Déjala vacía para no cambiarla"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center text-muted-foreground"
+                      onClick={() => setShowEditPassword((open) => !open)}
+                      aria-label={showEditPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      {showEditPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-none shrink-0"
+                    onClick={() => {
+                      setEditForm((f) => ({ ...f, password: generatePassword() }));
+                      setShowEditPassword(true);
+                    }}
+                  >
+                    <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                    Generar
+                  </Button>
+                </div>
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <Label>Teléfono</Label>
@@ -542,7 +712,56 @@ export default function AdminUsers() {
                 disabled={updateUser.isPending}
                 onClick={submitEdit}
               >
-                Guardar
+                Guardar cambios
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={Boolean(issued)} onOpenChange={(open) => !open && setIssued(null)}>
+          <DialogContent className="rounded-none sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Credenciales listas</DialogTitle>
+              <DialogDescription>
+                Copia usuario y contraseña ahora. La contraseña no se vuelve a mostrar.
+              </DialogDescription>
+            </DialogHeader>
+            {issued ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">{issued.name}</p>
+                <div className="space-y-1">
+                  <Label>Usuario</Label>
+                  <div className="flex gap-2">
+                    <Input className="rounded-none font-mono" readOnly value={issued.username} />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-none"
+                      onClick={() => copyText(issued.username, "Usuario")}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Contraseña</Label>
+                  <div className="flex gap-2">
+                    <Input className="rounded-none font-mono" readOnly value={issued.password} />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-none"
+                      onClick={() => copyText(issued.password, "Contraseña")}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            <DialogFooter>
+              <Button className="rounded-none" onClick={() => setIssued(null)}>
+                Listo
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -150,6 +150,8 @@ export const usersTable = pgTable(
   {
     id: text("id").primaryKey(),
     email: text("email").notNull(),
+    username: text("username"),
+    passwordHash: text("password_hash"),
     firstName: text("first_name"),
     lastName: text("last_name"),
     phone: text("phone"),
@@ -165,6 +167,7 @@ export const usersTable = pgTable(
   },
   (table) => [
     uniqueIndex("users_email_unique").on(table.email),
+    uniqueIndex("users_username_unique").on(table.username),
     uniqueIndex("users_stripe_customer_unique").on(table.stripeCustomerId),
   ],
 );

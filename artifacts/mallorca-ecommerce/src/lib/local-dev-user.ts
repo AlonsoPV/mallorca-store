@@ -1,6 +1,7 @@
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 export const LOCAL_DEV_AUTH_STORAGE_KEY = "mallorca_local_dev_auth";
+export const LOCAL_DEV_TOKEN_STORAGE_KEY = "mallorca_local_dev_token";
 export const LOCAL_DEV_AUTH_TOKEN = "local-dev";
 
 /** Stable dummy identity used as a Clerk stand-in on localhost. */
@@ -29,16 +30,27 @@ export function readLocalDevSignedIn(): boolean {
   return isLocalDevAuthPreferred();
 }
 
-export function persistLocalDevSignedIn(signedIn: boolean): void {
+export function persistLocalDevSignedIn(signedIn: boolean, token = LOCAL_DEV_AUTH_TOKEN): void {
   window.localStorage.setItem(
     LOCAL_DEV_AUTH_STORAGE_KEY,
     signedIn ? "1" : "0",
   );
+  if (signedIn) {
+    window.localStorage.setItem(LOCAL_DEV_TOKEN_STORAGE_KEY, token);
+  } else {
+    window.localStorage.removeItem(LOCAL_DEV_TOKEN_STORAGE_KEY);
+  }
 }
 
-export function attachLocalDevAuthToken(enabled: boolean): void {
+export function readLocalDevToken(): string | null {
+  if (typeof window === "undefined") return null;
+  if (!readLocalDevSignedIn()) return null;
+  return window.localStorage.getItem(LOCAL_DEV_TOKEN_STORAGE_KEY) || LOCAL_DEV_AUTH_TOKEN;
+}
+
+export function attachLocalDevAuthToken(enabled: boolean, token = LOCAL_DEV_AUTH_TOKEN): void {
   if (enabled) {
-    setAuthTokenGetter(() => LOCAL_DEV_AUTH_TOKEN);
+    setAuthTokenGetter(() => readLocalDevToken() || token);
   } else {
     setAuthTokenGetter(null);
   }

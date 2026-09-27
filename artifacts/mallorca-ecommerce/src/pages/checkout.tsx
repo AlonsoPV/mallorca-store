@@ -27,7 +27,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
-import { formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
+import { cartLeadNotice, formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
 import {
   formatSlotTime,
@@ -614,6 +614,10 @@ export default function CheckoutPage() {
                   <Button type="button" variant="outline" size="sm" onClick={() => void refetchSlots()}>Reintentar</Button>
                 </div>
               ) : slots?.length ? (
+                <>
+                  {cartLeadNotice(cart.maxLeadTimeMinutes) ? (
+                    <p className="mt-3 text-xs text-muted-foreground">{cartLeadNotice(cart.maxLeadTimeMinutes)}</p>
+                  ) : null}
                 <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {slots.map((slot) => {
                     const iso = slotToIso(slot.start);
@@ -636,13 +640,14 @@ export default function CheckoutPage() {
                     );
                   })}
                 </div>
+                </>
               ) : (
                 <p className="mt-4 text-sm text-muted-foreground">
                   {checkoutDate === mexicoToday()
                     ? "Ya no hay horarios disponibles para hoy. Elige otro día."
                     : `Esta fecha no tiene horarios disponibles para ${fulfillmentMethod === "delivery" ? "envío" : "recolección"}. Prueba con otro día.`}
-                  {cart && cart.maxLeadTimeMinutes >= 60 ? (
-                    <span className="mt-1 block">Los productos de tu bolsa requieren hasta {Math.ceil(cart.maxLeadTimeMinutes / 60)} horas de anticipación.</span>
+                  {cartLeadNotice(cart.maxLeadTimeMinutes) ? (
+                    <span className="mt-1 block">{cartLeadNotice(cart.maxLeadTimeMinutes)}</span>
                   ) : null}
                 </p>
               )}

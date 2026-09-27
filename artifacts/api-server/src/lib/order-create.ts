@@ -27,8 +27,10 @@ import {
 } from "./inventory-hold";
 import { logger } from "./logger";
 import {
+  cartLeadMinutes,
   fulfillmentSchedule,
   isValidSlotTime,
+  itemLeadMinutes,
   mexicoDate,
   reservationTtlMinutesUntil,
 } from "./fulfillment-schedule";
@@ -175,13 +177,11 @@ async function loadCartLines(cartId: string, branchId: number): Promise<{
     quantity: row.item.quantity,
   }));
 
-  const maxLeadTimeMinutes = rows.reduce(
-    (s, x) =>
-      Math.max(
-        s,
-        (x.product.minimumLeadTimeHours ?? 0) * 60,
-        x.bp?.preparationTimeMinutes ?? 0,
-      ),
+  const maxLeadTimeMinutes = cartLeadMinutes(
+    rows.map((row) => ({
+      minimumLeadTimeHours: row.product.minimumLeadTimeHours,
+      itemPreparationTimeMinutes: row.bp?.preparationTimeMinutes,
+    })),
     0,
   );
 
@@ -217,9 +217,11 @@ async function computeLeadMinutes(
     if (!row) continue;
     maxLead = Math.max(
       maxLead,
-      (row.product.minimumLeadTimeHours ?? 0) * 60,
-      row.bp?.preparationTimeMinutes ?? 0,
-      branchPrep,
+      itemLeadMinutes({
+        minimumLeadTimeHours: row.product.minimumLeadTimeHours,
+        itemPreparationTimeMinutes: row.bp?.preparationTimeMinutes,
+        branchPreparationTimeMinutes: branchPrep,
+      }),
     );
   }
   return maxLead;
@@ -277,12 +279,12 @@ export async function createOrder(
 
   for (const line of lines) {
     if (line.manualLineItem && !canAddManualLineItem(role)) {
-      throw new OrderCreateError("L√≠nea manual no permitida para este rol", 403);
+      throw new OrderCreateError("Lùnea manual no permitida para este rol", 403);
     }
   }
 
   if (input.paymentMethod === "COURTESY" && !canUseCourtesyPayment(role)) {
-    throw new OrderCreateError("Pago cortes√≠a no permitido para este rol", 403);
+    throw new OrderCreateError("Pago cortesùa no permitido para este rol", 403);
   }
 
   const allowUnavailable = Boolean(input.overrides?.stock);

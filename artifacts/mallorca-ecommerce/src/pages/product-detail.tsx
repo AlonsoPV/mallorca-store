@@ -17,7 +17,7 @@ import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { ProductCard } from "@/components/product-card";
-import { formatMxn, productAvailabilityCopy } from "@/lib/availability-copy";
+import { formatMxn, formatLeadTime, productAvailabilityCopy } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
 import { isCartNotFoundError } from "@/lib/cart-recovery";
 
@@ -149,25 +149,21 @@ export default function ProductDetail() {
   const currentSavings = currentSalePrice == null
     ? 0
     : Math.round((currentBasePrice - currentSalePrice) * 100) / 100;
-  const leadHours = Math.max(
-    product.minimumLeadTimeHours,
-    Math.ceil((currentBranchAvailability?.preparationTimeMinutes ?? 0) / 60),
+  const leadMinutes = Math.max(
+    (product.minimumLeadTimeHours ?? 0) * 60,
+    currentBranchAvailability?.preparationTimeMinutes ?? 0,
   );
+  const leadHours = Math.ceil(leadMinutes / 60);
   const scheduleAvailable = Boolean(
     !selectedTime ||
     (currentBranchAvailability &&
-      new Date(selectedTime).getTime() >=
-        Date.now() +
-          Math.max(
-            product.minimumLeadTimeHours * 60,
-            currentBranchAvailability.preparationTimeMinutes,
-          ) *
-          60_000),
+      new Date(selectedTime).getTime() >= Date.now() + leadMinutes * 60_000),
   );
   const availabilityLabel = productAvailabilityCopy({
     branchName: currentBranchAvailability?.branchName,
     available: currentBranchAvailability?.available,
     inventory: currentBranchAvailability?.inventory,
+    leadMinutes,
     leadHours,
     scheduleOk: scheduleAvailable,
     hasSchedule: Boolean(selectedTime),
@@ -441,11 +437,11 @@ export default function ProductDetail() {
                 </div>
               )}
               
-              {product.minimumLeadTimeHours > 0 && (
+              {leadMinutes > 0 && (
                 <div className="border border-[var(--mallorca-butter)] bg-[var(--mallorca-butter)]/20 p-4">
                   <h4 className="font-bold mb-1">Tiempo de preparación</h4>
                   <p className="text-muted-foreground">
-                    Este producto requiere un mínimo de {product.minimumLeadTimeHours} horas de anticipación para su preparación.
+                    Este producto requiere un mínimo de {formatLeadTime(leadMinutes)} de anticipación para su preparación.
                   </p>
                 </div>
               )}

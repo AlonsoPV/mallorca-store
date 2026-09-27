@@ -30,7 +30,7 @@ export type AppAuthState = {
   isSignedIn: boolean;
   user: AppUser;
   signOut: (options?: { redirectUrl?: string }) => Promise<void>;
-  signInLocalDev: () => void;
+  signInLocalDev: (token?: string) => void;
   addListener:
     | ((listener: (payload: { user: AppUser }) => void) => () => void)
     | null;
@@ -61,9 +61,9 @@ export function LocalAuthProvider({ children }: { children: ReactNode }) {
             primaryEmailAddress: LOCAL_DEV_USER.primaryEmailAddress,
           }
         : null,
-      signInLocalDev: () => {
-        persistLocalDevSignedIn(true);
-        attachLocalDevAuthToken(true);
+      signInLocalDev: (token = "local-dev") => {
+        persistLocalDevSignedIn(true, token);
+        attachLocalDevAuthToken(true, token);
         setIsSignedIn(true);
       },
       signOut: async (options) => {

@@ -33,6 +33,7 @@ import { loadProductCategorySummaries, loadProductCrossSellIds } from "./product
 import { loadReservedByBranchProductIds, sellableUnits } from "./reserved-stock";
 import { serializeAdminBranchAvailability } from "./admin-product-serialize";
 import { filterCrossSellCards } from "./catalog-cross-sell.ts";
+import { isReadyForLead, itemLeadMinutes } from "./fulfillment-schedule.ts";
 
 export function serializeBranch(branch: Branch) {
   const status = (branch as Branch & { status?: string }).status;
@@ -297,12 +298,13 @@ export async function listProductCards(filters: ProductFilters = {}) {
             branchProduct.preparationTimeMinutes ??
             branchPrep ??
             product.minimumLeadTimeHours * 60;
+          const leadMinutes = itemLeadMinutes({
+            minimumLeadTimeHours: product.minimumLeadTimeHours,
+            itemPreparationTimeMinutes: branchProduct.preparationTimeMinutes,
+            branchPreparationTimeMinutes: branchPrep,
+          });
           const scheduleReady =
-            !filters.scheduledStart ||
-            filters.scheduledStart.getTime() >=
-              Date.now() +
-                Math.max(product.minimumLeadTimeHours * 60, preparationTimeMinutes) *
-                60_000;
+            !filters.scheduledStart || isReadyForLead(filters.scheduledStart, leadMinutes);
           const basePrice = branchProduct.priceOverride ?? product.price;
           const legacySalePrice =
             branchProduct.salePriceOverride !== null
@@ -386,15 +388,7 @@ export async function listProductCards(filters: ProductFilters = {}) {
         (item) =>
           item.branchSlug === filters.branchSlug &&
           item.available &&
-          item.inventory > 0 &&
-          (!filters.scheduledStart ||
-            filters.scheduledStart.getTime() >=
-              Date.now() +
-                Math.max(
-                  product.minimumLeadTimeHours * 60,
-                  item.preparationTimeMinutes,
-                ) *
-                60_000),
+          item.inventory > 0,
       );
     });
 }

@@ -105,16 +105,19 @@ import {
 import { commitOrderReservations, releaseOrderReservations, reserveBranchProduct } from "../lib/inventory-hold";
 import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
 import {
+  allocateUsername,
   assignUserToBranch,
   canAssignRole,
   canManageUsers,
   findUserByEmail,
+  findUserByUsername,
   isAdminStaffRole,
   resolveIdentityForAdminUser,
   serializeSafeUser,
-  syncClerkProfile,
+  syncClerkCredentials,
   type AdminStaffRole,
 } from "../lib/admin-users";
+import { generatePassword, hashPassword } from "../lib/password";
 import { DEFAULT_NOTIFICATION_PREFERENCES, normalizeNotificationPreferences } from "../lib/notification-prefs";
 import {
   stockState,
@@ -354,6 +357,7 @@ router.get("/admin/users", async (req, res): Promise<void> => {
       firstName: usersTable.firstName,
       lastName: usersTable.lastName,
       email: usersTable.email,
+      username: usersTable.username,
       phone: usersTable.phone,
       role: usersTable.role,
       createdAt: usersTable.createdAt,
@@ -372,6 +376,7 @@ router.get("/admin/users/:id", async (req, res): Promise<void> => {
       firstName: usersTable.firstName,
       lastName: usersTable.lastName,
       email: usersTable.email,
+      username: usersTable.username,
       phone: usersTable.phone,
       role: usersTable.role,
       createdAt: usersTable.createdAt,
@@ -388,6 +393,9 @@ router.get("/admin/users/:id", async (req, res): Promise<void> => {
 
 const adminUserCreateBody = z.object({
   email: z.string().email(),
+  username: z.string().trim().nullable().optional(),
+  password: z.string().trim().min(8).nullable().optional(),
+  generatePassword: z.boolean().default(false),
   firstName: z.string().trim().nullable().optional(),
   lastName: z.string().trim().nullable().optional(),
   phone: z.string().trim().nullable().optional(),
@@ -402,6 +410,9 @@ const adminUserUpdateBody = z.object({
   firstName: z.string().trim().nullable().optional(),
   lastName: z.string().trim().nullable().optional(),
   phone: z.string().trim().nullable().optional(),
+  username: z.string().trim().nullable().optional(),
+  password: z.string().trim().min(8).nullable().optional(),
+  generatePassword: z.boolean().optional(),
   role: z.enum(["staff", "branch_manager", "operations", "operations_manager", "manager", "admin"]).optional(),
 });
 
@@ -434,6 +445,22 @@ router.post("/admin/users", async (req, res): Promise<void> => {
     return;
   }
 
+  const username = await allocateUsername(body.data.username, {
+    firstName: body.data.firstName,
+    lastName: body.data.lastName,
+    email,
+  }, existing?.id);
+  const taken = await findUserByUsername(username);
+  if (taken && taken.id !== existing?.id) {
+    res.status(409).json({ error: "Ese usuario ya está en uso", code: "USERNAME_EXISTS" });
+    return;
+  }
+
+  const temporaryPassword =
+    body.data.password?.trim() ||
+    (body.data.generatePassword || !body.data.password ? generatePassword() : null);
+  const passwordHash = temporaryPassword ? hashPassword(temporaryPassword) : null;
+
   let userRow = existing;
   let created = false;
   let promoted = false;
@@ -447,6 +474,8 @@ router.post("/admin/users", async (req, res): Promise<void> => {
           firstName: body.data.firstName ?? existing.firstName,
           lastName: body.data.lastName ?? existing.lastName,
           phone: body.data.phone ?? existing.phone,
+          username,
+          ...(passwordHash ? { passwordHash } : {}),
           role,
           updatedAt: new Date(),
         })
@@ -454,17 +483,21 @@ router.post("/admin/users", async (req, res): Promise<void> => {
         .returning();
       userRow = updated;
       promoted = true;
-      await syncClerkProfile({
+      await syncClerkCredentials({
         userId: existing.id,
         firstName: updated.firstName,
         lastName: updated.lastName,
+        username,
+        password: temporaryPassword,
       });
     } else {
       const identity = await resolveIdentityForAdminUser({
         email,
+        username,
+        password: temporaryPassword,
         firstName: body.data.firstName,
         lastName: body.data.lastName,
-        sendInvite: body.data.sendInvite,
+        sendInvite: body.data.sendInvite && !temporaryPassword,
       });
       inviteSent = identity.inviteSent;
       const [inserted] = await db
@@ -472,6 +505,8 @@ router.post("/admin/users", async (req, res): Promise<void> => {
         .values({
           id: identity.userId,
           email,
+          username,
+          passwordHash,
           firstName: body.data.firstName ?? null,
           lastName: body.data.lastName ?? null,
           phone: body.data.phone ?? null,
@@ -481,6 +516,8 @@ router.post("/admin/users", async (req, res): Promise<void> => {
           target: usersTable.id,
           set: {
             email,
+            username,
+            ...(passwordHash ? { passwordHash } : {}),
             firstName: body.data.firstName ?? null,
             lastName: body.data.lastName ?? null,
             phone: body.data.phone ?? null,
@@ -521,11 +558,13 @@ router.post("/admin/users", async (req, res): Promise<void> => {
     created,
     promoted,
     inviteSent,
+    username,
+    temporaryPassword,
     message: promoted
       ? "Cliente existente promovido a usuario operativo"
       : inviteSent
         ? "Usuario creado. Se envió invitación de acceso."
-        : "Usuario creado",
+        : "Usuario creado. Copia usuario y contraseña; la contraseña no se vuelve a mostrar.",
   });
 });
 
@@ -564,19 +603,42 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
   if (body.data.phone !== undefined) patch.phone = body.data.phone;
   if (body.data.role !== undefined) patch.role = body.data.role;
 
+  const username =
+    body.data.username !== undefined
+      ? await allocateUsername(body.data.username, current, current.id)
+      : current.username;
+  if (body.data.username !== undefined) {
+    const taken = await findUserByUsername(username);
+    if (taken && taken.id !== current.id) {
+      res.status(409).json({ error: "Ese usuario ya está en uso", code: "USERNAME_EXISTS" });
+      return;
+    }
+    patch.username = username;
+  }
+
+  const temporaryPassword =
+    body.data.password?.trim() ||
+    (body.data.generatePassword ? generatePassword() : null);
+  if (temporaryPassword) patch.passwordHash = hashPassword(temporaryPassword);
+
   const [updated] = await db
     .update(usersTable)
     .set(patch)
     .where(eq(usersTable.id, current.id))
     .returning();
 
-  await syncClerkProfile({
+  await syncClerkCredentials({
     userId: updated.id,
     firstName: updated.firstName,
     lastName: updated.lastName,
+    username: updated.username,
+    password: temporaryPassword,
   });
 
-  res.json(serializeSafeUser(updated));
+  res.json({
+    ...serializeSafeUser(updated),
+    temporaryPassword: temporaryPassword ?? undefined,
+  });
 });
 
 router.get("/admin/branches/:id/assignments", async (req, res): Promise<void> => {

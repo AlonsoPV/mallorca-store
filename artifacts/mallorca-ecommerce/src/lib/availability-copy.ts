@@ -42,22 +42,53 @@ export function formatBranchPostalLines(branch: {
   });
 }
 
+export function formatLeadTime(minutes: number): string {
+  const mins = Math.max(0, Math.round(minutes));
+  if (mins < 60) return mins === 1 ? "1 minuto" : `${mins} minutos`;
+  if (mins % 60 === 0) {
+    const hours = mins / 60;
+    return hours === 1 ? "1 hora" : `${hours} horas`;
+  }
+  const hours = Math.floor(mins / 60);
+  const rest = mins % 60;
+  const hourPart = hours === 1 ? "1 hora" : `${hours} horas`;
+  const minPart = rest === 1 ? "1 minuto" : `${rest} minutos`;
+  return `${hourPart} y ${minPart}`;
+}
+
+export function formatLeadCompact(minutes: number): string {
+  const mins = Math.max(0, Math.round(minutes));
+  if (mins < 60) return `${mins} min`;
+  return `${Math.ceil(mins / 60)} h`;
+}
+
+export function cartLeadNotice(maxLeadTimeMinutes?: number | null): string | null {
+  const minutes = maxLeadTimeMinutes ?? 0;
+  if (minutes <= 0) return null;
+  return `Los productos de tu bolsa requieren hasta ${formatLeadTime(minutes)} de anticipación.`;
+}
+
 export function productAvailabilityCopy(input: {
   branchName?: string | null;
   available?: boolean;
   inventory?: number | null;
   leadHours?: number | null;
+  leadMinutes?: number | null;
   scheduleOk?: boolean;
   hasSchedule?: boolean;
 }): string | null {
   const branch = input.branchName?.replace(/^Mallorca\s+/i, "") || null;
-  if ((input.inventory ?? 0) <= 0 || input.available === false) {
+  const leadMinutes = input.leadMinutes ?? ((input.leadHours ?? 0) * 60);
+  if ((input.inventory ?? 0) <= 0) {
     return branch ? `Agotado en ${branch}` : "Agotado";
   }
-  if (input.hasSchedule && !input.scheduleOk && (input.leadHours ?? 0) > 0) {
-    return `Necesita ${input.leadHours} h`;
+  if (input.hasSchedule && input.scheduleOk === false && leadMinutes > 0) {
+    return `Necesita ${formatLeadCompact(leadMinutes)}`;
   }
-  if (input.hasSchedule && !input.scheduleOk) {
+  if (input.available === false) {
+    return branch ? `Agotado en ${branch}` : "Agotado";
+  }
+  if (input.hasSchedule && input.scheduleOk === false) {
     return branch ? `No disponible en ${branch} para este horario` : "No disponible para este horario";
   }
   return null;

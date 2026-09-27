@@ -20,7 +20,7 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, className, showBranchAvailability = false }: ProductCardProps) {
-  const { cartId, branchId, setCartSession, clearCartSession, openBranchPicker, openMiniCart } = useCart();
+  const { cartId, branchId, selectedTime, setCartSession, clearCartSession, openBranchPicker, openMiniCart } = useCart();
   const addCartItem = useAddCartItem();
   const createSession = useCreateCartSession();
   const queryClient = useQueryClient();
@@ -32,15 +32,26 @@ export function ProductCard({ product, className, showBranchAvailability = false
     ?? (branchId
       ? product.availability?.find((availability) => availability.branchId === branchId)
       : undefined);
+  const leadMinutes = Math.max(
+    (product.minimumLeadTimeHours ?? 0) * 60,
+    activeAvailability?.preparationTimeMinutes ?? 0,
+  );
+  const scheduleOk = !selectedTime
+    || new Date(selectedTime).getTime() >= Date.now() + leadMinutes * 60_000;
   const availabilityLabel = pageAvailability || branchId
     ? productAvailabilityCopy({
         branchName: activeAvailability?.branchName,
         available: activeAvailability?.available,
         inventory: activeAvailability?.inventory,
+        leadMinutes,
+        hasSchedule: Boolean(selectedTime),
+        scheduleOk,
       })
     : null;
-  const canQuickAdd = Boolean(activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0)
-    || (!pageAvailability && !branchId);
+  const canQuickAdd = (
+    Boolean(activeAvailability?.available && (activeAvailability.inventory ?? 0) > 0)
+    || (!pageAvailability && !branchId)
+  ) && scheduleOk;
   const currentPrice = activeAvailability?.price ?? product.price;
   const currentSalePrice = activeAvailability
     ? activeAvailability.salePrice

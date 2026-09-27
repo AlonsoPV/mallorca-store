@@ -28,6 +28,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart-context";
 import { track } from "@/lib/analytics";
 import { formatSlotTime, mexicoTodayLocalDate, sameSlot, slotToIso } from "@/lib/slot-time";
+import { cartLeadNotice } from "@/lib/availability-copy";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -309,6 +310,12 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
                         <Button type="button" variant="outline" size="sm" onClick={() => void refetchSlots()}>Reintentar</Button>
                       </div>
                     ) : slots?.length ? (
+                      <>
+                        {cartLeadNotice(cart?.maxLeadTimeMinutes) ? (
+                          <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+                            {cartLeadNotice(cart?.maxLeadTimeMinutes)}
+                          </p>
+                        ) : null}
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {slots.map((slot) => {
                           const value = slotToIso(slot.start);
@@ -333,11 +340,12 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
                           );
                         })}
                       </div>
+                      </>
                     ) : (
                       <p className="text-sm leading-relaxed text-muted-foreground">
                         Esta fecha no tiene horarios disponibles para la sucursal. Prueba con otro día.
-                        {cart && cart.maxLeadTimeMinutes >= 60 ? (
-                          <span className="mt-1 block">Los productos de tu bolsa requieren hasta {Math.ceil(cart.maxLeadTimeMinutes / 60)} horas de anticipación.</span>
+                        {cartLeadNotice(cart?.maxLeadTimeMinutes) ? (
+                          <span className="mt-1 block">{cartLeadNotice(cart?.maxLeadTimeMinutes)}</span>
                         ) : null}
                       </p>
                     )}

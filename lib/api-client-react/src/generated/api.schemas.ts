@@ -1723,6 +1723,8 @@ export interface SafeUser {
   id: string;
   name: string;
   email: string;
+  /** @nullable */
+  username?: string | null;
   role: string;
   /** @nullable */
   firstName?: string | null;
@@ -1757,6 +1759,11 @@ export const AdminUserCreateBranchRole = {
 export interface AdminUserCreate {
   email: string;
   /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+  generatePassword?: boolean;
+  /** @nullable */
   firstName?: string | null;
   /** @nullable */
   lastName?: string | null;
@@ -1777,6 +1784,11 @@ export interface AdminUserUpdate {
   lastName?: string | null;
   /** @nullable */
   phone?: string | null;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+  generatePassword?: boolean;
   role?: AdminStaffRole;
 }
 
@@ -1787,6 +1799,10 @@ export interface AdminUserMutationResult {
   inviteSent: boolean;
   /** @nullable */
   message?: string | null;
+  /** @nullable */
+  temporaryPassword?: string | null;
+  /** @nullable */
+  username?: string | null;
 }
 
 export type AssignmentInputRole = typeof AssignmentInputRole[keyof typeof AssignmentInputRole];

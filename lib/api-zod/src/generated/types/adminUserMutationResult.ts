@@ -14,4 +14,8 @@ export interface AdminUserMutationResult {
   inviteSent: boolean;
   /** @nullable */
   message?: string | null;
+  /** @nullable */
+  temporaryPassword?: string | null;
+  /** @nullable */
+  username?: string | null;
 }

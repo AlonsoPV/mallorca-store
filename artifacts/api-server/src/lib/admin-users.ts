@@ -7,6 +7,7 @@ import {
   type User,
 } from "@workspace/db";
 import { logger } from "./logger";
+import { generateUsername, isValidUsername, normalizeUsername } from "./staff-credentials.ts";
 
 export const ADMIN_STAFF_ROLES = [
   "staff",
@@ -39,6 +40,7 @@ export function serializeSafeUser(user: {
   id: string;
   email: string;
   role: string;
+  username?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   phone?: string | null;
@@ -49,6 +51,7 @@ export function serializeSafeUser(user: {
     id: user.id,
     name,
     email: user.email,
+    username: user.username ?? null,
     role: user.role,
     firstName: user.firstName ?? null,
     lastName: user.lastName ?? null,
@@ -68,12 +71,14 @@ function localDevAuthEnabled(): boolean {
 
 export async function resolveIdentityForAdminUser(params: {
   email: string;
+  username?: string | null;
+  password?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   sendInvite?: boolean;
 }): Promise<{ userId: string; inviteSent: boolean; identitySource: "clerk" | "local" }> {
   const email = params.email.trim().toLowerCase();
-  const sendInvite = params.sendInvite !== false;
+  const sendInvite = params.sendInvite !== false && !params.password;
 
   if (!clerkConfigured() || localDevAuthEnabled()) {
     const slug = email.replace(/[^a-z0-9]+/g, "_").slice(0, 40);
@@ -94,16 +99,22 @@ export async function resolveIdentityForAdminUser(params: {
       await clerkClient.users.updateUser(found.id, {
         firstName: params.firstName ?? undefined,
         lastName: params.lastName ?? undefined,
+        username: params.username ?? undefined,
+        ...(params.password
+          ? { password: params.password, skipPasswordChecks: false }
+          : {}),
       });
       return { userId: found.id, inviteSent: false, identitySource: "clerk" };
     }
 
     const created = await clerkClient.users.createUser({
       emailAddress: [email],
+      username: params.username ?? undefined,
+      password: params.password ?? undefined,
       firstName: params.firstName ?? undefined,
       lastName: params.lastName ?? undefined,
-      skipPasswordRequirement: true,
-      skipPasswordChecks: true,
+      skipPasswordRequirement: !params.password,
+      skipPasswordChecks: !params.password,
     });
 
     let inviteSent = false;
@@ -123,6 +134,28 @@ export async function resolveIdentityForAdminUser(params: {
   } catch (error) {
     logger.error({ email, error }, "Failed to resolve Clerk identity for admin user create");
     throw error;
+  }
+}
+
+export async function syncClerkCredentials(params: {
+  userId: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  password?: string | null;
+}) {
+  if (!clerkConfigured() || params.userId.startsWith("user_local_")) return;
+  try {
+    await clerkClient.users.updateUser(params.userId, {
+      firstName: params.firstName ?? undefined,
+      lastName: params.lastName ?? undefined,
+      username: params.username ?? undefined,
+      ...(params.password
+        ? { password: params.password, skipPasswordChecks: false }
+        : {}),
+    });
+  } catch (error) {
+    logger.warn({ userId: params.userId, error }, "Unable to sync Clerk credentials");
   }
 }
 
@@ -150,6 +183,32 @@ export async function findUserByEmail(email: string) {
     .where(sql`lower(${usersTable.email}) = ${normalized}`)
     .limit(1);
   return row;
+}
+
+export async function findUserByUsername(username: string) {
+  const normalized = username.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const [row] = await db
+    .select()
+    .from(usersTable)
+    .where(sql`lower(${usersTable.username}) = ${normalized}`)
+    .limit(1);
+  return row;
+}
+
+export async function allocateUsername(
+  preferred: string | null | undefined,
+  seed: { firstName?: string | null; lastName?: string | null; email?: string | null },
+  excludeUserId?: string,
+): Promise<string> {
+  let base = preferred?.trim() ? normalizeUsername(preferred) : generateUsername(seed);
+  if (!isValidUsername(base)) base = generateUsername(seed);
+  for (let i = 0; i < 25; i += 1) {
+    const candidate = i === 0 ? base : `${base.slice(0, 24)}${i + 1}`;
+    const existing = await findUserByUsername(candidate);
+    if (!existing || existing.id === excludeUserId) return candidate;
+  }
+  return `${base.slice(0, 20)}${Date.now().toString(36).slice(-6)}`;
 }
 
 export async function assignUserToBranch(params: {

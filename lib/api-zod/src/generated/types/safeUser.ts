@@ -10,6 +10,8 @@ export interface SafeUser {
   id: string;
   name: string;
   email: string;
+  /** @nullable */
+  username?: string | null;
   role: string;
   /** @nullable */
   firstName?: string | null;

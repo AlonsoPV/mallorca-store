@@ -23,6 +23,7 @@ import {
   fulfillmentLabel,
 } from "@/lib/order-source";
 import { formatPriceMx } from "@/lib/order-status";
+import { cartLeadNotice } from "@/lib/availability-copy";
 import { cn } from "@/lib/utils";
 import {
   useCreateAdminOrder,
@@ -193,6 +194,48 @@ export default function AdminOrderNew() {
     date,
     method: fulfillmentMethod,
   });
+  const selectedBranch = (branches.data ?? []).find((row) => row.id === branchId);
+  const maxLeadMinutes = useMemo(() => {
+    const branchPrep = selectedBranch?.preparationTimeMinutes ?? 0;
+    return lines.reduce((max, line) => {
+      if (line.manualLineItem || line.productId == null) return max;
+      const product = (products.data ?? []).find((row) => row.id === line.productId);
+      const inventoryRow = (inventory.data ?? []).find((row) => row.product?.id === line.productId);
+      const itemPrep = (inventoryRow?.branchProduct as { preparationTimeMinutes?: number } | undefined)
+        ?.preparationTimeMinutes;
+      return Math.max(
+        max,
+        (product?.minimumLeadTimeHours ?? 0) * 60,
+        itemPrep ?? branchPrep,
+        branchPrep,
+      );
+    }, branchPrep);
+  }, [inventory.data, lines, products.data, selectedBranch?.preparationTimeMinutes]);
+  const deliveryLeadMinutes = fulfillmentMethod === "delivery"
+    ? selectedBranch?.deliveryTimeMinutes ?? 0
+    : 0;
+  const earliestSlotMs = Date.now() + (maxLeadMinutes + deliveryLeadMinutes) * 60_000;
+  const visibleSlots = useMemo(
+    () =>
+      (slots.data ?? []).filter((slot) => {
+        if (forceAvailability) return true;
+        if (!slot.available) return false;
+        return new Date(slot.start).getTime() >= earliestSlotMs;
+      }),
+    [earliestSlotMs, forceAvailability, slots.data],
+  );
+
+  useEffect(() => {
+    const times = visibleSlots.map((slot) =>
+      new Date(slot.start).toLocaleTimeString("es-MX", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "America/Mexico_City",
+      }),
+    );
+    if (times.length && !times.includes(time)) setTime(times[0]);
+  }, [time, visibleSlots]);
 
   const customerSearch = useSearchAdminCustomers({
     q: customerQuery.trim().length >= 2 ? customerQuery : "__",
@@ -837,8 +880,7 @@ export default function AdminOrderNew() {
                 onChange={(e) => setTime(e.target.value)}
                 disabled={branchId == null}
               >
-                {(slots.data ?? [])
-                  .filter((s) => s.available || forceAvailability)
+                {(visibleSlots)
                   .map((s) => {
                     const t = new Date(s.start).toLocaleTimeString("es-MX", {
                       hour: "2-digit",
@@ -856,6 +898,9 @@ export default function AdminOrderNew() {
               </select>
             </div>
           </div>
+          {cartLeadNotice(maxLeadMinutes) && lines.length > 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">{cartLeadNotice(maxLeadMinutes)}</p>
+          ) : null}
 
           {fulfillmentMethod === "delivery" ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-3">

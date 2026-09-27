@@ -38,6 +38,85 @@ const hours = [
   closed: false,
 }));
 
+function itemLeadMinutes(input) {
+  const fromHours = Math.max(0, Math.round((input.minimumLeadTimeHours ?? 0) * 60));
+  const fromPrep = Math.max(
+    0,
+    input.itemPreparationTimeMinutes ?? input.branchPreparationTimeMinutes ?? 0,
+  );
+  return Math.max(fromHours, fromPrep);
+}
+
+function cartLeadMinutes(items, branchPreparationTimeMinutes) {
+  const floor = Math.max(0, branchPreparationTimeMinutes);
+  return items.reduce(
+    (max, item) =>
+      Math.max(
+        max,
+        itemLeadMinutes({
+          minimumLeadTimeHours: item.minimumLeadTimeHours,
+          itemPreparationTimeMinutes: item.itemPreparationTimeMinutes,
+          branchPreparationTimeMinutes: floor,
+        }),
+      ),
+    floor,
+  );
+}
+
+function isReadyForLead(scheduledStart, leadMinutes, now = Date.now()) {
+  const at = scheduledStart instanceof Date ? scheduledStart.getTime() : Number(scheduledStart);
+  if (!Number.isFinite(at)) return false;
+  return at >= now + Math.max(0, leadMinutes) * 60_000;
+}
+
+function leadRequirementReason(leadMinutes) {
+  const minutes = Math.max(0, Math.round(leadMinutes));
+  if (minutes < 60) return `Requiere ${minutes} min de preparación.`;
+  return `Requiere ${Math.ceil(minutes / 60)} h de preparación.`;
+}
+
+function mockMexicoWeekday(date) {
+  return new Date(`${date}T12:00:00Z`)
+    .toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Mexico_City" })
+    .toLowerCase();
+}
+
+function mockSlotTimes(method) {
+  return method === "delivery"
+    ? ["12:00", "14:00", "16:00", "18:00"]
+    : ["10:00", "12:00", "14:00", "16:00", "18:00"];
+}
+
+function mockFulfillmentSlots(branchRow, date, method, cartLead, now = Date.now()) {
+  const weekday = mockMexicoWeekday(date);
+  const dayHours = (branchRow.hours || []).find((entry) => entry.day.toLowerCase() === weekday)
+    ?? { open: "08:00", close: "21:00", closed: false };
+  if (dayHours.closed) return [];
+  const deliveryMinutes = method === "delivery" ? Number(branchRow.deliveryTimeMinutes) || 0 : 0;
+  const prep = Number(branchRow.preparationTimeMinutes) || 0;
+  const leadMinutes = Math.max(cartLead, prep) + deliveryMinutes;
+  const open = new Date(`${date}T${dayHours.open}:00-06:00`).getTime();
+  const close = new Date(`${date}T${dayHours.close}:00-06:00`).getTime();
+  const anchor = open + (prep + deliveryMinutes) * 60_000;
+  const earliest = Math.max(anchor, now + leadMinutes * 60_000);
+  return mockSlotTimes(method)
+    .map((time) => {
+      const start = new Date(`${date}T${time}:00-06:00`);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      const available =
+        Number.isFinite(start.getTime()) &&
+        start.getTime() >= earliest &&
+        start.getTime() + 60 * 60 * 1000 <= close;
+      return {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        available,
+        remainingCapacity: available ? (method === "delivery" ? 4 : 8) : 0,
+      };
+    })
+    .filter((slot) => slot.available);
+}
+
 function branch(id, name, slug, shortName, neighborhood) {
   const street = `Av. Ejemplo`;
   const externalNumber = `${id}00`;
@@ -352,6 +431,21 @@ function applyBranchConfigurations(product, configurations) {
 const carts = new Map();
 let cartItemSeq = 1;
 
+function cartLeadMinutesForCart(cart) {
+  const branchPrep = Number(cart.branch?.preparationTimeMinutes) || 0;
+  return cartLeadMinutes(
+    cart.items.map((item) => {
+      const product = products.find((row) => row.id === item.productId);
+      const availability = product?.availability?.find((row) => row.branchId === cart.branch.id);
+      return {
+        minimumLeadTimeHours: product?.minimumLeadTimeHours ?? 0,
+        itemPreparationTimeMinutes: availability?.preparationTimeMinutes,
+      };
+    }),
+    branchPrep,
+  );
+}
+
 function cartView(cart) {
   const subtotal = cart.items.reduce((sum, item) => sum + item.lineTotal, 0);
   const quantity = cart.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -361,7 +455,7 @@ function cartView(cart) {
     items: cart.items,
     subtotal,
     quantity,
-    maxLeadTimeMinutes: 60,
+    maxLeadTimeMinutes: cartLeadMinutesForCart(cart),
   };
 }
 
@@ -373,6 +467,8 @@ function productSellable(product, branchId) {
 const localUser = {
   id: "user_local_dev_admin",
   email: "alpeva96@gmail.com",
+  username: "alonso",
+  password: null,
   firstName: "Admin",
   lastName: "Local",
   phone: null,
@@ -384,6 +480,8 @@ const mockUsers = [
   {
     id: "user_mgr_lomas",
     email: "mgr1@mallorca.local",
+    username: "carlos_ruiz",
+    password: null,
     firstName: "Carlos",
     lastName: "Ruiz",
     phone: null,
@@ -392,6 +490,8 @@ const mockUsers = [
   {
     id: "user_mgr_reforma",
     email: "mgr2@mallorca.local",
+    username: "ana_perez",
+    password: null,
     firstName: "Ana",
     lastName: "Pérez",
     phone: null,
@@ -823,9 +923,64 @@ function send(res, status, body) {
   res.end(payload);
 }
 
+function serializeMockUser(u) {
+  return {
+    id: u.id,
+    name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
+    email: u.email,
+    username: u.username ?? null,
+    role: u.role,
+    firstName: u.firstName ?? null,
+    lastName: u.lastName ?? null,
+    phone: u.phone ?? null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function normalizeUsername(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32);
+}
+
+function generateMockUsername(user) {
+  const base = normalizeUsername(`${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email?.split("@")[0] || "usuario") || "usuario";
+  const suffix = String(Math.floor(100 + Math.random() * 900));
+  let candidate = `${base.slice(0, 24)}${suffix}`;
+  let i = 1;
+  while (mockUsers.some((u) => u.username === candidate && u.id !== user.id)) {
+    candidate = `${base.slice(0, 24)}${suffix}${i}`;
+    i += 1;
+  }
+  return candidate;
+}
+
+function generateMockPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  let out = "";
+  for (let i = 0; i < 12; i += 1) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return out;
+}
+
+function resolveLocalAuthUser(req) {
+  const header = String(req.headers.authorization || "");
+  if (header.toLowerCase() === "bearer local-dev") return localUser;
+  const match = /^bearer local-dev:(.+)$/i.exec(header);
+  if (!match) return null;
+  return findMockUser(decodeURIComponent(match[1]));
+}
+
 function requireLocalAuth(req, res) {
-  const header = req.headers.authorization || "";
-  if (header.toLowerCase() === "bearer local-dev") return true;
+  const user = resolveLocalAuthUser(req);
+  if (user) {
+    req.localUser = user;
+    return true;
+  }
   send(res, 401, { error: "Unauthorized" });
   return false;
 }
@@ -877,6 +1032,25 @@ function filterProducts(url) {
         availability: p.availability.filter((a) => a.branchSlug === branchSlug),
       }))
       .filter((p) => p.availability.length > 0);
+  }
+  const scheduledStart = url.searchParams.get("scheduledStart");
+  const includeUnavailable = url.searchParams.get("includeUnavailable") === "true";
+  if (scheduledStart) {
+    const at = new Date(scheduledStart);
+    list = list.map((p) => ({
+      ...p,
+      availability: p.availability.map((row) => {
+        const lead = itemLeadMinutes({
+          minimumLeadTimeHours: p.minimumLeadTimeHours,
+          itemPreparationTimeMinutes: row.preparationTimeMinutes,
+          branchPreparationTimeMinutes: row.preparationTimeMinutes,
+        });
+        return { ...row, available: Boolean(row.available) && isReadyForLead(at, lead) };
+      }),
+    }));
+    if (!includeUnavailable) {
+      list = list.filter((p) => p.availability.some((row) => row.available && (row.inventory ?? 0) > 0));
+    }
   }
   return list;
 }
@@ -1319,9 +1493,41 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && path === "/api/auth/local-login") {
+    readJson(req)
+      .then((body) => {
+        const identifier = String(body?.identifier || "").trim().toLowerCase();
+        const password = String(body?.password || "");
+        const user = mockUsers.find(
+          (u) =>
+            u.password &&
+            (u.username?.toLowerCase() === identifier || u.email.toLowerCase() === identifier) &&
+            u.password === password,
+        );
+        if (!user) {
+          send(res, 401, { error: "Usuario o contraseña incorrectos." });
+          return;
+        }
+        send(res, 200, {
+          token: `local-dev:${user.id}`,
+          user: serializeMockUser(user),
+        });
+      })
+      .catch(() => send(res, 400, { error: "Invalid body" }));
+    return;
+  }
+
   if (req.method === "GET" && path === "/api/me") {
     if (!requireLocalAuth(req, res)) return;
-    send(res, 200, localUser);
+    send(res, 200, {
+      id: req.localUser.id,
+      email: req.localUser.email,
+      username: req.localUser.username ?? null,
+      firstName: req.localUser.firstName,
+      lastName: req.localUser.lastName,
+      phone: req.localUser.phone,
+      role: req.localUser.role,
+    });
     return;
   }
 
@@ -2301,20 +2507,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && path === "/api/admin/users") {
     if (!requireLocalAuth(req, res)) return;
-    send(
-      res,
-      200,
-      mockUsers.map((u) => ({
-        id: u.id,
-        name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
-        email: u.email,
-        role: u.role,
-        firstName: u.firstName ?? null,
-        lastName: u.lastName ?? null,
-        phone: u.phone ?? null,
-        createdAt: new Date().toISOString(),
-      })),
-    );
+    send(res, 200, mockUsers.filter((u) => u.role !== "customer").map(serializeMockUser));
     return;
   }
 
@@ -2335,17 +2528,36 @@ const server = http.createServer(async (req, res) => {
         let user;
         let created = false;
         let promoted = false;
+        const username =
+          normalizeUsername(body.username) ||
+          generateMockUsername({
+            id: existing?.id,
+            firstName: body.firstName,
+            lastName: body.lastName,
+            email,
+          });
+        if (mockUsers.some((u) => u.username === username && u.id !== existing?.id)) {
+          send(res, 409, { error: "Ese usuario ya está en uso", code: "USERNAME_EXISTS" });
+          return;
+        }
+        const temporaryPassword =
+          String(body.password || "").trim() ||
+          (body.generatePassword === false ? null : generateMockPassword());
         if (existing) {
           existing.role = body.role;
           existing.firstName = body.firstName ?? existing.firstName;
           existing.lastName = body.lastName ?? existing.lastName;
           existing.phone = body.phone ?? existing.phone;
+          existing.username = username;
+          if (temporaryPassword) existing.password = temporaryPassword;
           user = existing;
           promoted = true;
         } else {
           user = {
             id: `user_local_${Date.now()}`,
             email,
+            username,
+            password: temporaryPassword,
             firstName: body.firstName || "Nuevo",
             lastName: body.lastName || "Usuario",
             phone: body.phone || null,
@@ -2375,23 +2587,17 @@ const server = http.createServer(async (req, res) => {
             });
           }
         }
-        const safe = {
-          id: user.id,
-          name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
-          email: user.email,
-          role: user.role,
-          firstName: user.firstName ?? null,
-          lastName: user.lastName ?? null,
-          phone: user.phone ?? null,
-        };
+        const safe = serializeMockUser(user);
         send(res, 201, {
           user: safe,
           created,
           promoted,
           inviteSent: false,
+          username: user.username,
+          temporaryPassword,
           message: promoted
             ? "Cliente existente promovido a usuario operativo"
-            : "Usuario creado",
+            : "Usuario creado. Copia usuario y contraseña; la contraseña no se vuelve a mostrar.",
         });
       })
       .catch(() => send(res, 400, { error: "Invalid body" }));
@@ -2408,15 +2614,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET") {
-      send(res, 200, {
-        id: user.id,
-        name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
-        email: user.email,
-        role: user.role,
-        firstName: user.firstName ?? null,
-        lastName: user.lastName ?? null,
-        phone: user.phone ?? null,
-      });
+      send(res, 200, serializeMockUser(user));
       return;
     }
     if (req.method === "PATCH") {
@@ -2426,14 +2624,21 @@ const server = http.createServer(async (req, res) => {
           if (body.lastName !== undefined) user.lastName = body.lastName;
           if (body.phone !== undefined) user.phone = body.phone;
           if (body.role !== undefined) user.role = body.role;
+          if (body.username !== undefined) {
+            const username = normalizeUsername(body.username) || generateMockUsername(user);
+            if (mockUsers.some((u) => u.username === username && u.id !== user.id)) {
+              send(res, 409, { error: "Ese usuario ya está en uso", code: "USERNAME_EXISTS" });
+              return;
+            }
+            user.username = username;
+          }
+          let temporaryPassword = null;
+          if (body.password) temporaryPassword = String(body.password).trim();
+          else if (body.generatePassword) temporaryPassword = generateMockPassword();
+          if (temporaryPassword) user.password = temporaryPassword;
           send(res, 200, {
-            id: user.id,
-            name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
-            email: user.email,
-            role: user.role,
-            firstName: user.firstName ?? null,
-            lastName: user.lastName ?? null,
-            phone: user.phone ?? null,
+            ...serializeMockUser(user),
+            temporaryPassword: temporaryPassword || undefined,
           });
         })
         .catch(() => send(res, 400, { error: "Invalid body" }));
@@ -2534,28 +2739,94 @@ const server = http.createServer(async (req, res) => {
       month: "2-digit",
       day: "2-digit",
     }).format(new Date());
-    const method = url.searchParams.get("method") || "pickup";
+    const method = url.searchParams.get("method") === "delivery" ? "delivery" : "pickup";
     const branchId = Number(url.searchParams.get("branchId"));
+    const cartId = url.searchParams.get("cartId");
     const b = branches.find((item) => item.id === branchId) || branches[0];
-    const hours = method === "delivery" ? ["12:00", "14:00", "16:00", "18:00"] : ["10:00", "12:00", "14:00", "16:00", "18:00"];
-    const leadMinutes =
-      Math.max(0, Number(b.preparationTimeMinutes) || 0) +
-      (method === "delivery" ? Number(b.deliveryTimeMinutes) || 0 : 0);
-    const earliest = Date.now() + leadMinutes * 60_000;
-    const slots = hours
-      .map((time) => {
-        const start = new Date(`${date}T${time}:00.000-06:00`);
-        const end = new Date(start.getTime() + 60 * 60 * 1000);
-        const available = Number.isFinite(start.getTime()) && start.getTime() >= earliest;
-        return {
-          start: start.toISOString(),
-          end: end.toISOString(),
-          available,
-          remainingCapacity: available ? (method === "delivery" ? 4 : 8) : 0,
-        };
+    const cart = cartId ? carts.get(cartId) : undefined;
+    if (cart && cart.branch.id !== b.id) {
+      send(res, 409, { error: "Cart branch mismatch" });
+      return;
+    }
+    const cartLead = cart ? cartLeadMinutesForCart(cart) : 0;
+    send(res, 200, mockFulfillmentSlots(b, date, method, cartLead));
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/fulfillment/preview") {
+    readJson(req)
+      .then((body) => {
+        const cart = carts.get(body?.cartId);
+        if (!cart || !cart.items.length) {
+          send(res, 409, { error: "Cart is empty" });
+          return;
+        }
+        const method = body?.fulfillmentMethod === "delivery" ? "delivery" : "pickup";
+        const scheduled = new Date(body?.scheduledStart);
+        if (!Number.isFinite(scheduled.getTime())) {
+          send(res, 400, { error: "Invalid scheduledStart" });
+          return;
+        }
+        const date = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Mexico_City",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(scheduled);
+        const slots = mockFulfillmentSlots(cart.branch, date, method, cartLeadMinutesForCart(cart));
+        const slotMatch = slots.find((slot) => new Date(slot.start).getTime() === scheduled.getTime());
+        const methodAvailable = method === "pickup"
+          ? cart.branch.pickupAvailable !== false
+          : cart.branch.deliveryAvailable !== false;
+        const slotAvailable = Boolean(slotMatch && methodAvailable);
+        const slotReason = !methodAvailable
+          ? method === "delivery"
+            ? "Esta sucursal no ofrece delivery."
+            : "Esta sucursal no ofrece pickup."
+          : !slotMatch
+            ? "Este horario ya no está disponible para la sucursal."
+            : null;
+        const items = cart.items.map((item) => {
+          const product = products.find((row) => row.id === item.productId);
+          const availability = product?.availability?.find((row) => row.branchId === cart.branch.id);
+          const requiredLeadMinutes = itemLeadMinutes({
+            minimumLeadTimeHours: product?.minimumLeadTimeHours ?? 0,
+            itemPreparationTimeMinutes: availability?.preparationTimeMinutes,
+            branchPreparationTimeMinutes: cart.branch.preparationTimeMinutes,
+          });
+          const sellable = productSellable(product, cart.branch.id);
+          const leadReady = isReadyForLead(scheduled, requiredLeadMinutes);
+          const available = Boolean(
+            slotAvailable &&
+            product &&
+            availability?.available &&
+            sellable >= item.quantity &&
+            leadReady,
+          );
+          return {
+            cartItemId: item.id,
+            productId: item.productId,
+            name: item.name,
+            quantity: item.quantity,
+            available,
+            reason: available
+              ? null
+              : !slotAvailable
+                ? slotReason
+                : !leadReady
+                  ? leadRequirementReason(requiredLeadMinutes)
+                  : "No disponible para esta sucursal.",
+          };
+        });
+        send(res, 200, {
+          scheduledStart: scheduled.toISOString(),
+          slotAvailable,
+          slotReason,
+          items,
+          unavailableItems: items.filter((item) => !item.available),
+        });
       })
-      .filter((slot) => slot.available);
-    send(res, 200, slots);
+      .catch(() => send(res, 400, { error: "Invalid body" }));
     return;
   }
 

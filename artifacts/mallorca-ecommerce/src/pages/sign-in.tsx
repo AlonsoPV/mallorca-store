@@ -75,11 +75,29 @@ function ClerkPasswordGate({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function LocalPasswordGate({ onSuccess }: { onSuccess: () => void }) {
+function LocalPasswordGate({
+  onSuccess,
+}: {
+  onSuccess: (token?: string) => void;
+}) {
   const allowed = localDevCredentials();
   return (
     <PasswordSignInForm
       onAuthenticate={async (identifier, password) => {
+        try {
+          const response = await fetch("/api/auth/local-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identifier, password }),
+          });
+          if (response.ok) {
+            const data = (await response.json()) as { token?: string };
+            onSuccess(data.token);
+            return null;
+          }
+        } catch {
+          // Fall through to env credentials when the mock API is down.
+        }
         if (!credentialsMatch(identifier, password, allowed)) {
           return "Usuario o contraseña incorrectos.";
         }
@@ -119,8 +137,8 @@ export default function SignInPage() {
         <ClerkPasswordGate onSuccess={goToRedirect} />
       ) : (
         <LocalPasswordGate
-          onSuccess={() => {
-            signInLocalDev();
+          onSuccess={(token) => {
+            signInLocalDev(token);
             goToRedirect();
           }}
         />

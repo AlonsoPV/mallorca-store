@@ -11,6 +11,11 @@ import type { AdminUserCreateBranchRole } from './adminUserCreateBranchRole';
 export interface AdminUserCreate {
   email: string;
   /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  password?: string | null;
+  generatePassword?: boolean;
+  /** @nullable */
   firstName?: string | null;
   /** @nullable */
   lastName?: string | null;
