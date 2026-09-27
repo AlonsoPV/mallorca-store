@@ -139,7 +139,7 @@ export default function AdminDashboard() {
             <Link href="/admin/pedidos/nuevo">+ Nuevo pedido</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-none">
-            <Link href="/admin/agenda">Ver agenda</Link>
+            <Link href="/admin/pedidos?view=agenda">Ver agenda</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-none">
             <Link href="/admin/pedidos?day=today">Ver pedidos</Link>
@@ -151,7 +151,7 @@ export default function AdminDashboard() {
 
         <QueueSection
           title="Próximos pedidos"
-          href="/admin/agenda"
+          href="/admin/pedidos?view=agenda"
           linkLabel="Abrir agenda"
           emptyIcon={ShoppingCart}
           emptyTitle="No hay pedidos activos para hoy"

@@ -169,7 +169,7 @@ export default function AdminBranchDetail() {
                   <Link href={`/admin/pedidos/nuevo?branchId=${branchId}`}>Nuevo pedido</Link>
                 </Button>
                 <Button asChild>
-                  <Link href={`/admin/agenda?branchId=${branchId}`}>Abrir agenda</Link>
+                  <Link href={`/admin/pedidos?view=agenda&branchId=${branchId}`}>Abrir agenda</Link>
                 </Button>
               </div>
             </div>
@@ -280,7 +280,7 @@ export default function AdminBranchDetail() {
                 empty="No hay pedidos activos en agenda."
                 emptyAction={
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/agenda?branchId=${branchId}`}>Abrir agenda completa</Link>
+                    <Link href={`/admin/pedidos?view=agenda&branchId=${branchId}`}>Abrir agenda completa</Link>
                   </Button>
                 }
                 rows={agendaOrders.map((o: any) => [

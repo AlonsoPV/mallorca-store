@@ -39,7 +39,7 @@ import {
   type OrderSource,
   type PaymentMethod,
 } from "@workspace/api-client-react";
-import { Loader2, Minus, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Loader2, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 
@@ -429,7 +429,7 @@ export default function AdminOrderNew() {
   );
 
   const OrderSummaryPanel = (
-    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col bg-muted/20">
       <div className="border-b border-border px-4 py-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Pedido actual
@@ -491,7 +491,7 @@ export default function AdminOrderNew() {
                     <Button
                       size="icon"
                       variant="outline"
-                      className="h-7 w-7 rounded-none"
+                      className="h-8 w-8 rounded-none"
                       onClick={() =>
                         setLines((prev) =>
                           prev.map((l) =>
@@ -502,13 +502,13 @@ export default function AdminOrderNew() {
                         )
                       }
                     >
-                      <Minus className="h-3 w-3" />
+                      <Minus className="h-3.5 w-3.5" />
                     </Button>
-                    <span className="w-6 text-center text-sm tabular-nums">{line.quantity}</span>
+                    <span className="w-7 text-center text-sm tabular-nums">{line.quantity}</span>
                     <Button
                       size="icon"
                       variant="outline"
-                      className="h-7 w-7 rounded-none"
+                      className="h-8 w-8 rounded-none"
                       onClick={() =>
                         setLines((prev) =>
                           prev.map((l) =>
@@ -517,7 +517,7 @@ export default function AdminOrderNew() {
                         )
                       }
                     >
-                      <Plus className="h-3 w-3" />
+                      <Plus className="h-3.5 w-3.5" />
                     </Button>
                     <div className="ml-auto text-sm tabular-nums">
                       {previewLine
@@ -560,7 +560,7 @@ export default function AdminOrderNew() {
         ) : null}
       </div>
 
-      <div className="border-t border-border bg-background px-4 py-3 space-y-2">
+      <div className="space-y-3 border-t border-border bg-background px-4 py-4">
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -659,24 +659,28 @@ export default function AdminOrderNew() {
 
   return (
     <AdminLayout>
-      <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden">
-        {/* Compact context bar */}
-        <div className="shrink-0 border-b border-border bg-background px-3 py-2 md:px-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-border bg-background px-4 py-3 md:px-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-lg font-semibold leading-tight md:text-xl">Nuevo pedido</h1>
-              <p className="text-xs text-muted-foreground">Toma de pedido · misma lógica que el ecommerce</p>
+              <h1 className="font-serif text-xl leading-tight md:text-2xl">Nuevo pedido</h1>
+              <p className="hidden text-xs text-muted-foreground sm:block">
+                Elige sucursal, cliente y productos. El total se calcula a la derecha.
+              </p>
             </div>
-            <Button variant="ghost" size="sm" className="rounded-none" asChild>
-              <Link href="/admin/pedidos">Cancelar</Link>
+            <Button variant="outline" size="sm" className="rounded-none" asChild>
+              <Link href="/admin/pedidos">
+                <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+                Cancelar
+              </Link>
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
-            <div className="space-y-0.5">
-              <Label className="text-[11px]">Sucursal *</Label>
+          <div className="flex flex-wrap gap-3">
+            <div className="w-full space-y-1 sm:w-44">
+              <Label className="text-xs">Sucursal *</Label>
               <select
-                className="h-9 w-full border border-border bg-background px-2 text-sm"
+                className="h-10 w-full border border-border bg-background px-2.5 text-sm"
                 value={branchId ?? ""}
                 onChange={(e) => {
                   setBranchId(e.target.value ? Number(e.target.value) : null);
@@ -693,11 +697,27 @@ export default function AdminOrderNew() {
               </select>
             </div>
 
-            <div className="relative space-y-0.5 md:col-span-2">
-              <Label className="text-[11px]">Cliente *</Label>
+            <div className="relative min-w-[16rem] flex-1 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs">Cliente *</Label>
+                {customerName ? null : (
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline"
+                    onClick={() => setQuickCustomerOpen(true)}
+                  >
+                    + Cliente rápido
+                  </button>
+                )}
+              </div>
               {customerName ? (
-                <div className="flex h-9 items-center gap-2 border border-border bg-background px-2 text-sm">
+                <div className="flex h-10 items-center gap-2 border border-border bg-background px-2.5 text-sm">
                   <span className="min-w-0 flex-1 truncate font-medium">{customerName}</span>
+                  {customerPhone ? (
+                    <span className="hidden truncate text-xs text-muted-foreground sm:inline">
+                      {customerPhone}
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     className="text-muted-foreground hover:text-foreground"
@@ -714,21 +734,21 @@ export default function AdminOrderNew() {
               ) : (
                 <>
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      className="h-9 rounded-none pl-7 text-sm"
+                      className="h-10 rounded-none pl-8 text-sm"
                       placeholder="Buscar cliente…"
                       value={customerQuery}
                       onChange={(e) => setCustomerQuery(e.target.value)}
                     />
                   </div>
                   {customerQuery.trim().length >= 2 ? (
-                    <ul className="absolute z-20 mt-0.5 max-h-40 w-full overflow-y-auto border border-border bg-background text-sm shadow-sm">
+                    <ul className="absolute z-20 mt-0.5 max-h-48 w-full overflow-y-auto border border-border bg-background text-sm shadow-sm">
                       {(customerSearch.data ?? []).map((c) => (
                         <li key={`${c.email}-${c.userId}`}>
                           <button
                             type="button"
-                            className="w-full px-2 py-1.5 text-left hover:bg-muted"
+                            className="w-full px-3 py-2 text-left hover:bg-muted"
                             onClick={() => {
                               setCustomerName(c.name);
                               setCustomerEmail(c.email);
@@ -747,7 +767,7 @@ export default function AdminOrderNew() {
                       <li>
                         <button
                           type="button"
-                          className="w-full border-t border-border px-2 py-1.5 text-left text-primary hover:bg-muted"
+                          className="w-full border-t border-border px-3 py-2 text-left text-primary hover:bg-muted"
                           onClick={() => {
                             setQuickCustomerOpen(true);
                             setCustomerQuery("");
@@ -757,23 +777,15 @@ export default function AdminOrderNew() {
                         </button>
                       </li>
                     </ul>
-                  ) : (
-                    <button
-                      type="button"
-                      className="mt-0.5 text-xs text-primary"
-                      onClick={() => setQuickCustomerOpen(true)}
-                    >
-                      + Cliente rápido
-                    </button>
-                  )}
+                  ) : null}
                 </>
               )}
             </div>
 
-            <div className="space-y-0.5">
-              <Label className="text-[11px]">Origen</Label>
+            <div className="w-[9rem] space-y-1">
+              <Label className="text-xs">Origen</Label>
               <select
-                className="h-9 w-full border border-border bg-background px-2 text-sm"
+                className="h-10 w-full border border-border bg-background px-2.5 text-sm"
                 value={orderSource}
                 onChange={(e) => setOrderSource(e.target.value as OrderSource)}
               >
@@ -787,15 +799,15 @@ export default function AdminOrderNew() {
               </select>
             </div>
 
-            <div className="space-y-0.5">
-              <Label className="text-[11px]">Entrega</Label>
-              <div className="flex h-9">
+            <div className="w-44 space-y-1">
+              <Label className="text-xs">Entrega</Label>
+              <div className="flex h-10">
                 {(["pickup", "delivery"] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
                     className={cn(
-                      "flex-1 border text-xs font-medium",
+                      "flex-1 border text-sm font-medium first:border-r-0",
                       fulfillmentMethod === m
                         ? "border-foreground bg-foreground text-background"
                         : "border-border bg-background hover:bg-muted",
@@ -808,49 +820,47 @@ export default function AdminOrderNew() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-0.5">
-                <Label className="text-[11px]">Fecha</Label>
-                <Input
-                  type="date"
-                  className="h-9 rounded-none text-sm"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-0.5">
-                <Label className="text-[11px]">Hora</Label>
-                <select
-                  className="h-9 w-full border border-border bg-background px-1 text-sm"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  disabled={branchId == null}
-                >
-                  {(slots.data ?? [])
-                    .filter((s) => s.available || forceAvailability)
-                    .map((s) => {
-                      const t = new Date(s.start).toLocaleTimeString("es-MX", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: false,
-                        timeZone: "America/Mexico_City",
-                      });
-                      return (
-                        <option key={String(s.start)} value={t}>
-                          {t}
-                          {!s.available ? " *" : ""}
-                        </option>
-                      );
-                    })}
-                </select>
-              </div>
+            <div className="w-[10rem] space-y-1">
+              <Label className="text-xs">Fecha</Label>
+              <Input
+                type="date"
+                className="h-10 rounded-none text-sm"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+            <div className="w-28 space-y-1">
+              <Label className="text-xs">Hora</Label>
+              <select
+                className="h-10 w-full border border-border bg-background px-2 text-sm"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                disabled={branchId == null}
+              >
+                {(slots.data ?? [])
+                  .filter((s) => s.available || forceAvailability)
+                  .map((s) => {
+                    const t = new Date(s.start).toLocaleTimeString("es-MX", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                      timeZone: "America/Mexico_City",
+                    });
+                    return (
+                      <option key={String(s.start)} value={t}>
+                        {t}
+                        {!s.available ? " *" : ""}
+                      </option>
+                    );
+                  })}
+              </select>
             </div>
           </div>
 
           {fulfillmentMethod === "delivery" ? (
-            <div className="mt-2 grid gap-2 md:grid-cols-3">
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <Textarea
-                className="rounded-none text-sm md:col-span-2"
+                className="rounded-none text-sm sm:col-span-2"
                 rows={2}
                 placeholder="Dirección de delivery"
                 value={deliveryAddress}
@@ -883,12 +893,12 @@ export default function AdminOrderNew() {
         </div>
 
         {/* Split workspace */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="min-h-0 overflow-y-auto border-r border-border px-3 py-3 md:px-4">
-            <div className="relative mb-2">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-h-0 overflow-y-auto px-4 py-4 md:px-5">
+            <div className="relative mb-3">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-10 rounded-none pl-9"
+                className="h-11 rounded-none pl-9"
                 placeholder="Buscar producto o SKU…"
                 value={productQuery}
                 disabled={branchId == null}
@@ -906,7 +916,7 @@ export default function AdminOrderNew() {
               <button
                 type="button"
                 className={cn(
-                  "shrink-0 border px-2.5 py-1 text-xs",
+                  "h-8 shrink-0 border px-3 text-sm",
                   categoryId === "all"
                     ? "border-foreground bg-foreground text-background"
                     : "border-border hover:bg-muted",
@@ -920,7 +930,7 @@ export default function AdminOrderNew() {
                   key={c.id}
                   type="button"
                   className={cn(
-                    "shrink-0 border px-2.5 py-1 text-xs",
+                    "h-8 shrink-0 border px-3 text-sm",
                     categoryId === String(c.id)
                       ? "border-foreground bg-foreground text-background"
                       : "border-border hover:bg-muted",
@@ -933,17 +943,20 @@ export default function AdminOrderNew() {
             </div>
 
             {branchId == null ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">
-                Selecciona una sucursal para ver disponibilidad.
-              </p>
+              <div className="flex min-h-[240px] flex-col items-center justify-center border border-dashed border-border px-4 text-center">
+                <p className="text-sm font-medium">Selecciona una sucursal</p>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  El catálogo y el stock se muestran según la sucursal del pedido.
+                </p>
+              </div>
             ) : (
               <ul className="divide-y border border-border">
                 {filteredProducts.map((p) => {
                   const soldOut = Boolean((p as { soldOut?: boolean }).soldOut);
                   const promoPrice = (p as { promotionalPrice?: number | null }).promotionalPrice;
                   return (
-                    <li key={p.id} className="flex items-center gap-3 px-2 py-2 text-sm">
-                      <div className="h-10 w-10 shrink-0 overflow-hidden border border-border bg-muted">
+                    <li key={p.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                      <div className="h-12 w-12 shrink-0 overflow-hidden border border-border bg-muted">
                         {p.imageUrl ? (
                           <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
                         ) : null}
@@ -972,7 +985,7 @@ export default function AdminOrderNew() {
                       </div>
                       <Button
                         size="sm"
-                        className="h-8 shrink-0 rounded-none"
+                        className="h-9 shrink-0 rounded-none px-3"
                         disabled={soldOut && !forceAvailability}
                         onClick={() => addProduct(p as never)}
                       >
@@ -1025,11 +1038,11 @@ export default function AdminOrderNew() {
           </div>
 
           {/* Desktop sticky summary */}
-          <aside className="hidden min-h-0 lg:block">{OrderSummaryPanel}</aside>
+          <aside className="hidden min-h-0 border-l border-border md:block">{OrderSummaryPanel}</aside>
         </div>
 
         {/* Mobile sticky cart CTA */}
-        <div className="border-t border-border bg-background p-3 lg:hidden">
+        <div className="border-t border-border bg-background p-3 md:hidden">
           <Button
             className="w-full rounded-none"
             size="lg"

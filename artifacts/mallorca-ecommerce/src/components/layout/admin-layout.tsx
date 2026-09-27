@@ -11,7 +11,6 @@ import {
   Bell,
   BarChart3,
   Users,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
   CreditCard,
@@ -23,8 +22,7 @@ import { useAppSignOut } from "@/lib/app-auth";
 
 const primaryNav = [
   { href: "/admin", label: "Inicio", icon: LayoutDashboard },
-  { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
-  { href: "/admin/agenda", label: "Agenda", icon: CalendarDays },
+  { href: "/admin/pedidos", label: "Pedidos y agenda", icon: ShoppingCart },
   { href: "/admin/productos", label: "Productos e inventario", icon: Package },
   { href: "/admin/sucursales", label: "Sucursales", icon: Store },
   { href: "/admin/alertas", label: "Alertas", icon: Bell },

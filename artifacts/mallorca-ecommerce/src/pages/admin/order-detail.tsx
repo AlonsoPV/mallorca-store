@@ -1,3 +1,8 @@
+import {
+  AdminError,
+  AdminLoading,
+  AdminPageShell,
+} from "@/components/admin";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import {
   useGetAdminOrder,
@@ -59,7 +64,6 @@ import {
   type OrderStatus,
 } from "@/lib/order-status";
 import {
-  ORDER_SOURCE_LABELS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS,
   buildWhatsAppOrderMessage,
@@ -86,7 +90,7 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("border-b border-border py-5", className)}>
+    <section className={cn("border-b border-border py-4", className)}>
       <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {title}
       </h2>
@@ -103,7 +107,7 @@ export default function AdminOrderDetail() {
     return qs ? `/admin/pedidos?${qs}` : "/admin/pedidos";
   }, [search]);
 
-  const { data: order, isLoading, isError } = useGetAdminOrder(id);
+  const { data: order, isLoading, isError, refetch } = useGetAdminOrder(id);
   const updateOrder = useUpdateAdminOrder();
   const paymentLink = useCreateAdminOrderPaymentLink();
   const recordPayment = useRecordAdminOrderPayment();
@@ -223,163 +227,254 @@ export default function AdminOrderDetail() {
 
   return (
     <AdminLayout>
-      <div className="flex-1 overflow-y-auto">
-        <div className="border-b border-border bg-background px-4 py-3 md:px-8">
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <Link href={backHref} className="inline-flex items-center gap-1 hover:text-foreground">
-              <ArrowLeft className="h-3.5 w-3.5" /> Pedidos
-            </Link>
-            {order ? (
-              <>
-                <span>/</span>
-                <span className="text-foreground">#{order.orderNumber}</span>
-              </>
-            ) : null}
-          </div>
-
-          {isLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : isError || !order ? (
-            <p className="py-10 text-destructive">No se pudo cargar el pedido.</p>
-          ) : (
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="font-serif text-2xl text-foreground md:text-3xl">
-                    Pedido #{order.orderNumber}
-                  </h1>
-                  <span className="border border-border px-2 py-0.5 text-xs font-medium">
-                    {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] ??
-                      order.status}
-                  </span>
-                  {highlightCollect ? (
-                    <span className="border border-amber-600/40 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                      POR COBRAR {formatPriceMx(pendingAmount)}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Creado {formatOrderDateTime(order.createdAt)}
-                  {order.orderSource
-                    ? ` · ${ORDER_SOURCE_LABELS[order.orderSource] ?? order.orderSource}`
-                    : ""}
-                </p>
-                <p className="text-sm font-medium">
-                  {order.branchName ? `Mallorca ${order.branchName.replace(/^Mallorca\s+/i, "")}` : `Sucursal ${order.branchId}`}
-                  {" · "}
-                  {fulfillmentLabel(order.fulfillmentMethod)}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                {primary && primaryCtaLabel ? (
-                  <Button
-                    className="rounded-none"
-                    disabled={updateOrder.isPending}
-                    onClick={() => advance(primary)}
-                  >
-                    {primaryCtaLabel}
-                  </Button>
-                ) : null}
-                {unpaid ? (
-                  <Button variant="outline" className="rounded-none" onClick={openPayDialog}>
-                    Registrar pago
-                  </Button>
-                ) : null}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" className="rounded-none">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-none w-52">
-                    {editable ? (
-                      <DropdownMenuItem disabled>
-                        Editar pedido
-                      </DropdownMenuItem>
-                    ) : null}
-                    <DropdownMenuItem
-                      onClick={() => window.print()}
-                    >
-                      <Printer className="mr-2 h-4 w-4" /> Imprimir
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href={`/admin/pedidos/nuevo?duplicateFrom=${order.id}`}>
-                        Duplicar pedido
-                      </Link>
-                    </DropdownMenuItem>
-                    {order.customerPhone ? (
-                      <DropdownMenuItem asChild>
-                        <a
-                          href={whatsappComposeUrl(
-                            order.customerPhone,
-                            buildWhatsAppOrderMessage({
-                              customerName: order.customerName,
-                              orderNumber: order.orderNumber,
-                              branchName: order.branchName,
-                              scheduledStart: order.scheduledStart,
-                              total: order.total,
-                              paymentStatus: order.paymentStatus,
-                              link: order.paymentLinkUrl,
-                            }),
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Contactar cliente
-                        </a>
-                      </DropdownMenuItem>
-                    ) : null}
-                    <DropdownMenuItem
-                      disabled={paymentLink.isPending}
-                      onClick={async () => {
-                        try {
-                          const res = await paymentLink.mutateAsync({ id: order.id });
-                          toast({ title: "Link de pago generado" });
-                          refresh();
-                          window.open(res.url, "_blank");
-                        } catch {
-                          toast({ title: "No se pudo generar link", variant: "destructive" });
-                        }
-                      }}
-                    >
-                      Generar link de pago
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {order.status !== "cancelled" ? (
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => setCancelOpen(true)}
-                      >
-                        Cancelar pedido
-                      </DropdownMenuItem>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          )}
-        </div>
+      <AdminPageShell className="mx-auto w-full max-w-[1280px] space-y-4 p-4 sm:space-y-5 sm:p-5 md:p-6">
+        {isLoading ? <AdminLoading label="Cargando pedido…" /> : null}
+        {isError || (!isLoading && !order) ? (
+          <AdminError title="No se pudo cargar el pedido" onRetry={() => refetch()} />
+        ) : null}
 
         {order ? (
           <>
-            <div className="mx-auto grid max-w-[1400px] gap-0 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
-              {/* Main column */}
-              <div className="px-4 md:px-8 lg:border-r lg:border-border">
-                {/* Mobile: status first */}
-                <div className="lg:hidden">
-                  <Section title="Estado">
-                    <StatusPipeline
-                      current={pipelineCurrent}
-                      status={order.status}
-                      paymentStatus={order.paymentStatus}
-                      pending={updateOrder.isPending}
-                      onSelect={(next) => advance(next)}
-                    />
-                  </Section>
+            <div className="flex flex-col gap-3 border-b border-border pb-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <Link
+                    href={backHref}
+                    className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    Pedidos
+                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="font-serif text-2xl leading-tight text-foreground">
+                      Pedido #{order.orderNumber}
+                    </h1>
+                    <span className="border border-border px-2 py-0.5 text-xs font-medium">
+                      {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] ??
+                        order.status}
+                    </span>
+                    {highlightCollect ? (
+                      <span className="border border-amber-600/40 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                        POR COBRAR {formatPriceMx(pendingAmount)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatOrderDate(order.scheduledStart)} · {formatOrderTime(order.scheduledStart)}
+                    {order.scheduledEnd && order.fulfillmentMethod === "delivery"
+                      ? ` – ${formatOrderTime(order.scheduledEnd)}`
+                      : ""}
+                    {" · "}
+                    {fulfillmentLabel(order.fulfillmentMethod)}
+                    {" · "}
+                    {order.branchName
+                      ? `Mallorca ${order.branchName.replace(/^Mallorca\s+/i, "")}`
+                      : `Sucursal ${order.branchId}`}
+                    {" · "}
+                    {order.customerName}
+                  </p>
                 </div>
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                  {primary && primaryCtaLabel ? (
+                    <Button
+                      className="rounded-none"
+                      disabled={updateOrder.isPending}
+                      onClick={() => advance(primary)}
+                    >
+                      {primaryCtaLabel}
+                    </Button>
+                  ) : null}
+                  {unpaid ? (
+                    <Button variant="outline" className="rounded-none" onClick={openPayDialog}>
+                      Registrar pago
+                    </Button>
+                  ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="rounded-none">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52 rounded-none">
+                      <DropdownMenuItem onClick={() => window.print()}>
+                        <Printer className="mr-2 h-4 w-4" /> Imprimir
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/pedidos/nuevo?duplicateFrom=${order.id}`}>
+                          Duplicar pedido
+                        </Link>
+                      </DropdownMenuItem>
+                      {order.customerPhone ? (
+                        <DropdownMenuItem asChild>
+                          <a
+                            href={whatsappComposeUrl(
+                              order.customerPhone,
+                              buildWhatsAppOrderMessage({
+                                customerName: order.customerName,
+                                orderNumber: order.orderNumber,
+                                branchName: order.branchName,
+                                scheduledStart: order.scheduledStart,
+                                total: order.total,
+                                paymentStatus: order.paymentStatus,
+                                link: order.paymentLinkUrl,
+                              }),
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Contactar cliente
+                          </a>
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem
+                        disabled={paymentLink.isPending}
+                        onClick={async () => {
+                          try {
+                            const res = await paymentLink.mutateAsync({ id: order.id });
+                            toast({ title: "Link de pago generado" });
+                            refresh();
+                            window.open(res.url, "_blank");
+                          } catch {
+                            toast({ title: "No se pudo generar link", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        Generar link de pago
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {order.status !== "cancelled" ? (
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setCancelOpen(true)}
+                        >
+                          Cancelar pedido
+                        </DropdownMenuItem>
+                      ) : null}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              <StatusPipeline
+                compact
+                current={pipelineCurrent}
+                status={order.status}
+                paymentStatus={order.paymentStatus}
+                pending={updateOrder.isPending}
+                onSelect={(next) => advance(next)}
+              />
+            </div>
+
+            <div className="grid gap-6 pt-1 md:grid-cols-[minmax(0,1fr)_minmax(250px,300px)] xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div>
+                <section className="grid gap-3 py-4 sm:grid-cols-2 sm:gap-4">
+                  <div className="border border-border bg-background p-4">
+                    <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      Entrega
+                    </h2>
+                    <p className="font-medium">
+                      {order.fulfillmentMethod === "pickup"
+                        ? "Recoge en sucursal"
+                        : "Entrega a domicilio"}
+                    </p>
+                    {order.branchName ? (
+                      <p className="mt-1 text-sm">{order.branchName}</p>
+                    ) : null}
+                    <p className="mt-2 text-sm">
+                      {formatOrderDate(order.scheduledStart)}
+                      {" · "}
+                      {formatOrderTime(order.scheduledStart)}
+                      {order.scheduledEnd && order.fulfillmentMethod === "delivery"
+                        ? ` – ${formatOrderTime(order.scheduledEnd)}`
+                        : ""}
+                    </p>
+                    {order.fulfillmentMethod === "delivery" ? (
+                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                        {order.deliveryAddressSnapshot?.street ? (
+                          <>
+                            <p>
+                              {[
+                                order.deliveryAddressSnapshot.street,
+                                order.deliveryAddressSnapshot.externalNumber,
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              {order.deliveryAddressSnapshot.internalNumber
+                                ? ` Int. ${order.deliveryAddressSnapshot.internalNumber}`
+                                : ""}
+                            </p>
+                            <p>
+                              {[
+                                order.deliveryAddressSnapshot.neighborhood,
+                                order.deliveryAddressSnapshot.postalCode
+                                  ? `CP ${order.deliveryAddressSnapshot.postalCode}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                            {order.deliveryAddressSnapshot.references ? (
+                              <p>Referencias: {order.deliveryAddressSnapshot.references}</p>
+                            ) : null}
+                          </>
+                        ) : (
+                          <p>{order.deliveryAddress}</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="border border-border bg-background p-4">
+                    <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      Cliente
+                    </h2>
+                    <p className="text-lg font-medium leading-tight">{order.customerName}</p>
+                    {order.customerPhone ? (
+                      <p className="mt-1 text-sm text-muted-foreground">{order.customerPhone}</p>
+                    ) : null}
+                    {order.customerEmail ? (
+                      <p className="text-sm text-muted-foreground">{order.customerEmail}</p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {order.customerPhone ? (
+                        <>
+                          <Button variant="outline" size="sm" className="h-8 rounded-none" asChild>
+                            <a href={`tel:${order.customerPhone}`}>
+                              <Phone className="mr-1.5 h-3.5 w-3.5" /> Llamar
+                            </a>
+                          </Button>
+                          <Button variant="outline" size="sm" className="h-8 rounded-none" asChild>
+                            <a
+                              href={whatsappComposeUrl(
+                                order.customerPhone,
+                                buildWhatsAppOrderMessage({
+                                  customerName: order.customerName,
+                                  orderNumber: order.orderNumber,
+                                  branchName: order.branchName,
+                                  scheduledStart: order.scheduledStart,
+                                  total: order.total,
+                                  paymentStatus: order.paymentStatus,
+                                  link: order.paymentLinkUrl,
+                                }),
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              WhatsApp
+                            </a>
+                          </Button>
+                        </>
+                      ) : null}
+                      {order.customerEmail ? (
+                        <Button variant="outline" size="sm" className="h-8 rounded-none" asChild>
+                          <a href={`mailto:${order.customerEmail}`}>
+                            <Mail className="mr-1.5 h-3.5 w-3.5" /> Email
+                          </a>
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
 
                 <Section title="Productos">
                   <ul className="space-y-3">
@@ -428,107 +523,6 @@ export default function AdminOrderDetail() {
                       );
                     })}
                   </ul>
-                </Section>
-
-                <Section title="Cliente">
-                  <p className="text-lg font-medium leading-tight">{order.customerName}</p>
-                  {order.customerPhone ? (
-                    <p className="mt-1 text-sm text-muted-foreground">{order.customerPhone}</p>
-                  ) : null}
-                  {order.customerEmail ? (
-                    <p className="text-sm text-muted-foreground">{order.customerEmail}</p>
-                  ) : null}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {order.customerPhone ? (
-                      <>
-                        <Button variant="outline" size="sm" className="h-8 rounded-none" asChild>
-                          <a href={`tel:${order.customerPhone}`}>
-                            <Phone className="mr-1.5 h-3.5 w-3.5" /> Llamar
-                          </a>
-                        </Button>
-                        <Button variant="outline" size="sm" className="h-8 rounded-none" asChild>
-                          <a
-                            href={whatsappComposeUrl(
-                              order.customerPhone,
-                              buildWhatsAppOrderMessage({
-                                customerName: order.customerName,
-                                orderNumber: order.orderNumber,
-                                branchName: order.branchName,
-                                scheduledStart: order.scheduledStart,
-                                total: order.total,
-                                paymentStatus: order.paymentStatus,
-                                link: order.paymentLinkUrl,
-                              }),
-                            )}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            WhatsApp
-                          </a>
-                        </Button>
-                      </>
-                    ) : null}
-                    {order.customerEmail ? (
-                      <Button variant="outline" size="sm" className="h-8 rounded-none" asChild>
-                        <a href={`mailto:${order.customerEmail}`}>
-                          <Mail className="mr-1.5 h-3.5 w-3.5" /> Email
-                        </a>
-                      </Button>
-                    ) : null}
-                  </div>
-                </Section>
-
-                <Section title="Entrega">
-                  <p className="font-medium">
-                    {order.fulfillmentMethod === "pickup"
-                      ? "Recoge en sucursal"
-                      : "Entrega a domicilio"}
-                  </p>
-                  {order.branchName ? (
-                    <p className="mt-1 text-sm">{order.branchName}</p>
-                  ) : null}
-                  <p className="mt-2 text-sm">
-                    {formatOrderDate(order.scheduledStart)}
-                    {" · "}
-                    {formatOrderTime(order.scheduledStart)}
-                    {order.scheduledEnd && order.fulfillmentMethod === "delivery"
-                      ? `–${formatOrderTime(order.scheduledEnd)}`
-                      : ""}
-                  </p>
-                  {order.fulfillmentMethod === "delivery" ? (
-                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                      {order.deliveryAddressSnapshot?.street ? (
-                        <>
-                          <p>
-                            {[
-                              order.deliveryAddressSnapshot.street,
-                              order.deliveryAddressSnapshot.externalNumber,
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            {order.deliveryAddressSnapshot.internalNumber
-                              ? ` Int. ${order.deliveryAddressSnapshot.internalNumber}`
-                              : ""}
-                          </p>
-                          <p>
-                            {[
-                              order.deliveryAddressSnapshot.neighborhood,
-                              order.deliveryAddressSnapshot.postalCode
-                                ? `CP ${order.deliveryAddressSnapshot.postalCode}`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                          {order.deliveryAddressSnapshot.references ? (
-                            <p>Referencias: {order.deliveryAddressSnapshot.references}</p>
-                          ) : null}
-                        </>
-                      ) : (
-                        <p>{order.deliveryAddress}</p>
-                      )}
-                    </div>
-                  ) : null}
                 </Section>
 
                 <Section title="Notas">
@@ -618,22 +612,13 @@ export default function AdminOrderDetail() {
               </div>
 
               {/* Sticky ops summary */}
-              <aside className="border-t border-border bg-muted/20 px-4 py-5 md:px-6 lg:sticky lg:top-0 lg:h-fit lg:border-t-0 lg:self-start">
-                <div className="hidden lg:block">
-                  <Section title="Estado" className="border-b-0 pt-0">
-                    <StatusPipeline
-                      current={pipelineCurrent}
-                      status={order.status}
-                      paymentStatus={order.paymentStatus}
-                      pending={updateOrder.isPending}
-                      onSelect={(next) => advance(next)}
-                    />
-                  </Section>
-                </div>
-
+              <aside className="space-y-4 md:sticky md:top-4 md:self-start">
                 <Section
                   title="Pago"
-                  className={cn(highlightCollect && "rounded-sm border border-amber-600/30 bg-amber-50/80 px-3")}
+                  className={cn(
+                    "border border-border bg-background px-4 py-4",
+                    highlightCollect && "border-amber-600/30 bg-amber-50/80",
+                  )}
                 >
                   <dl className="space-y-2 text-sm">
                     <div className="flex justify-between gap-3">
@@ -696,7 +681,7 @@ export default function AdminOrderDetail() {
                   ) : null}
                 </Section>
 
-                <Section title="Resumen" className="border-b-0">
+                <Section title="Resumen" className="border border-border bg-background px-4 py-4">
                   <dl className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
                       <dt>Subtotal</dt>
@@ -740,7 +725,7 @@ export default function AdminOrderDetail() {
 
             {/* Sticky mobile CTA */}
             {(primary || unpaid) && editable ? (
-              <div className="sticky bottom-0 z-20 flex gap-2 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden">
+              <div className="sticky bottom-0 z-20 flex gap-2 border-t border-border bg-background/95 p-3 backdrop-blur md:hidden">
                 {unpaid ? (
                   <Button variant="outline" className="flex-1 rounded-none" onClick={openPayDialog}>
                     Registrar pago
@@ -981,7 +966,7 @@ export default function AdminOrderDetail() {
             </Dialog>
           </>
         ) : null}
-      </div>
+      </AdminPageShell>
     </AdminLayout>
   );
 }
@@ -1002,21 +987,25 @@ function StatusPipeline({
   paymentStatus,
   pending,
   onSelect,
+  compact,
 }: {
   current: OrderStatus;
   status: string;
   paymentStatus?: string | null;
   pending?: boolean;
   onSelect: (status: OrderStatus) => void;
+  compact?: boolean;
 }) {
   return (
     <div className="space-y-2">
       {status === "cancelled" ? (
-        <p className="text-sm font-medium text-destructive">Cancelado. Elige un estado para reabrirlo.</p>
-      ) : (
+        <p className="text-sm font-medium text-destructive">
+          Cancelado. Elige un estado para reabrirlo.
+        </p>
+      ) : compact ? null : (
         <p className="text-xs text-muted-foreground">Selecciona un estado para cambiarlo.</p>
       )}
-      <ol className="flex flex-col gap-1">
+      <ol className={compact ? "flex gap-1 overflow-x-auto pb-1" : "flex flex-col gap-1"}>
         {ORDER_STATUS_PIPELINE.map((step, idx) => {
           const active = status !== "cancelled" && step === current;
           const past =
@@ -1025,30 +1014,41 @@ function StatusPipeline({
               (status === "completed" && step !== "completed"));
           const target = statusForPipelineStep(step, paymentStatus);
           return (
-            <li key={step}>
+            <li key={step} className={compact ? "shrink-0" : undefined}>
               <button
                 type="button"
                 disabled={active || pending}
                 onClick={() => onSelect(target)}
                 className={cn(
-                  "flex w-full items-center gap-2 px-1 py-1 text-left text-sm",
-                  !active && "hover:bg-muted",
-                  active && "cursor-default",
+                  compact
+                    ? "h-8 border px-3 text-xs"
+                    : "flex w-full items-center gap-2 px-1 py-1 text-left text-sm",
+                  compact && active && "border-primary bg-primary text-primary-foreground",
+                  compact && past && !active && "border-border bg-muted text-muted-foreground",
+                  compact && !past && !active && "border-border text-muted-foreground hover:bg-muted",
+                  !compact && !active && "hover:bg-muted",
+                  !compact && active && "cursor-default",
                 )}
               >
-                <span
-                  className={cn(
-                    "flex h-5 w-5 items-center justify-center border text-[10px]",
-                    active && "border-foreground bg-foreground text-background",
-                    past && !active && "border-muted-foreground/40 text-muted-foreground",
-                    !past && !active && "border-border text-muted-foreground",
-                  )}
-                >
-                  {idx + 1}
-                </span>
-                <span className={cn(active ? "font-semibold" : "text-muted-foreground")}>
-                  {ORDER_STATUS_LABELS[step]}
-                </span>
+                {compact ? (
+                  ORDER_STATUS_LABELS[step]
+                ) : (
+                  <>
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 items-center justify-center border text-[10px]",
+                        active && "border-foreground bg-foreground text-background",
+                        past && !active && "border-muted-foreground/40 text-muted-foreground",
+                        !past && !active && "border-border text-muted-foreground",
+                      )}
+                    >
+                      {idx + 1}
+                    </span>
+                    <span className={cn(active ? "font-semibold" : "text-muted-foreground")}>
+                      {ORDER_STATUS_LABELS[step]}
+                    </span>
+                  </>
+                )}
               </button>
             </li>
           );
