@@ -109,6 +109,11 @@ const clerkAppearance = {
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "font-serif text-2xl font-bold text-foreground",
     headerSubtitle: "text-muted-foreground text-sm",
+    socialButtons: { display: "none" },
+    socialButtonsBlockButton: { display: "none" },
+    dividerRow: { display: "none" },
+    alternativeMethods: { display: "none" },
+    footerAction__signUp: { display: "none" },
     socialButtonsBlockButtonText: "text-foreground font-medium",
     formFieldLabel: "text-foreground font-semibold text-sm",
     footerActionLink: "text-primary hover:text-primary/90 font-medium",
@@ -119,7 +124,6 @@ const clerkAppearance = {
     alertText: "text-destructive",
     logoBox: "h-12 flex justify-center",
     logoImage: "h-full w-auto object-contain",
-    socialButtonsBlockButton: "border border-border rounded-none bg-background hover:bg-muted text-foreground transition-colors",
     formButtonPrimary: "bg-primary text-primary-foreground hover:bg-primary/90 rounded-none font-medium h-10",
     formFieldInput: "border border-input bg-background rounded-none focus:ring-1 focus:ring-ring text-foreground px-3 py-2",
     footerAction: "justify-center mt-4",
@@ -321,6 +325,7 @@ function ClerkProviderWithRoutes() {
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-in`}
       localization={esES}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
