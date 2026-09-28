@@ -1,4 +1,10 @@
-import { sendReceiptEmail } from "../../order-email-transport.mjs";
+import {
+  emailFromAddress,
+  emailReplyTo,
+  sendReceiptEmail,
+  smtpConfigured,
+} from "../../order-email-transport.mjs";
+import { getMailboxCatalog, loadStoredMailboxes, mailboxSendConfig } from "./mailboxes";
 import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import {
@@ -17,13 +23,19 @@ import { buildOrderEmail } from "../../order-receipt.mjs";
 import { logger } from "./logger";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-export function emailConfigured() {
+export async function emailConfigured() {
   const origin = process.env.PUBLIC_APP_URL;
-  return !!(
-    process.env.RESEND_API_KEY &&
-    process.env.ORDER_EMAIL_FROM &&
-    origin &&
-    /^https?:\/\//.test(origin)
+  if (!origin || !/^https?:\/\//.test(origin)) return false;
+  try {
+    if ((await getMailboxCatalog()).ready) return true;
+  } catch {
+    // Mailboxes table may be missing before the migration.
+  }
+  return Boolean(
+    (smtpConfigured() || process.env.RESEND_API_KEY) &&
+      emailFromAddress("customer") &&
+      emailFromAddress("branch") &&
+      emailReplyTo("customer"),
   );
 }
 async function branchRecipient(connection: Tx | typeof db, branchId: number) {
@@ -86,6 +98,7 @@ export async function orderEmailStatus(orderId: string) {
     })
     .from(orderEmailJobsTable)
     .where(eq(orderEmailJobsTable.orderId, orderId));
+  const configured = await emailConfigured();
   const status = (audience: string) => {
     const job = jobs.find((j) => j.audience === audience);
     if (!job) return { status: "not_scheduled", sentAt: null };
@@ -97,7 +110,7 @@ export async function orderEmailStatus(orderId: string) {
             ? "failed"
             : !job.recipient
               ? "missing_recipient"
-              : !emailConfigured()
+              : !configured
                 ? "not_configured"
                 : "pending",
       sentAt: job.sentAt,
@@ -107,13 +120,13 @@ export async function orderEmailStatus(orderId: string) {
 }
 let running = false;
 export async function processOrderEmails() {
-  if (running || !emailConfigured()) return;
+  if (running || !(await emailConfigured())) return;
   running = true;
   try {
     await pool.query(
       "UPDATE order_email_jobs SET status = 'failed', last_error = 'REVIEW_UNCERTAIN_SEND' WHERE status = 'sending' AND attempts >= 6 AND next_attempt_at <= now()",
     );
-    // Do not repeat uncertain sends outside the provider's 24-hour idempotency window.
+    // Do not keep retrying uncertain sends after a day; Hostinger SMTP does not dedupe.
     await pool.query(
       "UPDATE order_email_jobs SET status = 'failed', last_error = 'REVIEW_UNCERTAIN_SEND' WHERE status IN ('pending', 'sending') AND attempts > 0 AND first_attempt_at < now() - interval '23 hours'",
     );
@@ -136,15 +149,19 @@ export async function processOrderEmails() {
           continue;
         }
         let payload = job.send_payload;
+        const storedMailboxes = await loadStoredMailboxes();
+        const mailbox = mailboxSendConfig(job.audience, storedMailboxes);
         if (!payload) {
           const origin = process.env.PUBLIC_APP_URL!.replace(/\/$/, "");
           const orderUrl =
             job.audience === "branch"
               ? `${origin}/admin/pedidos/${encodeURIComponent(job.order_id)}`
               : `${origin}/pedido/${encodeURIComponent(job.order_id)}/${encodeURIComponent(job.payload.guestAccessToken)}`;
+          const replyTo = mailbox?.replyTo || emailReplyTo(job.audience);
           payload = {
-            from: process.env.ORDER_EMAIL_FROM,
+            from: mailbox?.from || emailFromAddress(job.audience),
             to: [recipient],
+            ...(replyTo ? { reply_to: replyTo } : {}),
             ...(await buildOrderEmail(
               job.payload.receipt,
               job.audience,
@@ -163,6 +180,9 @@ export async function processOrderEmails() {
         attempted = true;
         const providerId = await sendReceiptEmail(payload, job.id, {
           apiKey: process.env.RESEND_API_KEY,
+          env: process.env,
+          audience: job.audience,
+          mailbox,
         });
         await pool.query(
           "UPDATE order_email_jobs SET status = 'sent', sent_at = now(), provider_id = $2, last_error = NULL WHERE id = $1",

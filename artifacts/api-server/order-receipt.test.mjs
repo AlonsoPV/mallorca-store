@@ -146,7 +146,83 @@ test("receipt excludes private fields, renders valid PDFs and escapes email cont
   writeFileSync("tmp/pdfs/comprobante-mallorca-multipagina.pdf", many);
 });
 
-test("email transport preserves idempotency keys on retry and rejects failed sends", async () => {
+test("Hostinger SMTP requires separate pedidos and sucursal mailboxes", async () => {
+  const {
+    HOSTINGER_SMTP_HOST,
+    emailFromAddress,
+    emailReplyTo,
+    sendReceiptEmail,
+    smtpConfigured,
+    smtpTransportOptions,
+  } = await import("./order-email-transport.mjs");
+  const env = {
+    SMTP_PEDIDOS_USER: "pedidos@pasteleriamallorca.mx",
+    SMTP_PEDIDOS_PASS: "secret-pedidos",
+    SMTP_SUCURSAL_USER: "sucursal@pasteleriamallorca.mx",
+    SMTP_SUCURSAL_PASS: "secret-sucursal",
+    ORDER_EMAIL_FROM: "Mallorca <pedidos@pasteleriamallorca.mx>",
+    ORDER_EMAIL_FROM_BRANCH: "Mallorca Sucursal <sucursal@pasteleriamallorca.mx>",
+    ORDER_EMAIL_REPLY_TO: "Mallorca <contacto@pasteleriamallorca.mx>",
+  };
+  assert.equal(smtpConfigured(env), true);
+  assert.equal(smtpConfigured({ SMTP_PEDIDOS_USER: "pedidos@x.com", SMTP_PEDIDOS_PASS: "x" }), false);
+  assert.equal(smtpConfigured({}), false);
+  assert.deepEqual(smtpTransportOptions(env, "customer").auth, {
+    user: "pedidos@pasteleriamallorca.mx",
+    pass: "secret-pedidos",
+  });
+  assert.deepEqual(smtpTransportOptions(env, "branch").auth, {
+    user: "sucursal@pasteleriamallorca.mx",
+    pass: "secret-sucursal",
+  });
+  assert.equal(smtpTransportOptions(env, "customer").host, HOSTINGER_SMTP_HOST);
+  assert.equal(emailFromAddress("customer", env), "Mallorca <pedidos@pasteleriamallorca.mx>");
+  assert.equal(
+    emailFromAddress("branch", env),
+    "Mallorca Sucursal <sucursal@pasteleriamallorca.mx>",
+  );
+  assert.equal(emailReplyTo("customer", env), "Mallorca <contacto@pasteleriamallorca.mx>");
+
+  const sent = [];
+  const payload = {
+    from: emailFromAddress("branch", env),
+    to: ["gerente@example.com"],
+    subject: "Nuevo pedido",
+    html: "<p>Hola</p>",
+    attachments: [{ filename: "c.pdf", content: "AAA=", content_type: "application/pdf" }],
+  };
+  const id = await sendReceiptEmail(payload, "job-smtp", {
+    env,
+    audience: "branch",
+    transporter: {
+      sendMail: async (message) => {
+        sent.push(message);
+        return { messageId: "<job-smtp@smtp.hostinger.com>" };
+      },
+    },
+  });
+  assert.equal(id, "<job-smtp@smtp.hostinger.com>");
+  assert.equal(sent[0].from, payload.from);
+  assert.equal(sent[0].messageId, "<order-receipt.job-smtp@hostinger>");
+  assert.equal(sent[0].attachments[0].contentType, "application/pdf");
+  assert.equal(sent[0].attachments[0].encoding, "base64");
+  await assert.rejects(
+    sendReceiptEmail(payload, "job-smtp", {
+      env,
+      audience: "branch",
+      transporter: {
+        sendMail: async () => {
+          const error = new Error("Invalid login");
+          error.code = "EAUTH";
+          throw error;
+        },
+      },
+    }),
+    /EMAIL_PROVIDER_AUTH/,
+  );
+});
+
+test("email transport preserves Resend idempotency keys on retry and rejects failed sends", async () => {
   const { sendReceiptEmail } = await import("./order-email-transport.mjs");
   const requests = [];
   const fetcher = async (url, options) => {
@@ -154,11 +230,9 @@ test("email transport preserves idempotency keys on retry and rejects failed sen
     return { ok: true, json: async () => ({ id: "provider-test" }) };
   };
   const payload = { to: ["cliente@example.com"], subject: "Comprobante" };
-  assert.equal(
-    await sendReceiptEmail(payload, "job-1", { apiKey: "test-key", fetcher }),
-    "provider-test",
-  );
-  await sendReceiptEmail(payload, "job-1", { apiKey: "test-key", fetcher });
+  const resend = { env: {}, apiKey: "test-key", fetcher };
+  assert.equal(await sendReceiptEmail(payload, "job-1", resend), "provider-test");
+  await sendReceiptEmail(payload, "job-1", resend);
   assert.equal(
     requests[0].headers["Idempotency-Key"],
     requests[1].headers["Idempotency-Key"],
@@ -166,13 +240,14 @@ test("email transport preserves idempotency keys on retry and rejects failed sen
   assert.equal(requests[0].body, requests[1].body);
   await assert.rejects(
     sendReceiptEmail(payload, "job-1", {
+      env: {},
       apiKey: "test-key",
       fetcher: async () => ({ ok: false, status: 503 }),
     }),
     /EMAIL_PROVIDER_HTTP_503/,
   );
   await assert.rejects(
-    sendReceiptEmail(payload, "job-1", {}),
+    sendReceiptEmail(payload, "job-1", { env: {} }),
     /NOT_CONFIGURED/,
   );
 });

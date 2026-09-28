@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgTable,
   text,
   integer,
@@ -38,3 +39,19 @@ export const orderEmailJobsTable = pgTable(
     ),
   ],
 );
+
+export const mailboxesTable = pgTable("mailboxes", {
+  role: text("role").primaryKey(),
+  address: text("address").notNull().default(""),
+  displayName: text("display_name"),
+  smtpUser: text("smtp_user"),
+  passwordEncrypted: text("password_encrypted"),
+  smtpHost: text("smtp_host").notNull().default("smtp.hostinger.com"),
+  smtpPort: integer("smtp_port").notNull().default(465),
+  smtpSecure: boolean("smtp_secure").notNull().default(true),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});

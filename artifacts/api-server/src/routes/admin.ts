@@ -96,6 +96,8 @@ import {
   setOnlineProviderConfigured,
 } from "../lib/payments";
 import { fulfillmentSchedule, isValidSlotTime, mexicoDate } from "../lib/fulfillment-schedule";
+import { getMailboxCatalog, upsertMailbox } from "../lib/mailboxes";
+import { isMailboxRole, parseMailboxUpdate } from "../../mailbox-config.mjs";
 import {
   calculatePromotionPrice,
   getAdminProductDetail,
@@ -1279,6 +1281,30 @@ router.put("/admin/payment-providers/:provider", async (req, res): Promise<void>
       .where(eq(paymentMethodConfigsTable.provider, provider));
   }
   res.json(UpdateAdminPaymentProviderResponse.parse(await paymentProviderPayload(provider)));
+});
+
+router.get("/admin/mailboxes", async (req, res): Promise<void> => {
+  const user = await getRequestUser(req);
+  if (!user || user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+  try {
+    res.json(await getMailboxCatalog());
+  } catch {
+    res.status(503).json({ error: "Aplica la migración de buzones (007_mailboxes.sql)." });
+  }
+});
+
+router.put("/admin/mailboxes/:role", async (req, res): Promise<void> => {
+  const user = await getRequestUser(req);
+  if (!user || user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+  const role = String(req.params.role || "");
+  if (!isMailboxRole(role)) { res.status(404).json({ error: "Unknown mailbox" }); return; }
+  const parsed = parseMailboxUpdate(req.body);
+  if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+  try {
+    res.json(await upsertMailbox(role, parsed.data));
+  } catch {
+    res.status(503).json({ error: "Aplica la migración de buzones (007_mailboxes.sql)." });
+  }
 });
 
 router.get("/admin/orders/:id", async (req, res): Promise<void> => {

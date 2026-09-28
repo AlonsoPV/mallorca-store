@@ -4,6 +4,7 @@ import { receiptSnapshot } from "../../lib/purchase-result.mjs";
 import { previewOrderEmails, previewEmailStatus } from "./local-order-emails.mjs";
 import { exportLocalProducts, previewLocalProducts, importLocalProducts } from "./local-product-transfer.mjs";
 import { handleRoleAccess } from "./local-role-access.mjs";
+import { catalogMailboxes, isMailboxRole, parseMailboxUpdate } from "./mailbox-config.mjs";
 /**
  * Lightweight local API mock for Windows/dev without Postgres.
  * Serves the storefront + local-dev auth endpoints the Vite app expects on :8080.
@@ -911,6 +912,16 @@ const paymentProviders = {
   MERCADO_PAGO: blankProvider("MERCADO_PAGO"),
   PAYPAL: blankProvider("PAYPAL"),
 };
+
+const storedMailboxes = new Map();
+
+function encryptMailboxSecret(plain) {
+  return `v1:${Buffer.from(String(plain), "utf8").toString("base64")}`;
+}
+
+function mailboxCatalog() {
+  return catalogMailboxes([...storedMailboxes.values()]);
+}
 
 function send(res, status, body) {
   const payload = body === undefined ? "" : JSON.stringify(body);
@@ -2184,6 +2195,44 @@ const server = http.createServer(async (req, res) => {
         .catch(() => send(res, 400, { error: "Invalid body" }));
       return;
     }
+  }
+
+  if (req.method === "GET" && path === "/api/admin/mailboxes") {
+    send(res, 200, mailboxCatalog());
+    return;
+  }
+
+  const mailboxMatch = path.match(/^\/api\/admin\/mailboxes\/([^/]+)$/);
+  if (mailboxMatch && req.method === "PUT") {
+    const role = decodeURIComponent(mailboxMatch[1]);
+    if (!isMailboxRole(role)) {
+      send(res, 404, { error: "Unknown mailbox" });
+      return;
+    }
+    readJson(req)
+      .then((body) => {
+        const parsed = parseMailboxUpdate(body);
+        if (!parsed.ok) {
+          send(res, 400, { error: parsed.error });
+          return;
+        }
+        const existing = storedMailboxes.get(role) || { role };
+        storedMailboxes.set(role, {
+          role,
+          address: parsed.data.address,
+          displayName: parsed.data.displayName,
+          smtpUser: parsed.data.smtpUser,
+          smtpHost: parsed.data.smtpHost,
+          smtpPort: parsed.data.smtpPort,
+          smtpSecure: parsed.data.smtpSecure,
+          passwordEncrypted: parsed.data.password
+            ? encryptMailboxSecret(parsed.data.password)
+            : existing.passwordEncrypted || null,
+        });
+        send(res, 200, mailboxCatalog());
+      })
+      .catch(() => send(res, 400, { error: "Invalid body" }));
+    return;
   }
 
   const orderPaymentMatch = path.match(/^\/api\/admin\/orders\/([^/]+)\/payment$/);

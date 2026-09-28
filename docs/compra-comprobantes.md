@@ -16,22 +16,40 @@ Son comunicaciones transaccionales de compra, independientes de las preferencias
 ## Configuración necesaria antes del despliegue
 
 1. Aplicar `lib/db/src/scripts/order-emails.sql` en PostgreSQL antes de iniciar esta versión de la API. La cola es parte de la transacción de compra; sin esta migración, no se deben activar estos cambios en producción.
-2. Configurar en el servidor (nunca en variables VITE):
+2. Crear **tres cuentas** en Hostinger (hPanel → Emails → Email Accounts). Luego, en **Admin → Correos**, pega cada buzón:
+
+- `pedidos@` envía el comprobante al cliente (con contraseña SMTP).
+- `sucursal@` avisa al responsable de la sucursal (con contraseña SMTP, distinto al de pedidos).
+- `contacto@` es la dirección de respuesta del cliente (no hace falta su contraseña SMTP).
+
+La app guarda las contraseñas cifradas y las usa al enviar. Si aún no hay buzones en la app, el servidor puede usar estas variables (nunca `VITE_`):
 
 ```
-RESEND_API_KEY=<clave del proveedor>
-ORDER_EMAIL_FROM=Mallorca <pedidos@tu-dominio-verificado>
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_PEDIDOS_USER=pedidos@tu-dominio
+SMTP_PEDIDOS_PASS=<contraseña>
+SMTP_SUCURSAL_USER=sucursal@tu-dominio
+SMTP_SUCURSAL_PASS=<contraseña>
+ORDER_EMAIL_FROM=Mallorca <pedidos@tu-dominio>
+ORDER_EMAIL_FROM_BRANCH=Mallorca Sucursal <sucursal@tu-dominio>
+ORDER_EMAIL_REPLY_TO=Mallorca <contacto@tu-dominio>
 PUBLIC_APP_URL=https://tu-tienda
 ```
 
-3. Verificar el dominio/remitente en Resend y asignar responsables activos con correo a las sucursales.
+Cada buzón de envío autentica con su propio usuario y contraseña. El remitente debe coincidir con ese buzón. Puerto 465 con SSL; si Hostinger pide STARTTLS, usa puerto 587 y SSL desactivado. En producción aplica también `lib/db/migrations/007_mailboxes.sql`.
+
+Sin los dos buzones de envío, el sistema no considera el correo configurado.
+
+3. Asignar responsables activos con correo a las sucursales.
 4. Reiniciar el backend. El trabajador procesa la cola al arrancar, después de crear un pedido y cada 30 segundos.
 
-La clave no está incluida en el repositorio. No se enviaron correos reales durante las pruebas. Sin configuración, la interfaz informa que el correo no está disponible; no muestra un envío exitoso ficticio.
+La contraseña del buzón no está incluida en el repositorio. El mock local nunca envía correos reales. Sin SMTP (ni Resend de respaldo), la interfaz informa que el correo no está disponible; no muestra un envío exitoso ficticio.
 
 ## Entrega y reintentos
 
-La cola evita duplicados por pedido y destinatario lógico (cliente/sucursal). Cada mensaje conserva el contenido y la clave de idempotencia entre reintentos. Hay seis intentos con espera creciente y bloqueo de trabajos concurrentes. Los envíos inciertos mayores a 23 horas se dejan para revisión manual, dentro del margen del periodo de idempotencia del proveedor. `sent` significa que Resend aceptó el mensaje, no que el destinatario lo haya abierto o que se haya confirmado su entrega en bandeja.
+La cola evita duplicados por pedido y destinatario lógico (cliente/sucursal). Cada mensaje conserva el contenido entre reintentos. Hay seis intentos con espera creciente y bloqueo de trabajos concurrentes. Los envíos inciertos mayores a 23 horas se dejan para revisión manual. `sent` significa que Hostinger aceptó el mensaje por SMTP, no que el destinatario lo haya abierto o que se haya confirmado su entrega en bandeja.
 
 Las filas `failed` requieren revisión operativa de `last_error`. No se reenvían automáticamente después de agotarse los intentos. Las notas internas y de producción se excluyen del comprobante. El PDF por correo conserva el estado al registrar la compra; la descarga desde la pantalla refleja el estado vigente del pedido.
 

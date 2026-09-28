@@ -13,7 +13,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "dev:mock": "node ./local-mock-server.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:receipts": "node --test order-receipt.test.mjs"
+    "test:receipts": "node --test order-receipt.test.mjs mailbox-config.test.mjs"
   },
   "dependencies": {
     "@clerk/express": "^2.1.67",
@@ -27,6 +27,7 @@
     "express": "^5.2.1",
     "google-auth-library": "^10.4.1",
     "http-proxy-middleware": "^4.2.0",
+    "nodemailer": "^7.0.6",
     "pdfkit": "^0.20.2",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",

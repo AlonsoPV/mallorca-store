@@ -29,9 +29,12 @@ test("policy validates every role and module, protects admin, and denies unknown
 test("page and API permissions cover imports, assignments and payment operations", () => {
   assert.equal(pageModule("/admin/productos/3"), "products");
   assert.equal(pageModule("/admin/agenda"), "orders");
+  assert.equal(pageModule("/admin/correos"), "roles");
   assert.deepEqual(apiModules("/api/admin/products/import", "POST"), ["products"]);
   assert.deepEqual(apiModules("/api/admin/branches/1/assignments", "PUT"), ["users"]);
   assert.deepEqual(apiModules("/api/admin/payment-providers/mp", "PUT"), ["payments"]);
+  assert.deepEqual(apiModules("/api/admin/mailboxes", "GET"), ["roles"]);
+  assert.deepEqual(apiModules("/api/admin/mailboxes/customer", "PUT"), ["roles"]);
   assert.deepEqual(apiModules("/api/admin/new-unknown-module", "GET"), []);
 });
 test("persisted edits enforce denials, prevent escalation and reject stale saves", async () => {
