@@ -1,10 +1,11 @@
-import crypto from "node:crypto";
 import { buildReceiptPdf, receiptFilename } from "./order-receipt.mjs";
 import { receiptSnapshot } from "../../lib/purchase-result.mjs";
 import { previewOrderEmails, previewEmailStatus } from "./local-order-emails.mjs";
 import { exportLocalProducts, previewLocalProducts, importLocalProducts } from "./local-product-transfer.mjs";
 import { handleRoleAccess } from "./local-role-access.mjs";
 import { catalogMailboxes, isMailboxRole, parseMailboxUpdate } from "./mailbox-config.mjs";
+import { createHash, randomBytes } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
 /**
  * Lightweight local API mock for Windows/dev without Postgres.
  * Serves the storefront + local-dev auth endpoints the Vite app expects on :8080.
@@ -499,6 +500,29 @@ const mockUsers = [
     role: "branch_manager",
   },
 ];
+
+const passwordResetTokens = new Map();
+
+function hashMockResetToken(token) {
+  return createHash("sha256").update(String(token)).digest("hex");
+}
+
+async function previewPasswordResetEmail(user, resetUrl) {
+  const directory = new URL("../../.local/password-reset-previews/", import.meta.url);
+  await mkdir(directory, { recursive: true });
+  const id = user.id.replace(/[^a-z0-9_-]+/gi, "_");
+  await writeFile(
+    fileURLToPath(new URL(`${id}.html`, directory)),
+    `<p>Hola ${user.firstName || user.username || user.email},</p><p><a href="${resetUrl}">Restablecer contraseña</a></p>`,
+    "utf8",
+  );
+  await writeFile(
+    fileURLToPath(new URL(`${id}.json`, directory)),
+    JSON.stringify({ email: user.email, resetUrl, at: new Date().toISOString() }, null, 2),
+    "utf8",
+  );
+  console.log(`[local-mock-api] password reset preview → .local/password-reset-previews/${id}.html`);
+}
 
 /** @type {Array<{ id: number, branchId: number, userId: string, role: string, isPrimary: boolean, active: boolean }>} */
 let branchAssignments = [
@@ -1408,7 +1432,7 @@ const server = http.createServer(async (req, res) => {
         const order = {
           id,
           orderNumber: `M-MOCK${String(orders.length + 1).padStart(3, "0")}`,
-          guestAccessToken: crypto.randomBytes(24).toString("hex"),
+          guestAccessToken: randomBytes(24).toString("hex"),
           userId: req.headers.authorization === "Bearer local-dev" ? localUser.id : null,
           status: cashPickup ? "confirmed" : "pending_payment",
           paymentStatus: "unpaid",
@@ -1523,6 +1547,69 @@ const server = http.createServer(async (req, res) => {
           token: `local-dev:${user.id}`,
           user: serializeMockUser(user),
         });
+      })
+      .catch(() => send(res, 400, { error: "Invalid body" }));
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/auth/password-reset/request") {
+    readJson(req)
+      .then(async (body) => {
+        const identifier = String(body?.identifier || "").trim().toLowerCase();
+        const message =
+          "Si el usuario existe, enviamos un correo con el enlace para restablecer la contraseña.";
+        if (!identifier) {
+          send(res, 400, { error: "Escribe tu usuario o correo." });
+          return;
+        }
+        const user = mockUsers.find(
+          (u) =>
+            u.role !== "customer" &&
+            (u.username?.toLowerCase() === identifier || u.email.toLowerCase() === identifier),
+        );
+        if (user) {
+          const token = randomBytes(24).toString("hex");
+          passwordResetTokens.set(hashMockResetToken(token), {
+            userId: user.id,
+            expiresAt: Date.now() + 60 * 60 * 1000,
+          });
+          const origin = process.env.PUBLIC_APP_URL || "http://127.0.0.1:5190";
+          const resetUrl = `${origin.replace(/\/$/, "")}/recuperar-contrasena/${token}`;
+          await previewPasswordResetEmail(user, resetUrl);
+        }
+        send(res, 200, { ok: true, message });
+      })
+      .catch(() => send(res, 400, { error: "Invalid body" }));
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/auth/password-reset/confirm") {
+    readJson(req)
+      .then((body) => {
+        const token = String(body?.token || "").trim();
+        const password = String(body?.password || "");
+        if (!token) {
+          send(res, 400, { error: "Enlace inválido." });
+          return;
+        }
+        if (password.trim().length < 8) {
+          send(res, 400, { error: "La contraseña debe tener al menos 8 caracteres." });
+          return;
+        }
+        const key = hashMockResetToken(token);
+        const row = passwordResetTokens.get(key);
+        if (!row || row.expiresAt < Date.now()) {
+          send(res, 400, { error: "El enlace caducó o ya se usó. Solicita uno nuevo." });
+          return;
+        }
+        const user = mockUsers.find((u) => u.id === row.userId);
+        if (!user || user.role === "customer") {
+          send(res, 400, { error: "Usuario no válido." });
+          return;
+        }
+        user.password = password.trim();
+        passwordResetTokens.delete(key);
+        send(res, 200, { ok: true });
       })
       .catch(() => send(res, 400, { error: "Invalid body" }));
     return;

@@ -25,6 +25,7 @@ import Branches from '@/pages/branches';
 import BranchDetail from '@/pages/branch-detail';
 import SignInPage from '@/pages/sign-in';
 import SignUpPage from '@/pages/sign-up';
+import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/forgot-password';
 import Cart from '@/pages/cart';
 import Checkout from '@/pages/checkout';
 import OrderDetails from '@/pages/order-details';
@@ -227,6 +228,8 @@ function AppRoutes() {
 
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
+      <Route path="/recuperar-contrasena" component={ForgotPasswordPage} />
+      <Route path="/recuperar-contrasena/:token" component={ResetPasswordPage} />
 
       <Route path="/admin">
         <AdminGuard><AdminDashboard /></AdminGuard>

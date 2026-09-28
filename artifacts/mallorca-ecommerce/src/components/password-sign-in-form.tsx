@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { Link } from "wouter";
 import { SignInCaptcha } from "@/components/sign-in-captcha";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -151,9 +152,17 @@ export function PasswordSignInForm({ onAuthenticate }: PasswordSignInFormProps) 
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="sign-in-password" className="text-sm font-semibold">
-          Contraseña
-        </Label>
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="sign-in-password" className="text-sm font-semibold">
+            Contraseña
+          </Label>
+          <Link
+            href="/recuperar-contrasena"
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
         <div className="flex h-11 items-center border border-input bg-background">
           <Input
             id="sign-in-password"

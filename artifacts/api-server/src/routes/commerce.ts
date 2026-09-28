@@ -31,6 +31,7 @@ import { buildBranchPreviewItems } from "../lib/branch-preview";
 import { getRequestUser, requireAuth } from "../middlewares/auth";
 import { findUserByIdentifier } from "../lib/admin-users";
 import { verifyPassword } from "../lib/password";
+import { confirmPasswordReset, requestPasswordReset } from "../lib/password-reset";
 import crypto from "node:crypto";
 import { applyInventoryAlert } from "../lib/inventory-alerts";
 import { validateDeliveryCoverage } from "../lib/delivery-validation";
@@ -620,6 +621,29 @@ router.post("/auth/local-login", async (req, res): Promise<void> => {
     },
   });
 });
+
+router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
+  const identifier = String(req.body?.identifier ?? "").trim();
+  if (!identifier) {
+    res.status(400).json({ error: "Escribe tu usuario o correo." });
+    return;
+  }
+  const result = await requestPasswordReset(identifier);
+  res.json(result);
+});
+
+router.post("/auth/password-reset/confirm", async (req, res): Promise<void> => {
+  const result = await confirmPasswordReset({
+    token: String(req.body?.token ?? ""),
+    password: String(req.body?.password ?? ""),
+  });
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true });
+});
+
 router.get("/me", requireAuth, async (req, res): Promise<void> => { const u = await getRequestUser(req); res.json(GetMeResponse.parse(u)); });
 router.patch("/me", requireAuth, async (req, res): Promise<void> => { const b = UpdateMeBody.safeParse(req.body); if (!b.success) { res.status(400).json({ error: b.error.message }); return; } const u = await getRequestUser(req); const [updated] = await db.update(usersTable).set(b.data).where(eq(usersTable.id, u!.id)).returning(); res.json(UpdateMeResponse.parse(updated)); });
 router.get("/me/orders", requireAuth, async (req, res): Promise<void> => {

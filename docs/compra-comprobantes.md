@@ -42,6 +42,8 @@ Cada buzón de envío autentica con su propio usuario y contraseña. El remitent
 
 Sin los dos buzones de envío, el sistema no considera el correo configurado.
 
+La recuperación de contraseña del personal (`/recuperar-contrasena`) usa el buzón de pedidos (o SMTP de entorno) y exige `PUBLIC_APP_URL` para armar el enlace. Aplica también `lib/db/migrations/008_password_reset_tokens.sql` (o `pnpm --filter @workspace/db run push`).
+
 3. Asignar responsables activos con correo a las sucursales.
 4. Reiniciar el backend. El trabajador procesa la cola al arrancar, después de crear un pedido y cada 30 segundos.
 
