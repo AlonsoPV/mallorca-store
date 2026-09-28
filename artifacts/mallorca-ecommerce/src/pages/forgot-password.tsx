@@ -77,7 +77,7 @@ export function ForgotPasswordPage() {
         <div className="space-y-1">
           <h1 className="font-serif text-2xl font-bold text-foreground">Recuperar contraseña</h1>
           <p className="text-sm text-muted-foreground">
-            Te enviamos un enlace a tu correo de Hostinger / cuenta registrada.
+            Te enviaremos un enlace al correo asociado con tu cuenta.
           </p>
         </div>
 
@@ -154,6 +154,8 @@ export function ResetPasswordPage() {
       setError(result.error);
       return;
     }
+    setPassword("");
+    setConfirm("");
     setDone(true);
   }
 

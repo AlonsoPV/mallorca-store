@@ -19,6 +19,7 @@ import {
   GetOrderDetailsParams, GetOrderDetailsResponse, GetGuestOrderDetailsParams,
   GetGuestOrderDetailsResponse, GetMeResponse, UpdateMeBody, UpdateMeResponse,
   ListMyOrdersResponse, ListCheckoutPaymentMethodsQueryParams, ListCheckoutPaymentMethodsResponse,
+  RequestPasswordResetBody, ConfirmPasswordResetBody,
   type Cart as CartShape,
 } from "@workspace/api-zod";
 import {
@@ -623,19 +624,28 @@ router.post("/auth/local-login", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
-  const identifier = String(req.body?.identifier ?? "").trim();
-  if (!identifier) {
+  const body = RequestPasswordResetBody.safeParse(req.body);
+  if (!body.success || !body.data.identifier.trim()) {
     res.status(400).json({ error: "Escribe tu usuario o correo." });
     return;
   }
-  const result = await requestPasswordReset(identifier);
+  const result = await requestPasswordReset(body.data.identifier);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
   res.json(result);
 });
 
 router.post("/auth/password-reset/confirm", async (req, res): Promise<void> => {
+  const body = ConfirmPasswordResetBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Enlace o contraseña no válidos." });
+    return;
+  }
   const result = await confirmPasswordReset({
-    token: String(req.body?.token ?? ""),
-    password: String(req.body?.password ?? ""),
+    token: body.data.token,
+    password: body.data.password,
   });
   if (!result.ok) {
     res.status(result.status).json({ error: result.error });

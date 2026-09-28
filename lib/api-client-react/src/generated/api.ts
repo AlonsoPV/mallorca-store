@@ -89,8 +89,13 @@ import type {
   ListInventoryMovements200Item,
   ListProductsParams,
   Order,
+  OrderConfirmation,
   OrderInput,
   OrderSummary,
+  PasswordResetConfirmationInput,
+  PasswordResetConfirmationResult,
+  PasswordResetRequestInput,
+  PasswordResetRequestResult,
   PaymentLinkResponse,
   PaymentMethodConfig,
   PaymentMethodConfigUpdate,
@@ -316,6 +321,183 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getRequestPasswordResetUrl = () => {
+
+
+
+
+  return `/api/auth/password-reset/request`
+}
+
+/**
+ * Always gives the same success response for valid identifiers, whether or not an account exists.
+ * @summary Request a one-time password reset link
+ */
+export const requestPasswordReset = async (passwordResetRequestInput: PasswordResetRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<PasswordResetRequestResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PasswordResetRequestResult>(getRequestPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(passwordResetRequestInput)
+  }
+);}
+
+
+
+
+
+export const getRequestPasswordResetMutationKey = () => ['requestPasswordReset'] as const;
+
+export const getRequestPasswordResetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPasswordReset>>, TError,RequestPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestPasswordReset>>, TError,RequestPasswordResetMutationVariables, TContext> => {
+
+const mutationKey = getRequestPasswordResetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestPasswordReset>>, RequestPasswordResetMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestPasswordReset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestPasswordResetMutationResult = NonNullable<Awaited<ReturnType<typeof requestPasswordReset>>>
+    export type RequestPasswordResetMutationBody = BodyType<PasswordResetRequestInput>
+    export type RequestPasswordResetMutationError = ErrorType<ErrorResponse>
+    export type RequestPasswordResetMutationVariables = {data: BodyType<PasswordResetRequestInput>}
+
+    /**
+ * @summary Request a one-time password reset link
+ */
+export const useRequestPasswordReset = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPasswordReset>>, TError,RequestPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestPasswordReset>>,
+        TError,
+        RequestPasswordResetMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestPasswordResetMutationOptions(options));
+    }
+
+export const getConfirmPasswordResetUrl = () => {
+
+
+
+
+  return `/api/auth/password-reset/confirm`
+}
+
+/**
+ * @summary Set a new password using a valid one-time token
+ */
+export const confirmPasswordReset = async (passwordResetConfirmationInput: PasswordResetConfirmationInput, options?: Parameters<typeof customFetch>[1]): Promise<PasswordResetConfirmationResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PasswordResetConfirmationResult>(getConfirmPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(passwordResetConfirmationInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmPasswordResetMutationKey = () => ['confirmPasswordReset'] as const;
+
+export const getConfirmPasswordResetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmPasswordReset>>, TError,ConfirmPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmPasswordReset>>, TError,ConfirmPasswordResetMutationVariables, TContext> => {
+
+const mutationKey = getConfirmPasswordResetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmPasswordReset>>, ConfirmPasswordResetMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmPasswordReset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmPasswordResetMutationResult = NonNullable<Awaited<ReturnType<typeof confirmPasswordReset>>>
+    export type ConfirmPasswordResetMutationBody = BodyType<PasswordResetConfirmationInput>
+    export type ConfirmPasswordResetMutationError = ErrorType<ErrorResponse>
+    export type ConfirmPasswordResetMutationVariables = {data: BodyType<PasswordResetConfirmationInput>}
+
+    /**
+ * @summary Set a new password using a valid one-time token
+ */
+export const useConfirmPasswordReset = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmPasswordReset>>, TError,ConfirmPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmPasswordReset>>,
+        TError,
+        ConfirmPasswordResetMutationVariables,
+        TContext
+      > => {
+      return useMutation(getConfirmPasswordResetMutationOptions(options));
+    }
 
 export const getListBranchesUrl = () => {
 
@@ -2669,6 +2851,312 @@ export function useGetGuestOrderDetails<TData = Awaited<ReturnType<typeof getGue
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetGuestOrderDetailsQueryOptions(id,token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetOrderReceiptUrl = (id: string,) => {
+
+
+
+
+  return `/api/orders/${id}/receipt.pdf`
+}
+
+/**
+ * Requires the authenticated order owner.
+ */
+export const getOrderReceipt = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetOrderReceiptUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOrderReceiptQueryKey = (id: string,) => {
+    return [
+    `/api/orders/${id}/receipt.pdf`
+    ] as const;
+    }
+
+
+export const getGetOrderReceiptQueryOptions = <TData = Awaited<ReturnType<typeof getOrderReceipt>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderReceipt>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOrderReceiptQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrderReceipt>>> = ({ signal }) => getOrderReceipt(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOrderReceipt>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOrderReceiptQueryResult = NonNullable<Awaited<ReturnType<typeof getOrderReceipt>>>
+export type GetOrderReceiptQueryError = ErrorType<void>
+
+
+
+export function useGetOrderReceipt<TData = Awaited<ReturnType<typeof getOrderReceipt>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderReceipt>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOrderReceiptQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetOrderConfirmationUrl = (id: string,) => {
+
+
+
+
+  return `/api/orders/${id}/confirmation`
+}
+
+/**
+ * Requires the authenticated order owner.
+ */
+export const getOrderConfirmation = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<OrderConfirmation> => {
+
+  return customFetch<OrderConfirmation>(getGetOrderConfirmationUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOrderConfirmationQueryKey = (id: string,) => {
+    return [
+    `/api/orders/${id}/confirmation`
+    ] as const;
+    }
+
+
+export const getGetOrderConfirmationQueryOptions = <TData = Awaited<ReturnType<typeof getOrderConfirmation>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderConfirmation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOrderConfirmationQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrderConfirmation>>> = ({ signal }) => getOrderConfirmation(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOrderConfirmation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOrderConfirmationQueryResult = NonNullable<Awaited<ReturnType<typeof getOrderConfirmation>>>
+export type GetOrderConfirmationQueryError = ErrorType<void>
+
+
+
+export function useGetOrderConfirmation<TData = Awaited<ReturnType<typeof getOrderConfirmation>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderConfirmation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOrderConfirmationQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetGuestOrderReceiptUrl = (id: string,
+    token: string,) => {
+
+
+
+
+  return `/api/guest/orders/${id}/${token}/receipt.pdf`
+}
+
+/**
+ * Requires the private guest token.
+ */
+export const getGuestOrderReceipt = async (id: string,
+    token: string, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetGuestOrderReceiptUrl(id,token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGuestOrderReceiptQueryKey = (id: string,
+    token: string,) => {
+    return [
+    `/api/guest/orders/${id}/${token}/receipt.pdf`
+    ] as const;
+    }
+
+
+export const getGetGuestOrderReceiptQueryOptions = <TData = Awaited<ReturnType<typeof getGuestOrderReceipt>>, TError = ErrorType<void>>(id: string,
+    token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGuestOrderReceipt>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGuestOrderReceiptQueryKey(id,token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGuestOrderReceipt>>> = ({ signal }) => getGuestOrderReceipt(id,token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGuestOrderReceipt>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGuestOrderReceiptQueryResult = NonNullable<Awaited<ReturnType<typeof getGuestOrderReceipt>>>
+export type GetGuestOrderReceiptQueryError = ErrorType<void>
+
+
+
+export function useGetGuestOrderReceipt<TData = Awaited<ReturnType<typeof getGuestOrderReceipt>>, TError = ErrorType<void>>(
+ id: string,
+    token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGuestOrderReceipt>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGuestOrderReceiptQueryOptions(id,token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetGuestOrderConfirmationUrl = (id: string,
+    token: string,) => {
+
+
+
+
+  return `/api/guest/orders/${id}/${token}/confirmation`
+}
+
+/**
+ * Requires the private guest token.
+ */
+export const getGuestOrderConfirmation = async (id: string,
+    token: string, options?: Parameters<typeof customFetch>[1]): Promise<OrderConfirmation> => {
+
+  return customFetch<OrderConfirmation>(getGetGuestOrderConfirmationUrl(id,token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGuestOrderConfirmationQueryKey = (id: string,
+    token: string,) => {
+    return [
+    `/api/guest/orders/${id}/${token}/confirmation`
+    ] as const;
+    }
+
+
+export const getGetGuestOrderConfirmationQueryOptions = <TData = Awaited<ReturnType<typeof getGuestOrderConfirmation>>, TError = ErrorType<void>>(id: string,
+    token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGuestOrderConfirmation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGuestOrderConfirmationQueryKey(id,token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGuestOrderConfirmation>>> = ({ signal }) => getGuestOrderConfirmation(id,token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGuestOrderConfirmation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGuestOrderConfirmationQueryResult = NonNullable<Awaited<ReturnType<typeof getGuestOrderConfirmation>>>
+export type GetGuestOrderConfirmationQueryError = ErrorType<void>
+
+
+
+export function useGetGuestOrderConfirmation<TData = Awaited<ReturnType<typeof getGuestOrderConfirmation>>, TError = ErrorType<void>>(
+ id: string,
+    token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGuestOrderConfirmation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGuestOrderConfirmationQueryOptions(id,token,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

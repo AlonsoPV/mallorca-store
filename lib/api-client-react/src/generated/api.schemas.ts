@@ -13,6 +13,33 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface PasswordResetRequestInput {
+  /**
+     * @minLength 1
+     * @maxLength 320
+     */
+  identifier: string;
+}
+
+export interface PasswordResetRequestResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface PasswordResetConfirmationInput {
+  /** @pattern ^[0-9a-f]{64}$ */
+  token: string;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  password: string;
+}
+
+export interface PasswordResetConfirmationResult {
+  ok: boolean;
+}
+
 export interface BranchHour {
   day: string;
   label: string;
@@ -1525,6 +1552,39 @@ export interface Order {
   audit?: OrderAuditEvent[];
 }
 
+export type OrderEmailStatusStatus = typeof OrderEmailStatusStatus[keyof typeof OrderEmailStatusStatus];
+
+
+export const OrderEmailStatusStatus = {
+  pending: 'pending',
+  sent: 'sent',
+  failed: 'failed',
+  missing_recipient: 'missing_recipient',
+  not_configured: 'not_configured',
+  not_scheduled: 'not_scheduled',
+  unavailable: 'unavailable',
+  preview: 'preview',
+} as const;
+
+export interface OrderEmailStatus {
+  status: OrderEmailStatusStatus;
+  /** @nullable */
+  sentAt?: string | null;
+}
+
+export type OrderConfirmationNotifications = {
+  customer: OrderEmailStatus;
+  branch: OrderEmailStatus;
+};
+
+export interface OrderConfirmation {
+  branchName?: string;
+  branchAddress?: string;
+  /** @nullable */
+  branchPhone?: string | null;
+  notifications: OrderConfirmationNotifications;
+}
+
 export interface OrderSummaryItem {
   name: string;
   quantity: number;
@@ -1567,13 +1627,31 @@ export const PaymentStartCode = {
   PAYMENT_PROVIDER_NOT_CONFIGURED: 'PAYMENT_PROVIDER_NOT_CONFIGURED',
 } as const;
 
+export type PaymentStartProvider = typeof PaymentStartProvider[keyof typeof PaymentStartProvider];
+
+
+export const PaymentStartProvider = {
+  MERCADO_PAGO: 'MERCADO_PAGO',
+  PAYPAL: 'PAYPAL',
+} as const;
+
+export type PaymentStartMode = typeof PaymentStartMode[keyof typeof PaymentStartMode];
+
+
+export const PaymentStartMode = {
+  redirect: 'redirect',
+} as const;
+
+/**
+ * Error when the provider is not configured, or the checkout session when it is.
+ */
 export interface PaymentStart {
   error?: string;
   code?: PaymentStartCode;
-  provider?: "MERCADO_PAGO" | "PAYPAL";
+  provider?: PaymentStartProvider;
   redirectUrl?: string;
   providerReference?: string;
-  mode?: "redirect";
+  mode?: PaymentStartMode;
 }
 
 export interface PaymentStartInput {

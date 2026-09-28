@@ -6,12 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PaymentStartCode } from './paymentStartCode';
+import type { PaymentStartMode } from './paymentStartMode';
+import type { PaymentStartProvider } from './paymentStartProvider';
 
+/**
+ * Error when the provider is not configured, or the checkout session when it is.
+ */
 export interface PaymentStart {
   error?: string;
   code?: PaymentStartCode;
-  provider?: "MERCADO_PAGO" | "PAYPAL";
+  provider?: PaymentStartProvider;
   redirectUrl?: string;
   providerReference?: string;
-  mode?: "redirect";
+  mode?: PaymentStartMode;
 }

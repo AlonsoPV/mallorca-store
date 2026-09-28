@@ -1,28 +1,58 @@
+import { clerkClient } from "@clerk/express";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { db, passwordResetTokensTable, usersTable } from "@workspace/db";
-import { sendReceiptEmail } from "../../order-email-transport.mjs";
-import { findUserByIdentifier, isAdminStaffRole, syncClerkCredentials } from "./admin-users";
+import { emailFromAddress, resolveMailbox, sendReceiptEmail } from "../../order-email-transport.mjs";
+import { findUserByIdentifier } from "./admin-users";
 import { loadStoredMailboxes, mailboxSendConfig } from "./mailboxes";
 import { hashPassword } from "./password";
 import { logger } from "./logger";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000;
+const REQUEST_COOLDOWN_MS = 5 * 60 * 1000;
 const GENERIC_OK =
-  "Si el usuario existe, enviamos un correo con el enlace para restablecer la contraseña.";
+  "Si la cuenta existe, recibirás un enlace para restablecer la contraseña.";
+const UNAVAILABLE = "El servicio de recuperación no está disponible en este momento. Inténtalo más tarde.";
+const INVALID_TOKEN = "El enlace caducó o ya se usó. Solicita uno nuevo.";
+
+type RequestResult =
+  | { ok: true; message: string }
+  | { ok: false; error: string; status: 503 };
+type ConfirmResult =
+  | { ok: true }
+  | { ok: false; error: string; status: number };
+type IdentityPasswordUpdater = (userId: string, password: string) => Promise<void>;
+
+async function updateClerkPassword(userId: string, password: string): Promise<void> {
+  await clerkClient.users.updateUser(userId, { password, skipPasswordChecks: false });
+}
 
 export function hashResetToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
 export function isPasswordStrongEnough(password: string): boolean {
-  return typeof password === "string" && password.trim().length >= 8;
+  return typeof password === "string" &&
+    password.length >= 8 &&
+    password.length <= 128 &&
+    password.trim().length >= 8;
 }
 
 function publicAppOrigin(env: NodeJS.ProcessEnv = process.env): string | null {
-  const origin = String(env.PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
-  if (!origin || !/^https?:\/\//.test(origin)) return null;
-  return origin;
+  const domain = String(env.REPLIT_DEV_DOMAIN || "").split(",")[0]?.trim();
+  const candidate =
+    String(env.PUBLIC_APP_URL || "").trim() ||
+    (env.NODE_ENV !== "production" && domain ? `https://${domain}` : "");
+  try {
+    const url = new URL(candidate);
+    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+      return null;
+    }
+    if (env.NODE_ENV === "production" && url.protocol !== "https:") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
 }
 
 function buildResetEmail(params: {
@@ -61,43 +91,75 @@ function escapeHtml(value: string) {
 export async function requestPasswordReset(
   identifier: string,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ ok: true; message: string }> {
+  options: { sendEmail?: typeof sendReceiptEmail } = {},
+): Promise<RequestResult> {
   const message = GENERIC_OK;
   const trimmed = String(identifier || "").trim();
   if (!trimmed) return { ok: true, message };
 
   const origin = publicAppOrigin(env);
   if (!origin) {
-    logger.warn("Password reset skipped: PUBLIC_APP_URL missing");
-    return { ok: true, message };
+    logger.warn("Password reset unavailable: PUBLIC_APP_URL missing or invalid");
+    return { ok: false, error: UNAVAILABLE, status: 503 };
+  }
+
+  const stored = await loadStoredMailboxes();
+  const mailbox = mailboxSendConfig("customer", stored);
+  if (!mailbox && !resolveMailbox("customer", env) &&
+      !(env.RESEND_API_KEY && emailFromAddress("customer", env))) {
+    logger.warn("Password reset unavailable: customer email sender not configured");
+    return { ok: false, error: UNAVAILABLE, status: 503 };
   }
 
   const user = await findUserByIdentifier(trimmed);
-  if (!user || !isAdminStaffRole(user.role) || !user.email) {
+  if (!user?.email) {
     return { ok: true, message };
   }
 
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashResetToken(token);
   const id = `prt_${randomBytes(12).toString("hex")}`;
-  const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+  const now = new Date();
+  try {
+    const issued = await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, user.id))
+        .for("update");
+      if (!locked) return false;
 
-  await db
-    .update(passwordResetTokensTable)
-    .set({ usedAt: new Date() })
-    .where(
-      and(
-        eq(passwordResetTokensTable.userId, user.id),
-        isNull(passwordResetTokensTable.usedAt),
-      ),
-    );
+      const [recent] = await tx
+        .select({ id: passwordResetTokensTable.id })
+        .from(passwordResetTokensTable)
+        .where(and(
+          eq(passwordResetTokensTable.userId, user.id),
+          isNull(passwordResetTokensTable.usedAt),
+          gt(passwordResetTokensTable.createdAt, new Date(now.getTime() - REQUEST_COOLDOWN_MS)),
+        ))
+        .limit(1);
+      if (recent) return false;
 
-  await db.insert(passwordResetTokensTable).values({
-    id,
-    userId: user.id,
-    tokenHash,
-    expiresAt,
-  });
+      await tx
+        .update(passwordResetTokensTable)
+        .set({ usedAt: now })
+        .where(and(
+          eq(passwordResetTokensTable.userId, user.id),
+          isNull(passwordResetTokensTable.usedAt),
+        ));
+      await tx.insert(passwordResetTokensTable).values({
+        id,
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(now.getTime() + TOKEN_TTL_MS),
+      });
+      return true;
+    });
+    if (!issued) return { ok: true, message };
+  } catch (error) {
+    logger.error({ error }, "Unable to issue password reset token");
+    return { ok: false, error: UNAVAILABLE, status: 503 };
+  }
 
   const resetUrl = `${origin}/recuperar-contrasena/${encodeURIComponent(token)}`;
   const name =
@@ -105,13 +167,11 @@ export async function requestPasswordReset(
     user.username ||
     user.email;
   const content = buildResetEmail({ name, resetUrl });
-  const stored = await loadStoredMailboxes();
-  const mailbox = mailboxSendConfig("customer", stored);
 
   try {
-    await sendReceiptEmail(
+    await (options.sendEmail ?? sendReceiptEmail)(
       {
-        from: mailbox?.from,
+        from: mailbox?.from || emailFromAddress("customer", env),
         to: [user.email],
         reply_to: mailbox?.replyTo,
         ...content,
@@ -126,6 +186,11 @@ export async function requestPasswordReset(
     );
   } catch (error) {
     logger.warn({ userId: user.id, error }, "Password reset email failed");
+    await db
+      .update(passwordResetTokensTable)
+      .set({ usedAt: new Date() })
+      .where(eq(passwordResetTokensTable.id, id))
+      .catch((updateError) => logger.error({ updateError }, "Unable to revoke unsent password reset token"));
   }
 
   return { ok: true, message };
@@ -134,57 +199,61 @@ export async function requestPasswordReset(
 export async function confirmPasswordReset(params: {
   token: string;
   password: string;
-}): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+}, updateIdentityPassword: IdentityPasswordUpdater = updateClerkPassword): Promise<ConfirmResult> {
   const token = String(params.token || "").trim();
   const password = String(params.password || "");
-  if (!token) return { ok: false, error: "Enlace inválido.", status: 400 };
+  if (!/^[0-9a-f]{64}$/.test(token)) {
+    return { ok: false, error: INVALID_TOKEN, status: 400 };
+  }
   if (!isPasswordStrongEnough(password)) {
-    return { ok: false, error: "La contraseña debe tener al menos 8 caracteres.", status: 400 };
+    return { ok: false, error: "La contraseña debe tener entre 8 y 128 caracteres.", status: 400 };
   }
 
   const tokenHash = hashResetToken(token);
-  const [row] = await db
-    .select()
-    .from(passwordResetTokensTable)
-    .where(
-      and(
-        eq(passwordResetTokensTable.tokenHash, tokenHash),
-        isNull(passwordResetTokensTable.usedAt),
-        gt(passwordResetTokensTable.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
+  const now = new Date();
+  try {
+    return await db.transaction(async (tx): Promise<ConfirmResult> => {
+      const [claimed] = await tx
+        .update(passwordResetTokensTable)
+        .set({ usedAt: now })
+        .where(and(
+          eq(passwordResetTokensTable.tokenHash, tokenHash),
+          isNull(passwordResetTokensTable.usedAt),
+          gt(passwordResetTokensTable.expiresAt, now),
+        ))
+        .returning({ userId: passwordResetTokensTable.userId });
+      if (!claimed) return { ok: false, error: INVALID_TOKEN, status: 400 };
 
-  if (!row) {
-    return { ok: false, error: "El enlace caducó o ya se usó. Solicita uno nuevo.", status: 400 };
+      const [user] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, claimed.userId))
+        .limit(1);
+      if (!user) return { ok: false, error: INVALID_TOKEN, status: 400 };
+
+      if (!user.id.startsWith("user_local_")) {
+        await updateIdentityPassword(user.id, password);
+      }
+      await tx
+        .update(usersTable)
+        .set({ passwordHash: hashPassword(password), updatedAt: now })
+        .where(eq(usersTable.id, user.id));
+      await tx
+        .update(passwordResetTokensTable)
+        .set({ usedAt: now })
+        .where(and(
+          eq(passwordResetTokensTable.userId, user.id),
+          isNull(passwordResetTokensTable.usedAt),
+        ));
+      return { ok: true };
+    });
+  } catch (error) {
+    const status = error && typeof error === "object" && "status" in error
+      ? Number(error.status)
+      : 0;
+    logger.warn({ status, errorName: error instanceof Error ? error.name : "unknown" }, "Password reset failed");
+    return status === 400 || status === 422
+      ? { ok: false, error: "La contraseña no cumple los requisitos de seguridad. Prueba otra.", status: 400 }
+      : { ok: false, error: UNAVAILABLE, status: 503 };
   }
-
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, row.userId))
-    .limit(1);
-  if (!user || !isAdminStaffRole(user.role)) {
-    return { ok: false, error: "Usuario no válido.", status: 400 };
-  }
-
-  const passwordHash = hashPassword(password.trim());
-  await db
-    .update(usersTable)
-    .set({ passwordHash, updatedAt: new Date() })
-    .where(eq(usersTable.id, user.id));
-  await db
-    .update(passwordResetTokensTable)
-    .set({ usedAt: new Date() })
-    .where(eq(passwordResetTokensTable.id, row.id));
-
-  await syncClerkCredentials({
-    userId: user.id,
-    username: user.username,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    password: password.trim(),
-  });
-
-  return { ok: true };
 }

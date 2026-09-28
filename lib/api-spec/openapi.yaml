@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Account recovery
   - name: storefront
     description: Public catalog and branch operations
   - name: admin
@@ -54,6 +56,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/password-reset/request:
+    post:
+      operationId: requestPasswordReset
+      tags: [auth]
+      summary: Request a one-time password reset link
+      description: Always gives the same success response for valid identifiers, whether or not an account exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetRequestInput" }
+      responses:
+        "200":
+          description: Generic confirmation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordResetRequestResult" }
+        "400":
+          description: Invalid identifier
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "503":
+          description: Recovery service unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /auth/password-reset/confirm:
+    post:
+      operationId: confirmPasswordReset
+      tags: [auth]
+      summary: Set a new password using a valid one-time token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetConfirmationInput" }
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordResetConfirmationResult" }
+        "400":
+          description: Invalid or expired token, or rejected password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "503":
+          description: Recovery service unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
   /branches:
     get:
       operationId: listBranches
@@ -1260,6 +1315,28 @@ components:
         error:
           type: string
       required: [error]
+    PasswordResetRequestInput:
+      type: object
+      required: [identifier]
+      properties:
+        identifier: { type: string, minLength: 1, maxLength: 320 }
+    PasswordResetRequestResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+    PasswordResetConfirmationInput:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string, pattern: "^[0-9a-f]{64}$" }
+        password: { type: string, minLength: 8, maxLength: 128 }
+    PasswordResetConfirmationResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
     BranchHour:
       type: object
       properties:

@@ -43,6 +43,43 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Always gives the same success response for valid identifiers, whether or not an account exists.
+ * @summary Request a one-time password reset link
+ */
+export const requestPasswordResetBodyIdentifierMax = 320;
+
+
+
+export const RequestPasswordResetBody = zod.object({
+  "identifier": zod.string().min(1).max(requestPasswordResetBodyIdentifierMax)
+})
+
+export const RequestPasswordResetResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Set a new password using a valid one-time token
+ */
+export const confirmPasswordResetBodyTokenRegExp = new RegExp('^[0-9a-f]{64}$');
+export const confirmPasswordResetBodyPasswordMin = 8;
+export const confirmPasswordResetBodyPasswordMax = 128;
+
+
+
+export const ConfirmPasswordResetBody = zod.object({
+  "token": zod.string().regex(confirmPasswordResetBodyTokenRegExp),
+  "password": zod.string().min(confirmPasswordResetBodyPasswordMin).max(confirmPasswordResetBodyPasswordMax)
+})
+
+export const ConfirmPasswordResetResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary List active branches
  */
 export const ListBranchesResponseItem = zod.object({
@@ -2132,7 +2169,7 @@ export const StartOrderPaymentResponse = zod.object({
   "redirectUrl": zod.string().optional(),
   "providerReference": zod.string().optional(),
   "mode": zod.enum(['redirect']).optional()
-})
+}).describe('Error when the provider is not configured, or the checkout session when it is.')
 
 
 export const GetOrderDetailsParams = zod.object({
@@ -2295,6 +2332,76 @@ export const GetGuestOrderDetailsResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "payload": zod.record(zod.string(), zod.unknown()).nullish()
 })).optional()
+})
+
+
+/**
+ * Requires the authenticated order owner.
+ */
+export const GetOrderReceiptParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetOrderReceiptResponse = zod.unknown()
+
+
+/**
+ * Requires the authenticated order owner.
+ */
+export const GetOrderConfirmationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetOrderConfirmationResponse = zod.object({
+  "branchName": zod.string().optional(),
+  "branchAddress": zod.string().optional(),
+  "branchPhone": zod.string().nullish(),
+  "notifications": zod.object({
+  "customer": zod.object({
+  "status": zod.enum(['pending', 'sent', 'failed', 'missing_recipient', 'not_configured', 'not_scheduled', 'unavailable', 'preview']),
+  "sentAt": zod.coerce.date().nullish()
+}),
+  "branch": zod.object({
+  "status": zod.enum(['pending', 'sent', 'failed', 'missing_recipient', 'not_configured', 'not_scheduled', 'unavailable', 'preview']),
+  "sentAt": zod.coerce.date().nullish()
+})
+})
+})
+
+
+/**
+ * Requires the private guest token.
+ */
+export const GetGuestOrderReceiptParams = zod.object({
+  "id": zod.coerce.string(),
+  "token": zod.coerce.string()
+})
+
+export const GetGuestOrderReceiptResponse = zod.unknown()
+
+
+/**
+ * Requires the private guest token.
+ */
+export const GetGuestOrderConfirmationParams = zod.object({
+  "id": zod.coerce.string(),
+  "token": zod.coerce.string()
+})
+
+export const GetGuestOrderConfirmationResponse = zod.object({
+  "branchName": zod.string().optional(),
+  "branchAddress": zod.string().optional(),
+  "branchPhone": zod.string().nullish(),
+  "notifications": zod.object({
+  "customer": zod.object({
+  "status": zod.enum(['pending', 'sent', 'failed', 'missing_recipient', 'not_configured', 'not_scheduled', 'unavailable', 'preview']),
+  "sentAt": zod.coerce.date().nullish()
+}),
+  "branch": zod.object({
+  "status": zod.enum(['pending', 'sent', 'failed', 'missing_recipient', 'not_configured', 'not_scheduled', 'unavailable', 'preview']),
+  "sentAt": zod.coerce.date().nullish()
+})
+})
 })
 
 
@@ -5522,6 +5629,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "email": zod.string(),
+  "username": zod.string().nullish(),
   "role": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -5531,12 +5639,16 @@ export const ListAdminUsersResponseItem = zod.object({
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
 
+export const createAdminUserBodyGeneratePasswordDefault = false;
 export const createAdminUserBodyBranchRoleDefault = `staff`;
 export const createAdminUserBodyIsPrimaryDefault = false;
 export const createAdminUserBodySendInviteDefault = true;
 
 export const CreateAdminUserBody = zod.object({
   "email": zod.string().email(),
+  "username": zod.string().nullish(),
+  "password": zod.string().nullish(),
+  "generatePassword": zod.boolean().default(createAdminUserBodyGeneratePasswordDefault),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -5552,6 +5664,7 @@ export const CreateAdminUserResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "email": zod.string(),
+  "username": zod.string().nullish(),
   "role": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -5561,7 +5674,9 @@ export const CreateAdminUserResponse = zod.object({
   "created": zod.boolean(),
   "promoted": zod.boolean(),
   "inviteSent": zod.boolean(),
-  "message": zod.string().nullish()
+  "message": zod.string().nullish(),
+  "temporaryPassword": zod.string().nullish(),
+  "username": zod.string().nullish()
 })
 
 
@@ -5573,6 +5688,7 @@ export const GetAdminUserResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "email": zod.string(),
+  "username": zod.string().nullish(),
   "role": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -5585,10 +5701,15 @@ export const UpdateAdminUserParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const updateAdminUserBodyGeneratePasswordDefault = false;
+
 export const UpdateAdminUserBody = zod.object({
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
   "phone": zod.string().nullish(),
+  "username": zod.string().nullish(),
+  "password": zod.string().nullish(),
+  "generatePassword": zod.boolean().default(updateAdminUserBodyGeneratePasswordDefault),
   "role": zod.enum(['staff', 'branch_manager', 'operations', 'operations_manager', 'manager', 'admin']).optional()
 })
 
@@ -5596,6 +5717,7 @@ export const UpdateAdminUserResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "email": zod.string(),
+  "username": zod.string().nullish(),
   "role": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
