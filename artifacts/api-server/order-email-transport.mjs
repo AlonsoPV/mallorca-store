@@ -21,12 +21,18 @@ export function emailFromAddress(audience = "customer", env = process.env) {
   if (audience === "branch") {
     return pick(env, "ORDER_EMAIL_FROM_BRANCH");
   }
+  if (audience === "system") {
+    return pick(env, "ORDER_EMAIL_FROM_SYSTEM", "ORDER_EMAIL_FROM_ECOMM", "ORDER_EMAIL_FROM");
+  }
   return pick(env, "ORDER_EMAIL_FROM_CUSTOMER", "ORDER_EMAIL_FROM");
 }
 
 export function emailReplyTo(audience = "customer", env = process.env) {
   if (audience === "branch") {
     return pick(env, "ORDER_EMAIL_REPLY_TO_BRANCH", "ORDER_EMAIL_REPLY_TO");
+  }
+  if (audience === "system") {
+    return pick(env, "ORDER_EMAIL_REPLY_TO_SYSTEM", "ORDER_EMAIL_REPLY_TO");
   }
   return pick(env, "ORDER_EMAIL_REPLY_TO");
 }
@@ -38,6 +44,12 @@ export function mailboxAuth(audience = "customer", env = process.env) {
       pass: pick(env, "SMTP_SUCURSAL_PASS", "SMTP_BRANCH_PASS"),
     };
   }
+  if (audience === "system") {
+    return {
+      user: pick(env, "SMTP_ECOMM_USER", "SMTP_SYSTEM_USER", "SMTP_USER"),
+      pass: pick(env, "SMTP_ECOMM_PASS", "SMTP_SYSTEM_PASS", "SMTP_PASS"),
+    };
+  }
   return {
     user: pick(env, "SMTP_PEDIDOS_USER", "SMTP_CUSTOMER_USER", "SMTP_USER"),
     pass: pick(env, "SMTP_PEDIDOS_PASS", "SMTP_CUSTOMER_PASS", "SMTP_PASS"),
@@ -45,7 +57,8 @@ export function mailboxAuth(audience = "customer", env = process.env) {
 }
 
 export function resolveMailbox(audience = "customer", env = process.env) {
-  const role = audience === "branch" ? "branch" : "customer";
+  const role =
+    audience === "branch" ? "branch" : audience === "system" ? "system" : "customer";
   const from = emailFromAddress(role, env);
   const auth = mailboxAuth(role, env);
   if (!from || !auth.user || !auth.pass) return null;
@@ -116,7 +129,8 @@ async function sendViaSmtp(
   jobId,
   { env = process.env, transporter, audience, mailbox: override } = {},
 ) {
-  const role = audience === "branch" ? "branch" : "customer";
+  const role =
+    audience === "branch" ? "branch" : audience === "system" ? "system" : "customer";
   const mailbox = override || resolveMailbox(role, env);
   if (!transporter && !mailbox) throw new Error("EMAIL_PROVIDER_NOT_CONFIGURED");
   const mailer = transporter || nodemailer.createTransport(smtpTransportOptions(env, role, override || undefined));

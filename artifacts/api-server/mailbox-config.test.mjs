@@ -31,6 +31,12 @@ test("app mailboxes are ready only with distinct pedidos, sucursal and contacto"
 test("empty app rows fall back to env seeds without exposing a password", () => {
   const catalog = catalogMailboxes([], [
     {
+      role: "system",
+      address: "ecomm@pasteleria-mallorca.mx",
+      displayName: "Mallorca Ecommerce",
+      passwordConfigured: true,
+    },
+    {
       role: "customer",
       address: "pedidos@mallorca.mx",
       displayName: "Mallorca",
@@ -41,7 +47,8 @@ test("empty app rows fall back to env seeds without exposing a password", () => 
   ]);
   assert.equal(catalog.ready, true);
   assert.equal(catalog.source, "env");
-  assert.equal(catalog.mailboxes[0].passwordConfigured, true);
+  assert.equal(catalog.mailboxes.find((row) => row.role === "system")?.address, "ecomm@pasteleria-mallorca.mx");
+  assert.equal(catalog.mailboxes.find((row) => row.role === "customer")?.passwordConfigured, true);
   assert.equal(formatMailboxFrom("pedidos@mallorca.mx", "Mallorca"), "Mallorca <pedidos@mallorca.mx>");
   assert.equal(parseFromDisplayName("Mallorca <pedidos@mallorca.mx>"), "Mallorca");
 });

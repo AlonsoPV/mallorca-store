@@ -37,7 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const MAILBOXES_KEY = ["admin", "mailboxes"] as const;
 
-type MailboxRole = "customer" | "branch" | "contact";
+type MailboxRole = "system" | "customer" | "branch" | "contact";
 
 type PublicMailbox = {
   role: MailboxRole;
@@ -64,6 +64,13 @@ const PURPOSES: {
   example: string;
   needsPassword: boolean;
 }[] = [
+  {
+    role: "system",
+    title: "Sistema / desarrollo",
+    hint: "Correo de la tienda para recuperación de contraseña y avisos internos.",
+    example: "ecomm@pasteleria-mallorca.mx",
+    needsPassword: true,
+  },
   {
     role: "customer",
     title: "Pedidos al cliente",
@@ -96,10 +103,10 @@ type FormState = {
   smtpPort: string;
 };
 
-const emptyForm = (role: MailboxRole = "customer"): FormState => ({
+const emptyForm = (role: MailboxRole = "system"): FormState => ({
   role,
-  address: "",
-  displayName: "",
+  address: role === "system" ? "ecomm@pasteleria-mallorca.mx" : "",
+  displayName: role === "system" ? "Mallorca Ecommerce" : "",
   password: "",
   smtpHost: "smtp.hostinger.com",
   smtpPort: "465",
@@ -152,15 +159,16 @@ export default function AdminMailboxes() {
   });
 
   function openAdd(role?: MailboxRole) {
-    const selected = role ?? PURPOSES.find((item) => !byRole[item.role]?.configured)?.role ?? "customer";
+    const selected = role ?? PURPOSES.find((item) => !byRole[item.role]?.configured)?.role ?? "system";
     const row = byRole[selected];
+    const defaults = emptyForm(selected);
     setForm({
       role: selected,
-      address: row?.address ?? "",
-      displayName: row?.displayName ?? "",
+      address: row?.address || defaults.address,
+      displayName: row?.displayName || defaults.displayName,
       password: "",
-      smtpHost: row?.smtpHost ?? "smtp.hostinger.com",
-      smtpPort: String(row?.smtpPort ?? 465),
+      smtpHost: row?.smtpHost ?? defaults.smtpHost,
+      smtpPort: String(row?.smtpPort ?? defaults.smtpPort),
     });
     setAdvanced(false);
     setOpen(true);
@@ -183,7 +191,7 @@ export default function AdminMailboxes() {
       <AdminPageShell>
         <AdminPageHeader
           title="Correos"
-          description="Añade aquí los buzones que ya creaste en Hostinger (hPanel → Emails). No se crean en la app: solo se registran para enviar pedidos, avisar a sucursal y recibir respuestas."
+          description="Registra los buzones de Hostinger. El de sistema (ecomm@pasteleria-mallorca.mx) envía la recuperación de contraseña; pedidos, sucursal y contacto cubren la compra."
           actions={
             <Button className="rounded-none" onClick={() => openAdd()}>
               <Plus className="mr-2 h-4 w-4" />

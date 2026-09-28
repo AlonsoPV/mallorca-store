@@ -18,10 +18,10 @@ export function mailboxAuth(
 ): { user: string; pass: string };
 
 export function resolveMailbox(
-  audience?: "customer" | "branch" | string,
+  audience?: "customer" | "branch" | "system" | string,
   env?: NodeJS.ProcessEnv,
 ): {
-  role: "customer" | "branch";
+  role: "customer" | "branch" | "system";
   from: string;
   replyTo?: string;
   user: string;

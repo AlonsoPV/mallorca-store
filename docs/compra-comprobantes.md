@@ -42,7 +42,16 @@ Cada buzón de envío autentica con su propio usuario y contraseña. El remitent
 
 Sin los dos buzones de envío, el sistema no considera el correo configurado.
 
-La recuperación de contraseña del personal (`/recuperar-contrasena`) usa el buzón de pedidos (o SMTP de entorno) y exige `PUBLIC_APP_URL` para armar el enlace. Aplica también `lib/db/migrations/008_password_reset_tokens.sql` (o `pnpm --filter @workspace/db run push`).
+La recuperación de contraseña del personal (`/recuperar-contrasena`) se envía desde **ecomm@pasteleria-mallorca.mx** (buzón Sistema en Admin → Correos, o variables `SMTP_ECOMM_*` / `ORDER_EMAIL_FROM_SYSTEM`). Exige `PUBLIC_APP_URL` para armar el enlace. Aplica también `lib/db/migrations/008_password_reset_tokens.sql` (o `pnpm --filter @workspace/db run push`).
+
+En Secrets / `.env` (desarrollo):
+
+```
+SMTP_ECOMM_USER=ecomm@pasteleria-mallorca.mx
+SMTP_ECOMM_PASS=<contraseña Hostinger del buzón ecomm>
+ORDER_EMAIL_FROM_SYSTEM=Mallorca Ecommerce <ecomm@pasteleria-mallorca.mx>
+PUBLIC_APP_URL=https://tu-tienda
+```
 
 3. Asignar responsables activos con correo a las sucursales.
 4. Reiniciar el backend. El trabajador procesa la cola al arrancar, después de crear un pedido y cada 30 segundos.

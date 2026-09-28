@@ -1,8 +1,11 @@
 import { extractEmailAddress } from "./order-email-transport.mjs";
 
-export const MAILBOX_ROLES = ["customer", "branch", "contact"];
+export const MAILBOX_ROLES = ["system", "customer", "branch", "contact"];
 export const DEFAULT_SMTP_HOST = "smtp.hostinger.com";
 export const DEFAULT_SMTP_PORT = 465;
+/** Correo de desarrollo / sistema de la tienda (Hostinger). */
+export const DEV_SYSTEM_EMAIL = "ecomm@pasteleria-mallorca.mx";
+export const DEV_SYSTEM_DISPLAY_NAME = "Mallorca Ecommerce";
 
 export function isMailboxRole(value) {
   return MAILBOX_ROLES.includes(String(value || ""));

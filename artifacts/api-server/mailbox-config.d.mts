@@ -1,6 +1,8 @@
-export const MAILBOX_ROLES: readonly ["customer", "branch", "contact"];
+export const MAILBOX_ROLES: readonly ["system", "customer", "branch", "contact"];
 export const DEFAULT_SMTP_HOST: string;
 export const DEFAULT_SMTP_PORT: number;
+export const DEV_SYSTEM_EMAIL: string;
+export const DEV_SYSTEM_DISPLAY_NAME: string;
 
 export type MailboxRole = (typeof MAILBOX_ROLES)[number];
 

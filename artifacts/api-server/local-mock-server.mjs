@@ -518,7 +518,16 @@ async function previewPasswordResetEmail(user, resetUrl) {
   );
   await writeFile(
     fileURLToPath(new URL(`${id}.json`, directory)),
-    JSON.stringify({ email: user.email, resetUrl, at: new Date().toISOString() }, null, 2),
+    JSON.stringify(
+      {
+        from: "Mallorca Ecommerce <ecomm@pasteleria-mallorca.mx>",
+        email: user.email,
+        resetUrl,
+        at: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
     "utf8",
   );
   console.log(`[local-mock-api] password reset preview → .local/password-reset-previews/${id}.html`);

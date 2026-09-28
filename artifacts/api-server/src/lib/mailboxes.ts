@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { db, mailboxesTable } from "@workspace/db";
 import {
   catalogMailboxes,
+  DEV_SYSTEM_DISPLAY_NAME,
+  DEV_SYSTEM_EMAIL,
   formatMailboxFrom,
   parseFromDisplayName,
   type MailboxCatalog,
@@ -13,6 +15,7 @@ import {
   emailReplyTo,
   extractEmailAddress,
   mailboxAuth,
+  resolveMailbox,
 } from "../../order-email-transport.mjs";
 import { decryptSecret, encryptSecret } from "./payments/secrets";
 import { logger } from "./logger";
@@ -33,9 +36,19 @@ function envMailboxSeeds(env: NodeJS.ProcessEnv = process.env) {
   const customerFrom = emailFromAddress("customer", env);
   const branchFrom = emailFromAddress("branch", env);
   const contactFrom = emailReplyTo("customer", env);
+  const systemFrom = emailFromAddress("system", env);
   const customerAuth = mailboxAuth("customer", env);
   const branchAuth = mailboxAuth("branch", env);
+  const systemAuth = mailboxAuth("system", env);
   return [
+    {
+      role: "system" as const,
+      address:
+        extractEmailAddress(systemFrom) || systemAuth.user || DEV_SYSTEM_EMAIL,
+      displayName: parseFromDisplayName(systemFrom) || DEV_SYSTEM_DISPLAY_NAME,
+      smtpUser: systemAuth.user || DEV_SYSTEM_EMAIL,
+      passwordConfigured: Boolean(systemAuth.pass),
+    },
     {
       role: "customer" as const,
       address: extractEmailAddress(customerFrom) || customerAuth.user,
@@ -74,11 +87,18 @@ export async function getMailboxCatalog(
   return catalogMailboxes(await loadStoredMailboxes(), envMailboxSeeds(env));
 }
 
+function roleForAudience(audience: string): MailboxRole {
+  if (audience === "branch") return "branch";
+  if (audience === "system") return "system";
+  if (audience === "contact") return "contact";
+  return "customer";
+}
+
 export function mailboxSendConfig(
   audience: string,
   rows: StoredMailbox[],
 ): MailboxSendConfig | null {
-  const role: MailboxRole = audience === "branch" ? "branch" : "customer";
+  const role = roleForAudience(audience);
   const row = rows.find((item) => item.role === role);
   const contact = rows.find((item) => item.role === "contact");
   const pass = decryptSecret(row?.passwordEncrypted);
@@ -96,6 +116,32 @@ export function mailboxSendConfig(
       ? formatMailboxFrom(contact?.address, contact?.displayName)
       : undefined,
   };
+}
+
+/** Prefer app mailbox `system` (ecomm@…), then env Hostinger, then pedidos. */
+export function resolvePasswordResetMailbox(
+  rows: StoredMailbox[],
+  env: NodeJS.ProcessEnv = process.env,
+): MailboxSendConfig | null {
+  return (
+    mailboxSendConfig("system", rows) ||
+    (() => {
+      const resolved = resolveMailbox("system", env);
+      if (!resolved) return null;
+      return {
+        from: resolved.from,
+        user: resolved.user,
+        pass: resolved.pass,
+        host: String(env.SMTP_HOST || "smtp.hostinger.com").trim() || "smtp.hostinger.com",
+        port: Number(env.SMTP_PORT || 465) || 465,
+        secure: env.SMTP_SECURE == null
+          ? true
+          : !["0", "false", "no"].includes(String(env.SMTP_SECURE).toLowerCase()),
+        replyTo: resolved.replyTo,
+      };
+    })() ||
+    mailboxSendConfig("customer", rows)
+  );
 }
 
 export async function upsertMailbox(

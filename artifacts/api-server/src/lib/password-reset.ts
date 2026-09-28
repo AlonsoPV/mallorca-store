@@ -2,9 +2,9 @@ import { clerkClient } from "@clerk/express";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { db, passwordResetTokensTable, usersTable } from "@workspace/db";
-import { emailFromAddress, resolveMailbox, sendReceiptEmail } from "../../order-email-transport.mjs";
+import { sendReceiptEmail } from "../../order-email-transport.mjs";
 import { findUserByIdentifier } from "./admin-users";
-import { loadStoredMailboxes, mailboxSendConfig } from "./mailboxes";
+import { loadStoredMailboxes, resolvePasswordResetMailbox } from "./mailboxes";
 import { hashPassword } from "./password";
 import { logger } from "./logger";
 
@@ -104,10 +104,9 @@ export async function requestPasswordReset(
   }
 
   const stored = await loadStoredMailboxes();
-  const mailbox = mailboxSendConfig("customer", stored);
-  if (!mailbox && !resolveMailbox("customer", env) &&
-      !(env.RESEND_API_KEY && emailFromAddress("customer", env))) {
-    logger.warn("Password reset unavailable: customer email sender not configured");
+  const mailbox = resolvePasswordResetMailbox(stored, env);
+  if (!mailbox) {
+    logger.warn("Password reset unavailable: ecomm@ / system mailbox not configured");
     return { ok: false, error: UNAVAILABLE, status: 503 };
   }
 
@@ -171,15 +170,15 @@ export async function requestPasswordReset(
   try {
     await (options.sendEmail ?? sendReceiptEmail)(
       {
-        from: mailbox?.from || emailFromAddress("customer", env),
+        from: mailbox.from,
         to: [user.email],
-        reply_to: mailbox?.replyTo,
+        reply_to: mailbox.replyTo,
         ...content,
       },
       id,
       {
         env,
-        audience: "customer",
+        audience: "system",
         mailbox,
         apiKey: env.RESEND_API_KEY,
       },
