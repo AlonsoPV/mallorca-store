@@ -8,3 +8,4 @@
 - [API integration test runner](api-integration-test-runner.md) — Bundle route tests with esbuild before running them when workspace TypeScript imports cannot load directly in Node.
 - [Fulfillment lead time](fulfillment-lead-time.md) — Measure cart-item notice from order time, not from each future day's opening; keep the branch's daily floor separate.
 - [GitHub connector push safety](github-connector-push-safety.md) — Keep exact Git IDs and fast-forward only; text shell output can alter commit bytes.
+- [Workspace dependency hydration](workspace-dependency-hydration.md) — A stale local install can crash on declared runtime packages even when the publish lockfile is correct.

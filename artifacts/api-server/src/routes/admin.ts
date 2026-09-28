@@ -605,11 +605,8 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
   if (body.data.phone !== undefined) patch.phone = body.data.phone;
   if (body.data.role !== undefined) patch.role = body.data.role;
 
-  const username =
-    body.data.username !== undefined
-      ? await allocateUsername(body.data.username, current, current.id)
-      : current.username;
   if (body.data.username !== undefined) {
+    const username = await allocateUsername(body.data.username, current, current.id);
     const taken = await findUserByUsername(username);
     if (taken && taken.id !== current.id) {
       res.status(409).json({ error: "Ese usuario ya está en uso", code: "USERNAME_EXISTS" });

@@ -196,6 +196,14 @@ export async function findUserByUsername(username: string) {
   return row;
 }
 
+export async function findUserByIdentifier(identifier: string) {
+  const normalized = identifier.trim();
+  if (!normalized) return undefined;
+  return normalized.includes("@")
+    ? findUserByEmail(normalized)
+    : findUserByUsername(normalized);
+}
+
 export async function allocateUsername(
   preferred: string | null | undefined,
   seed: { firstName?: string | null; lastName?: string | null; email?: string | null },
