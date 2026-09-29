@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   captchaMatches,
   generateCaptchaChallenge,
+  isValidEmailIdentifier,
   isSignInLocked,
   readSignInGate,
   registerSignInFailure,
@@ -41,6 +42,7 @@ function GoogleMark(props: SVGProps<SVGSVGElement>) {
 
 type PasswordSignInFormProps = {
   onAuthenticate: (identifier: string, password: string) => Promise<string | null>;
+  emailOnly?: boolean;
   subtitle?: string;
   onGoogleSignIn?: () => void | Promise<void>;
   googleLoading?: boolean;
@@ -54,6 +56,7 @@ function storage(): Storage | null {
 
 export function PasswordSignInForm({
   onAuthenticate,
+  emailOnly = false,
   subtitle = "Solo usuario y contraseña. No se pueden crear cuentas desde aquí.",
   onGoogleSignIn,
   googleLoading = false,
@@ -110,7 +113,12 @@ export function PasswordSignInForm({
     }
 
     if (!identifier.trim() || !password) {
-      setError("Escribe usuario y contraseña.");
+      setError(emailOnly ? "Escribe correo y contraseña." : "Escribe usuario y contraseña.");
+      return;
+    }
+
+    if (emailOnly && !isValidEmailIdentifier(identifier)) {
+      setError("Escribe un correo electrónico válido.");
       return;
     }
 
@@ -195,17 +203,18 @@ export function PasswordSignInForm({
 
       <div className="space-y-2">
         <Label htmlFor="sign-in-identifier" className="text-sm font-semibold">
-          Usuario
+          {emailOnly ? "Correo electrónico" : "Usuario"}
         </Label>
         <Input
           id="sign-in-identifier"
-          name="username"
+          name={emailOnly ? "email" : "username"}
+          type={emailOnly ? "email" : "text"}
           value={identifier}
           onChange={(event) => setIdentifier(event.target.value)}
-          autoComplete="username"
+          autoComplete={emailOnly ? "email" : "username"}
           autoCapitalize="none"
           disabled={disabled}
-          placeholder="Usuario o correo"
+          placeholder={emailOnly ? "nombre@ejemplo.com" : "Usuario o correo"}
           className="h-11 rounded-none"
         />
       </div>

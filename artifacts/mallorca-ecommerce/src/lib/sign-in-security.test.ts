@@ -8,6 +8,7 @@ import {
   clerkSignInErrorMessage,
   credentialsMatch,
   generateCaptchaChallenge,
+  isValidEmailIdentifier,
   isSignInLocked,
   readSignInGate,
   registerSignInFailure,
@@ -40,6 +41,12 @@ test("matches local credentials by username or email", () => {
   assert.equal(credentialsMatch("otro", "mallorca-local", allowed), false);
 });
 
+test("Clerk sign-in only submits email identifiers", () => {
+  assert.equal(isValidEmailIdentifier(" persona@ejemplo.com "), true);
+  assert.equal(isValidEmailIdentifier("usuario"), false);
+  assert.equal(isValidEmailIdentifier("persona@"), false);
+});
+
 test("locks sign-in after too many failures and unlocks later", () => {
   let gate = registerSignInSuccess();
   const start = 1_000;
@@ -67,4 +74,10 @@ test("maps Clerk errors without leaking the account", () => {
     "Usuario o contraseña incorrectos.",
   );
   assert.match(clerkSignInErrorMessage({ message: "Failed to fetch" }), /conectar/);
+  assert.equal(
+    clerkSignInErrorMessage({
+      errors: [{ code: "form_param_format_invalid", meta: { param_name: "identifier" } }],
+    }),
+    "Escribe un correo electrónico válido.",
+  );
 });

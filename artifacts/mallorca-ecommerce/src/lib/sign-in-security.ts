@@ -42,6 +42,10 @@ export function credentialsMatch(
   return okId && password === allowed.password;
 }
 
+export function isValidEmailIdentifier(identifier: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim());
+}
+
 export function isSignInLocked(gate: SignInGate, now: number): boolean {
   return gate.lockedUntil > now;
 }
@@ -92,7 +96,7 @@ export function writeSignInGate(
 
 export function clerkSignInErrorMessage(error: unknown): string {
   const maybe = error as {
-    errors?: { code?: string; message?: string }[];
+    errors?: { code?: string; message?: string; meta?: { param_name?: string } }[];
     message?: string;
   };
   const code = maybe.errors?.[0]?.code ?? "";
@@ -102,6 +106,9 @@ export function clerkSignInErrorMessage(error: unknown): string {
   }
   if (code.includes("strategy") || code.includes("not_allowed")) {
     return "Este método de acceso no está disponible.";
+  }
+  if (code === "form_param_format_invalid" && maybe.errors?.[0]?.meta?.param_name === "identifier") {
+    return "Escribe un correo electrónico válido.";
   }
   return "Usuario o contraseña incorrectos.";
 }

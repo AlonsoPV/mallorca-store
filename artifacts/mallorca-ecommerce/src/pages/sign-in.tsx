@@ -70,11 +70,13 @@ function ClerkPasswordGate({
     );
   }
 
+  const clerkSignIn = signIn;
+
   async function signInWithGoogle() {
     setGoogleError(null);
     setGoogleLoading(true);
     try {
-      await signIn.authenticateWithRedirect({
+      await clerkSignIn.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: `${basePath}/sign-in/sso-callback`,
         redirectUrlComplete: redirectPath,
@@ -87,13 +89,14 @@ function ClerkPasswordGate({
 
   return (
     <PasswordSignInForm
-      subtitle="Usuario y contraseña, o continúa con Google."
+      subtitle="Correo electrónico y contraseña, o continúa con Google."
+      emailOnly
       googleError={googleError}
       googleLoading={googleLoading}
       onGoogleSignIn={signInWithGoogle}
       onAuthenticate={async (identifier, password) => {
         try {
-          const result = await signIn.create({ identifier, password });
+          const result = await clerkSignIn.create({ identifier, password });
           if (result.status === "complete" && result.createdSessionId) {
             await setActive({ session: result.createdSessionId });
             onSuccess();

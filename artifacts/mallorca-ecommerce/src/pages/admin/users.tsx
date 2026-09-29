@@ -131,7 +131,7 @@ export default function AdminUsers() {
   });
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
-  const [issued, setIssued] = useState<{ username: string; password: string; name: string } | null>(null);
+  const [issued, setIssued] = useState<{ email: string; password: string; name: string } | null>(null);
 
   const canManage =
     me.data?.role === "admin" || me.data?.role === "operations_manager";
@@ -216,7 +216,6 @@ export default function AdminUsers() {
     };
     try {
       const result = await createUser.mutateAsync({ data: payload });
-      const username = result.username || result.user.username || form.username;
       const password = result.temporaryPassword || form.password;
       toast({
         title: result.promoted
@@ -225,8 +224,8 @@ export default function AdminUsers() {
         description: result.message ?? undefined,
       });
       setCreateOpen(false);
-      if (username && password) {
-        setIssued({ username, password, name: result.user.name });
+      if (password) {
+        setIssued({ email: result.user.email, password, name: result.user.name });
       }
       refresh();
     } catch (e) {
@@ -257,7 +256,7 @@ export default function AdminUsers() {
       setEditOpen(false);
       if (editForm.password.trim()) {
         setIssued({
-          username: editForm.username.trim() || editing.username || editing.email,
+          email: editing.email,
           password: editForm.password.trim(),
           name: [editForm.firstName, editForm.lastName].filter(Boolean).join(" ") || editing.name,
         });
@@ -273,7 +272,7 @@ export default function AdminUsers() {
       <AdminPageShell>
         <AdminPageHeader
           title="Usuarios"
-          description="Genera usuario y contraseña, y guarda los cambios del equipo."
+          description="Gestiona las cuentas y contraseñas del equipo."
           actions={
             canManage ? (
               <Button className="rounded-none" onClick={openCreate}>
@@ -414,7 +413,7 @@ export default function AdminUsers() {
             <DialogHeader>
               <DialogTitle>Nuevo usuario</DialogTitle>
               <DialogDescription>
-                Genera usuario y contraseña. Cópialos al crear; la contraseña no se vuelve a mostrar.
+                Para iniciar sesión se usa el correo electrónico. Copia la contraseña al crear; no se vuelve a mostrar.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -733,21 +732,21 @@ export default function AdminUsers() {
             <DialogHeader>
               <DialogTitle>Credenciales listas</DialogTitle>
               <DialogDescription>
-                Copia usuario y contraseña ahora. La contraseña no se vuelve a mostrar.
+                Para iniciar sesión usa este correo y contraseña. La contraseña no se vuelve a mostrar.
               </DialogDescription>
             </DialogHeader>
             {issued ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">{issued.name}</p>
                 <div className="space-y-1">
-                  <Label>Usuario</Label>
+                  <Label>Correo electrónico</Label>
                   <div className="flex gap-2">
-                    <Input className="rounded-none font-mono" readOnly value={issued.username} />
+                    <Input className="rounded-none font-mono" readOnly value={issued.email} />
                     <Button
                       type="button"
                       variant="outline"
                       className="rounded-none"
-                      onClick={() => copyText(issued.username, "Usuario")}
+                      onClick={() => copyText(issued.email, "Correo electrónico")}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>

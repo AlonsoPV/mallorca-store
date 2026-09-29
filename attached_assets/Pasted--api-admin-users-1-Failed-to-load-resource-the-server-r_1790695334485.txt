@@ -1,0 +1,97 @@
+/api/admin/users:1  Failed to load resource: the server responded with a status of 400 ()
+VM16:2 Uncaught TypeError: Cannot read properties of undefined (reading 'startTime')
+    at et.reportAllChanges (<anonymous>:2:19429)
+    at <anonymous>:2:13070
+    at <anonymous>:2:331
+    at d (<anonymous>:2:6141)
+    at <anonymous>:2:6326
+    at <anonymous>:2:2895
+    at n.timeout (<anonymous>:2:5652)
+et.reportAllChanges @ VM16:2
+(anonymous) @ VM16:2
+(anonymous) @ VM16:2
+d @ VM16:2
+(anonymous) @ VM16:2
+(anonymous) @ VM16:2
+n.timeout @ VM16:2
+requestIdleCallback
+x @ VM16:2
+g @ VM16:2
+(anonymous) @ VM16:2
+index-Ct9TwmO6.js:9  POST https://mallorca-ecommerce.replit.app/api/admin/users 400 (Bad Request)
+ot @ index-Ct9TwmO6.js:9
+FH @ index-Ct9TwmO6.js:9
+mutationFn @ index-Ct9TwmO6.js:9
+fn @ index-Ct9TwmO6.js:9
+N @ index-Ct9TwmO6.js:9
+start @ index-Ct9TwmO6.js:9
+execute @ index-Ct9TwmO6.js:9
+await in execute
+mutate @ index-Ct9TwmO6.js:9
+J @ index-Ct9TwmO6.js:395
+gC @ index-Ct9TwmO6.js:8
+(anonymous) @ index-Ct9TwmO6.js:8
+NS @ index-Ct9TwmO6.js:8
+Cy @ index-Ct9TwmO6.js:8
+Uy @ index-Ct9TwmO6.js:9
+h6 @ index-Ct9TwmO6.js:9
+VM16:2 Uncaught TypeError: Cannot read properties of undefined (reading 'startTime')
+    at et.reportAllChanges (<anonymous>:2:19429)
+    at <anonymous>:2:13070
+    at <anonymous>:2:331
+    at d (<anonymous>:2:6141)
+    at <anonymous>:2:6326
+    at x (<anonymous>:2:5486)
+    at g (<anonymous>:2:6248)
+    at <anonymous>:2:6512
+    at u (<anonymous>:2:735)
+et.reportAllChanges @ VM16:2
+(anonymous) @ VM16:2
+(anonymous) @ VM16:2
+d @ VM16:2
+(anonymous) @ VM16:2
+x @ VM16:2
+g @ VM16:2
+(anonymous) @ VM16:2
+u @ VM16:2
+clerk.browser.js:44  POST https://mallorca-ecommerce.replit.app/api/__clerk/v1/client/sign_ins?__clerk_api_version=2026-05-12&_clerk_js_version=6.34.1 422 (Unprocessable Content)
+tP.retryImmediately @ clerk.browser.js:44
+tP @ clerk.browser.js:42
+o @ clerk.browser.js:44
+await in o
+_baseFetch @ clerk.browser.js:43
+(anonymous) @ clerk.browser.js:43
+execute @ clerk.browser.js:43
+_fetch @ clerk.browser.js:43
+_baseMutate @ clerk.browser.js:44
+_basePost @ clerk.browser.js:44
+create @ clerk.browser.js:44
+onAuthenticate @ index-Ct9TwmO6.js:63
+se @ index-Ct9TwmO6.js:63
+gC @ index-Ct9TwmO6.js:8
+(anonymous) @ index-Ct9TwmO6.js:8
+NS @ index-Ct9TwmO6.js:8
+Cy @ index-Ct9TwmO6.js:8
+Uy @ index-Ct9TwmO6.js:9
+h6 @ index-Ct9TwmO6.js:9
+clerk.browser.js:44  POST https://mallorca-ecommerce.replit.app/api/__clerk/v1/client/sign_ins?__clerk_api_version=2026-05-12&_clerk_js_version=6.34.1 422 (Unprocessable Content)
+tP.retryImmediately @ clerk.browser.js:44
+tP @ clerk.browser.js:42
+o @ clerk.browser.js:44
+await in o
+_baseFetch @ clerk.browser.js:43
+(anonymous) @ clerk.browser.js:43
+execute @ clerk.browser.js:43
+_fetch @ clerk.browser.js:43
+_baseMutate @ clerk.browser.js:44
+_basePost @ clerk.browser.js:44
+create @ clerk.browser.js:44
+onAuthenticate @ index-Ct9TwmO6.js:63
+se @ index-Ct9TwmO6.js:63
+gC @ index-Ct9TwmO6.js:8
+(anonymous) @ index-Ct9TwmO6.js:8
+NS @ index-Ct9TwmO6.js:8
+Cy @ index-Ct9TwmO6.js:8
+Uy @ index-Ct9TwmO6.js:9
+h6 @ index-Ct9TwmO6.js:9
+clerk.browser.js:44  POST https://mallorca-ecommerce.replit.app/api/__clerk/v1/client/sign_ins?__clerk_api_version=2026-05-12&_clerk_js_version=6.34.1 422 (Unprocessable Content)
