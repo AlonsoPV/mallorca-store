@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { logger } from "./logger";
 import { generateUsername, isValidUsername, normalizeUsername } from "./staff-credentials.ts";
+import { syncStaffCredentials } from "./staff-credential-sync.ts";
 
 export const ADMIN_STAFF_ROLES = [
   "staff",
@@ -148,18 +149,13 @@ export async function syncClerkCredentials(params: {
   username?: string | null;
   password?: string | null;
 }) {
-  if (!clerkConfigured() || params.userId.startsWith("user_local_")) return;
   try {
-    await clerkClient.users.updateUser(params.userId, {
-      firstName: params.firstName ?? undefined,
-      lastName: params.lastName ?? undefined,
-      username: params.username ?? undefined,
-      ...(params.password
-        ? { password: params.password, skipPasswordChecks: false }
-        : {}),
-    });
+    await syncStaffCredentials(params, clerkConfigured(), (id, update) =>
+      clerkClient.users.updateUser(id, update),
+    );
   } catch (error) {
-    logger.warn({ userId: params.userId, error }, "Unable to sync Clerk credentials");
+    logger.warn({ userId: params.userId, code: (error as { code?: string }).code }, "Unable to sync Clerk credentials");
+    throw error;
   }
 }
 

@@ -14,6 +14,7 @@ import {
   registerSignInFailure,
   registerSignInSuccess,
   remainingLockMs,
+  submitClerkPassword,
 } from "./sign-in-security.ts";
 
 test("generates a 5-character captcha from the safe alphabet", () => {
@@ -80,4 +81,61 @@ test("maps Clerk errors without leaking the account", () => {
     }),
     "Escribe un correo electrónico válido.",
   );
+  assert.match(clerkSignInErrorMessage({ errors: [{ code: "too_many_attempts" }] }), /bloqueado/);
+  assert.match(clerkSignInErrorMessage({ errors: [{ code: "second_factor_invalid" }] }), /verificación/);
+});
+
+test("completes password sign-in and activates only the completed session", async () => {
+  let activated: string | null = null;
+  const result = await submitClerkPassword(
+    { create: async () => ({ status: "complete", createdSessionId: "session-test", attemptFirstFactor: async () => { throw Error("unexpected"); } }) },
+    "equipo@example.test",
+    "sample-password",
+    async ({ session }) => { activated = session; },
+  );
+  assert.deepEqual(result, { kind: "complete" });
+  assert.equal(activated, "session-test");
+});
+
+test("continues a password first factor before activating a session", async () => {
+  let attempted = false;
+  const result = await submitClerkPassword(
+    { create: async () => ({
+      status: "needs_first_factor",
+      createdSessionId: null,
+      supportedFirstFactors: [{ strategy: "password" }],
+      attemptFirstFactor: async ({ strategy, password }) => {
+        assert.equal(strategy, "password");
+        assert.equal(password, "sample-password");
+        attempted = true;
+        return { status: "complete", createdSessionId: "session-test", attemptFirstFactor: async () => { throw Error("unexpected"); } };
+      },
+    }) },
+    "equipo@example.test",
+    "sample-password",
+    async () => {},
+  );
+  assert.equal(attempted, true);
+  assert.deepEqual(result, { kind: "complete" });
+});
+
+test("does not treat an unfinished verification or a rejected Clerk password as success", async () => {
+  let activated = false;
+  const activate = async () => { activated = true; };
+  const verify = await submitClerkPassword(
+    { create: async () => ({ status: "needs_second_factor", createdSessionId: null, attemptFirstFactor: async () => { throw Error("unexpected"); } }) },
+    "equipo@example.test", "sample-password", activate,
+  );
+  assert.equal(verify.kind, "verification");
+  const rejected = await submitClerkPassword(
+    { create: async () => { throw { errors: [{ code: "form_password_incorrect" }] }; } },
+    "equipo@example.test", "sample-password", activate,
+  );
+  assert.deepEqual(rejected, { kind: "error", message: "Usuario o contraseña incorrectos." });
+  const network = await submitClerkPassword(
+    { create: async () => { throw new Error("Failed to fetch"); } },
+    "equipo@example.test", "sample-password", activate,
+  );
+  assert.match(network.kind === "error" ? network.message : "", /conectar/);
+  assert.equal(activated, false);
 });

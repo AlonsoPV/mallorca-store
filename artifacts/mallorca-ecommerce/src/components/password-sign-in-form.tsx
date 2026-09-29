@@ -40,7 +40,7 @@ function GoogleMark(props: SVGProps<SVGSVGElement>) {
 }
 
 type PasswordSignInFormProps = {
-  onAuthenticate: (identifier: string, password: string) => Promise<string | null>;
+  onAuthenticate: (identifier: string, password: string) => Promise<string | null | { kind: "verification" }>;
   subtitle?: string;
   onGoogleSignIn?: () => void | Promise<void>;
   googleLoading?: boolean;
@@ -125,7 +125,11 @@ export function PasswordSignInForm({
     setSubmitting(true);
     try {
       const authError = await onAuthenticate(identifier.trim(), password);
-      if (authError) {
+      if (authError && typeof authError !== "string" && authError.kind === "verification") {
+        persistGate(registerSignInSuccess());
+        return;
+      }
+      if (typeof authError === "string") {
         persistGate(registerSignInFailure(gate, Date.now()));
         refreshCaptcha();
         setError(authError);

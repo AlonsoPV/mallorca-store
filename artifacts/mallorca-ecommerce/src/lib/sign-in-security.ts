@@ -104,6 +104,12 @@ export function clerkSignInErrorMessage(error: unknown): string {
   if (/network|fetch|Failed to fetch|timeout/i.test(message)) {
     return "No se pudo conectar. Intenta de nuevo.";
   }
+  if (/rate_limit|too_many_attempts|locked|blocked/i.test(code)) {
+    return "El acceso está temporalmente bloqueado. Intenta de nuevo más tarde.";
+  }
+  if (/verification|second_factor/i.test(code)) {
+    return "Se requiere una verificación adicional para entrar.";
+  }
   if (code.includes("strategy") || code.includes("not_allowed")) {
     return "Este método de acceso no está disponible.";
   }
@@ -111,4 +117,43 @@ export function clerkSignInErrorMessage(error: unknown): string {
     return "Escribe un correo electrónico válido.";
   }
   return "Usuario o contraseña incorrectos.";
+}
+
+type PasswordAttempt = {
+  status: string | null;
+  createdSessionId: string | null;
+  supportedFirstFactors?: Array<{ strategy: string }> | null;
+  attemptFirstFactor: (params: { strategy: "password"; password: string }) => Promise<PasswordAttempt>;
+};
+
+export type PasswordSignInOutcome =
+  | { kind: "complete" }
+  | { kind: "verification"; message: string }
+  | { kind: "error"; message: string };
+
+export async function submitClerkPassword(
+  client: { create: (params: { identifier: string; password: string }) => Promise<PasswordAttempt> },
+  email: string,
+  password: string,
+  setActive: (params: { session: string }) => Promise<unknown>,
+): Promise<PasswordSignInOutcome> {
+  try {
+    let result = await client.create({ identifier: email, password });
+    if (
+      result.status === "needs_first_factor" &&
+      result.supportedFirstFactors?.some((factor) => factor.strategy === "password")
+    ) {
+      result = await result.attemptFirstFactor({ strategy: "password", password });
+    }
+    if (result.status === "complete" && result.createdSessionId) {
+      await setActive({ session: result.createdSessionId });
+      return { kind: "complete" };
+    }
+    if (["needs_first_factor", "needs_second_factor", "needs_client_trust", "needs_new_password", "needs_protect_check"].includes(result.status ?? "")) {
+      return { kind: "verification", message: "Completa la verificación adicional para entrar." };
+    }
+    return { kind: "error", message: "No se completó el acceso. Prueba con tu correo o con Google." };
+  } catch (error) {
+    return { kind: "error", message: clerkSignInErrorMessage(error) };
+  }
 }

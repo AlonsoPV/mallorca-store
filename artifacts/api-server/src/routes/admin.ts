@@ -120,6 +120,7 @@ import {
   type AdminStaffRole,
 } from "../lib/admin-users";
 import { generatePassword, hashPassword } from "../lib/password";
+import { StaffCredentialSyncError } from "../lib/staff-credential-sync";
 import { DEFAULT_NOTIFICATION_PREFERENCES, normalizeNotificationPreferences } from "../lib/notification-prefs";
 import {
   stockState,
@@ -467,31 +468,37 @@ router.post("/admin/users", async (req, res): Promise<void> => {
   let created = false;
   let promoted = false;
   let inviteSent = false;
+  let clerkSyncedBeforeCommit = false;
 
   try {
     if (existing) {
-      const [updated] = await db
-        .update(usersTable)
-        .set({
-          firstName: body.data.firstName ?? existing.firstName,
-          lastName: body.data.lastName ?? existing.lastName,
-          phone: body.data.phone ?? existing.phone,
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(usersTable)
+          .set({
+            firstName: body.data.firstName ?? existing.firstName,
+            lastName: body.data.lastName ?? existing.lastName,
+            phone: body.data.phone ?? existing.phone,
+            username,
+            ...(passwordHash ? { passwordHash } : {}),
+            role,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.id, existing.id))
+          .returning();
+        if (!row) throw new Error("User not found during update");
+        await syncClerkCredentials({
+          userId: existing.id,
+          firstName: row.firstName,
+          lastName: row.lastName,
           username,
-          ...(passwordHash ? { passwordHash } : {}),
-          role,
-          updatedAt: new Date(),
-        })
-        .where(eq(usersTable.id, existing.id))
-        .returning();
+          password: temporaryPassword,
+        });
+        clerkSyncedBeforeCommit = !row.id.startsWith("user_local_");
+        return row;
+      });
       userRow = updated;
       promoted = true;
-      await syncClerkCredentials({
-        userId: existing.id,
-        firstName: updated.firstName,
-        lastName: updated.lastName,
-        username,
-        password: temporaryPassword,
-      });
     } else {
       const identity = await resolveIdentityForAdminUser({
         email,
@@ -532,13 +539,24 @@ router.post("/admin/users", async (req, res): Promise<void> => {
       created = true;
     }
   } catch (error) {
+    if (clerkSyncedBeforeCommit) {
+      req.log.error({ userId: existing?.id, errorCode: (error as { code?: string }).code }, "Clerk update succeeded but staff database transaction failed");
+      res.status(503).json({
+        error: "No se pudo confirmar el cambio. Revisa la cuenta antes de volver a editarla.",
+        code: "USER_CREDENTIAL_REVIEW_REQUIRED",
+      });
+      return;
+    }
     const providerErrors = (error as { errors?: Array<{ code?: string }> } | null)?.errors;
-    const message = providerErrors?.some((item) => item.code === "form_password_length_too_short")
+    const syncCode = error instanceof StaffCredentialSyncError ? error.code : undefined;
+    const message = syncCode === "form_password_length_too_short" || providerErrors?.some((item) => item.code === "form_password_length_too_short")
       ? "La contraseña debe tener al menos 15 caracteres"
-      : providerErrors?.some((item) => item.code?.startsWith("form_password_"))
+      : syncCode?.startsWith("form_password_") || providerErrors?.some((item) => item.code?.startsWith("form_password_"))
         ? "La contraseña no cumple los requisitos de seguridad. Prueba con otra."
+        : error instanceof StaffCredentialSyncError
+          ? "No se guardaron los cambios: no se pudo sincronizar el acceso. Intenta de nuevo."
         : "No se pudo crear el usuario. Revisa el correo y el usuario e inténtalo de nuevo.";
-    res.status(400).json({ error: message, code: "USER_CREATE_FAILED" });
+    res.status(error instanceof StaffCredentialSyncError && !syncCode?.startsWith("form_password_") ? 503 : 400).json({ error: message, code: "USER_CREATE_FAILED" });
     return;
   }
 
@@ -624,20 +642,54 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
     body.data.password?.trim() ||
     (body.data.generatePassword ? generatePassword() : null);
   if (temporaryPassword) patch.passwordHash = hashPassword(temporaryPassword);
+  const needsClerkSync = Boolean(
+    temporaryPassword ||
+    (patch.username !== undefined && patch.username !== current.username) ||
+    (patch.firstName !== undefined && patch.firstName !== current.firstName) ||
+    (patch.lastName !== undefined && patch.lastName !== current.lastName),
+  );
 
-  const [updated] = await db
-    .update(usersTable)
-    .set(patch)
-    .where(eq(usersTable.id, current.id))
-    .returning();
-
-  await syncClerkCredentials({
-    userId: updated.id,
-    firstName: updated.firstName,
-    lastName: updated.lastName,
-    username: updated.username,
-    password: temporaryPassword,
-  });
+  let updated: typeof current;
+  let clerkSyncedBeforeCommit = false;
+  try {
+    updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(usersTable)
+        .set(patch)
+        .where(eq(usersTable.id, current.id))
+        .returning();
+      if (!row) throw new Error("User not found during update");
+      if (needsClerkSync) {
+        await syncClerkCredentials({
+          userId: row.id,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          username: row.username,
+          password: temporaryPassword,
+        });
+        clerkSyncedBeforeCommit = !row.id.startsWith("user_local_");
+      }
+      return row;
+    });
+  } catch (error) {
+    if (clerkSyncedBeforeCommit) {
+      req.log.error({ userId: current.id, errorCode: (error as { code?: string }).code }, "Clerk update succeeded but staff database transaction failed");
+      res.status(503).json({
+        error: "No se pudo confirmar el cambio. Revisa la cuenta antes de volver a editarla.",
+        code: "USER_CREDENTIAL_REVIEW_REQUIRED",
+      });
+      return;
+    }
+    if (!(error instanceof StaffCredentialSyncError)) throw error;
+    const passwordRejected = error.code?.startsWith("form_password_");
+    res.status(passwordRejected ? 400 : 503).json({
+      error: passwordRejected
+        ? "Clerk rechazó la contraseña. Usa otra de al menos 15 caracteres."
+        : "No se guardaron los cambios: no se pudo sincronizar el acceso. Intenta de nuevo.",
+      code: "USER_CREDENTIAL_SYNC_FAILED",
+    });
+    return;
+  }
 
   res.json({
     ...serializeSafeUser(updated),

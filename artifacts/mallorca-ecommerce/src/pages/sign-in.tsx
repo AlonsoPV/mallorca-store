@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AuthenticateWithRedirectCallback } from "@clerk/react";
+import { AuthenticateWithRedirectCallback, SignIn } from "@clerk/react";
 import { useSignIn } from "@clerk/react/legacy";
 import { Link, useLocation } from "wouter";
 import { PasswordSignInForm } from "@/components/password-sign-in-form";
@@ -8,6 +8,7 @@ import {
   clerkSignInErrorMessage,
   credentialsMatch,
   isValidEmailIdentifier,
+  submitClerkPassword,
 } from "@/lib/sign-in-security";
 import { LOCAL_DEV_USER } from "@/lib/local-dev-user";
 import { storeLogo } from "@/lib/store-media";
@@ -64,6 +65,7 @@ function ClerkPasswordGate({
   const { isLoaded, signIn, setActive } = useSignIn();
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [requiresVerification, setRequiresVerification] = useState(false);
 
   if (!isLoaded || !signIn || !setActive) {
     return (
@@ -72,6 +74,15 @@ function ClerkPasswordGate({
   }
 
   const clerkSignIn = signIn;
+
+  if (requiresVerification) {
+    return (
+      <div className="w-full max-w-[440px] space-y-3">
+        <p className="text-sm text-muted-foreground">Completa la verificación adicional para entrar.</p>
+        <SignIn routing="hash" fallbackRedirectUrl={redirectPath} />
+      </div>
+    );
+  }
 
   async function signInWithGoogle() {
     setGoogleError(null);
@@ -114,13 +125,16 @@ function ClerkPasswordGate({
           } else if (!isValidEmailIdentifier(identifier)) {
             return "Escribe un correo electrónico válido.";
           }
-          const result = await clerkSignIn.create({ identifier: email, password });
-          if (result.status === "complete" && result.createdSessionId) {
-            await setActive({ session: result.createdSessionId });
+          const result = await submitClerkPassword(clerkSignIn, email, password, setActive);
+          if (result.kind === "complete") {
             onSuccess();
             return null;
           }
-          return "Completa el inicio de sesión o usa Google.";
+          if (result.kind === "verification") {
+            setRequiresVerification(true);
+            return { kind: "verification" };
+          }
+          return result.message;
         } catch (error) {
           return clerkSignInErrorMessage(error);
         }
