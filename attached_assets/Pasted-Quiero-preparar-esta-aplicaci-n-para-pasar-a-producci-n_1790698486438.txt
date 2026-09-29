@@ -1,0 +1,158 @@
+Quiero preparar esta aplicación para pasar a producción y optimizar al máximo el consumo de recursos y los posibles costos de infraestructura en Replit, SIN afectar la experiencia del usuario ni las funcionalidades actuales.
+
+El objetivo es que acciones normales como navegar por el catálogo, cambiar de sucursal, iniciar sesión, agregar productos al carrito, calcular entrega, crear pedidos y pagar generen únicamente las solicitudes y consultas estrictamente necesarias.
+
+Antes de modificar código, realiza una auditoría completa de la arquitectura actual y detecta qué componentes podrían generar consumo innecesario en producción.
+
+Analiza especialmente:
+
+1. FRONTEND Y SOLICITUDES
+- Detecta llamadas repetidas o innecesarias a la API.
+- Identifica requests que se ejecuten en cada render.
+- Revisa polling, refetch automáticos y listeners.
+- Evita volver a solicitar información que no ha cambiado.
+- Implementa caché donde tenga sentido.
+- Revisa si cambiar de pantalla, categoría o producto provoca consultas duplicadas.
+- Verifica que una pestaña abierta no genere actividad innecesaria continuamente.
+
+2. CATÁLOGO
+El catálogo será una de las áreas con más tráfico.
+
+Optimiza productos, categorías, sucursales, disponibilidad y precios para minimizar consultas al servidor y PostgreSQL.
+
+Prioriza:
+- caché;
+- reutilización de información ya descargada;
+- consultas agrupadas;
+- evitar N+1 queries;
+- paginación/lazy loading cuando tenga sentido;
+- minimizar llamadas al backend por navegación.
+
+No comprometas la actualización correcta de precios, disponibilidad o inventario.
+
+3. CARRITO
+
+Analiza si actualmente cada modificación del carrito genera una llamada al servidor o base de datos.
+
+Cuando sea seguro hacerlo, mantén temporalmente en cliente aquellas operaciones que no necesiten persistencia inmediata.
+
+La validación definitiva de precios, productos, inventario, sucursal, entrega y totales debe continuar realizándose en backend antes de confirmar una orden.
+
+4. AUTENTICACIÓN
+
+Revisa el flujo actual con Clerk.
+
+Evita verificaciones redundantes de sesión o consultas repetidas al backend.
+
+No reduzcas seguridad ni elimines validaciones necesarias.
+
+5. POSTGRESQL
+
+Audita:
+- queries duplicadas;
+- queries N+1;
+- índices faltantes;
+- consultas excesivamente grandes;
+- consultas que puedan consolidarse;
+- conexiones innecesarias;
+- procesos que mantengan la base activa sin necesidad.
+
+No modifiques ni elimines información existente.
+
+6. IMÁGENES Y APP STORAGE
+
+Revisa cómo se cargan y sirven las imágenes.
+
+Optimiza:
+- tamaño;
+- compresión;
+- lazy loading;
+- caché;
+- solicitudes duplicadas.
+
+El objetivo es reducir transferencia de datos sin afectar de manera perceptible la calidad visual.
+
+7. CONEXIONES EN TIEMPO REAL
+
+Revisa cualquier WebSocket, SSE, polling, listener o mecanismo utilizado para actualizar catálogo, pedidos o información.
+
+Una tienda abierta sin interacción del usuario NO debería mantener actividad constante si no es necesaria.
+
+Verifica especialmente que las conexiones se cierren o reduzcan cuando:
+- la pestaña esté oculta;
+- el usuario abandone la página;
+- ya no sea necesaria la suscripción.
+
+8. PEDIDOS Y PAGOS
+
+Mantén máxima seguridad y consistencia.
+
+No optimices eliminando validaciones necesarias.
+
+Verifica que:
+- una compra no pueda crear pedidos duplicados;
+- webhooks sean idempotentes;
+- reintentos no dupliquen operaciones;
+- las consultas relacionadas con una orden sean las estrictamente necesarias;
+- Mercado Pago/PayPal no provoquen procesamiento duplicado.
+
+9. ADMINISTRACIÓN
+
+Revisa que dashboards, pedidos, inventarios y otras pantallas administrativas no estén haciendo polling o consultas continuas sin necesidad.
+
+Usa actualización bajo demanda o mecanismos eficientes cuando sea apropiado.
+
+10. MEDICIÓN
+
+Quiero poder saber qué tan eficiente será la aplicación antes de lanzarla.
+
+Identifica qué operaciones serán las principales responsables del consumo de:
+
+- Autoscale / compute
+- PostgreSQL
+- App Storage
+- transferencia de datos
+- servicios externos
+
+IMPORTANTE:
+
+No realices una migración fuera de Replit.
+
+No cambies proveedores.
+
+No cambies Clerk, PostgreSQL, Mercado Pago, PayPal ni otros servicios actuales únicamente para reducir costos.
+
+No elimines funcionalidades.
+
+No sacrifiques seguridad, consistencia de pedidos ni experiencia del usuario.
+
+PRIMERO entrégame un diagnóstico con una tabla:
+
+Problema detectado | Componente | Impacto esperado en consumo | Riesgo | Optimización recomendada | Prioridad
+
+Clasifica las optimizaciones en:
+
+ALTA — implementar antes de producción  
+MEDIA — recomendable  
+BAJA — optimización futura
+
+Después propón un plan de implementación.
+
+NO realices cambios hasta terminar el diagnóstico.
+
+Una vez aprobado el plan, implementa las optimizaciones progresivamente y verifica después de cada grupo de cambios que:
+
+- login funciona;
+- catálogo funciona;
+- sucursales funcionan;
+- carrito funciona;
+- cálculo de entrega funciona;
+- checkout funciona;
+- creación de pedidos funciona;
+- pagos funcionan;
+- inventario funciona;
+- panel administrativo funciona.
+
+OBJETIVO FINAL:
+
+Tener una aplicación preparada para producción que pueda recibir usuarios y pedidos reales utilizando la menor cantidad razonable de infraestructura de Replit, sin comprometer seguridad, estabilidad ni experiencia de compra.
