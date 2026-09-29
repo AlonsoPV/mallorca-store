@@ -279,12 +279,12 @@ export async function createOrder(
 
   for (const line of lines) {
     if (line.manualLineItem && !canAddManualLineItem(role)) {
-      throw new OrderCreateError("Lùnea manual no permitida para este rol", 403);
+      throw new OrderCreateError("L√≠nea manual no permitida para este rol", 403);
     }
   }
 
   if (input.paymentMethod === "COURTESY" && !canUseCourtesyPayment(role)) {
-    throw new OrderCreateError("Pago cortesùa no permitido para este rol", 403);
+    throw new OrderCreateError("Pago cortes√≠a no permitido para este rol", 403);
   }
 
   const allowUnavailable = Boolean(input.overrides?.stock);

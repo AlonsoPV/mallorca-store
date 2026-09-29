@@ -88,6 +88,45 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const PRODUCTS_LIST_QUERY_KEY = "admin.productos.search";
+const ADMIN_CATALOG_REFRESH_INTERVAL_MS = 60_000;
+
+type CatalogChange = {
+  productId: number;
+  reason: "product" | "promotion" | "inventory";
+  changedAt: string;
+};
+
+function parseCatalogChange(data: string): CatalogChange | null {
+  try {
+    const value = JSON.parse(data) as Partial<CatalogChange>;
+    if (
+      !Number.isInteger(value.productId) ||
+      (value.productId ?? 0) < 1 ||
+      !["product", "promotion", "inventory"].includes(value.reason ?? "") ||
+      typeof value.changedAt !== "string"
+    ) {
+      return null;
+    }
+    return value as CatalogChange;
+  } catch {
+    return null;
+  }
+}
+
+function cacheHasProduct(data: unknown, productIds: Set<number>): boolean {
+  if (!data || typeof data !== "object") return false;
+  if (Array.isArray(data)) return data.some((item) => cacheHasProduct(item, productIds));
+
+  const value = data as Record<string, unknown>;
+  if (
+    typeof value.id === "number" &&
+    productIds.has(value.id) &&
+    ("slug" in value || "sku" in value || "availability" in value || "variants" in value)
+  ) {
+    return true;
+  }
+  return Object.values(value).some((item) => cacheHasProduct(item, productIds));
+}
 
 function parseView(value: string | null): ViewChip {
   if (value === "active" || value === "draft" || value === "inactive" || value === "low" || value === "out" || value === "critical" || value === "normal") {
@@ -320,9 +359,17 @@ export default function AdminProductsList() {
   const statusFilter: ListAdminProductsStatus | undefined =
     view === "active" ? "active" : view === "draft" ? "draft" : view === "inactive" ? "inactive" : undefined;
 
-  const { data: products, isLoading: productsLoading, isError: productsError, refetch } = useListAdminProducts({
+  const productParams = {
     search: debouncedSearch || undefined,
     status: statusFilter,
+  };
+  const { data: products, isLoading: productsLoading, isError: productsError, refetch } = useListAdminProducts(productParams, {
+    query: {
+      queryKey: getListAdminProductsQueryKey(productParams),
+      refetchInterval: ADMIN_CATALOG_REFRESH_INTERVAL_MS,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+    },
   });
   const inventoryStates = { low: "LOW_STOCK", critical: "CRITICAL_STOCK", out: "OUT_OF_STOCK", normal: "NORMAL" } as const;
   const inventoryState = inventoryStates[view as keyof typeof inventoryStates];
@@ -341,6 +388,105 @@ export default function AdminProductsList() {
   const duplicate = useDuplicateProduct();
   const exportProducts = useExportProducts();
   const bulk = useBulkUpdateProducts();
+
+  useEffect(() => {
+    let events: EventSource | null = null;
+    let reconnectNeedsRefresh = false;
+    let pendingChanges: CatalogChange[] = [];
+    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const invalidateCatalog = (changes: CatalogChange[], refreshAll = false) => {
+      const productIds = new Set(changes.map((change) => change.productId));
+      const refreshProductLists =
+        refreshAll ||
+        changes.some((change) => change.reason === "product" || change.reason === "inventory");
+      const refreshInventory =
+        refreshAll ||
+        changes.some((change) => change.reason === "product" || change.reason === "inventory");
+
+      void queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          if (typeof key !== "string") return false;
+          if (key.startsWith("/api/admin/products")) {
+            return refreshAll || (key === "/api/admin/products" && refreshProductLists) ||
+              cacheHasProduct(query.state.data, productIds);
+          }
+          if (key.startsWith("/api/admin/inventory")) {
+            return refreshInventory || cacheHasProduct(query.state.data, productIds);
+          }
+          return false;
+        },
+      });
+    };
+
+    const flushChanges = (refreshAll = false) => {
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      invalidateTimer = null;
+      const changes = pendingChanges;
+      pendingChanges = [];
+      invalidateCatalog(changes, refreshAll);
+    };
+
+    const onChange = (event: Event) => {
+      const change = parseCatalogChange((event as MessageEvent<string>).data);
+      if (!change) {
+        pendingChanges = [];
+        flushChanges(true);
+        return;
+      }
+      pendingChanges.push(change);
+      if (!invalidateTimer) invalidateTimer = setTimeout(() => flushChanges(), 100);
+    };
+
+    const onOpen = () => {
+      if (!reconnectNeedsRefresh) return;
+      reconnectNeedsRefresh = false;
+      pendingChanges = [];
+      flushChanges(true);
+    };
+
+    const onError = () => {
+      reconnectNeedsRefresh = true;
+    };
+
+    const syncConnection = () => {
+      if (document.visibilityState === "hidden") {
+        if (invalidateTimer) clearTimeout(invalidateTimer);
+        invalidateTimer = null;
+        pendingChanges = [];
+        events?.removeEventListener("catalog-change", onChange);
+        events?.removeEventListener("open", onOpen);
+        events?.removeEventListener("error", onError);
+        events?.close();
+        events = null;
+      } else if (!events) {
+        events = new EventSource("/api/catalog/events");
+        events.addEventListener("catalog-change", onChange);
+        events.addEventListener("open", onOpen);
+        events.addEventListener("error", onError);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        pendingChanges = [];
+        flushChanges(true);
+      }
+      syncConnection();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    syncConnection();
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      events?.removeEventListener("catalog-change", onChange);
+      events?.removeEventListener("open", onOpen);
+      events?.removeEventListener("error", onError);
+      events?.close();
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+    };
+  }, [queryClient]);
 
   const categoryList = categories.data ?? [];
   const branchList = branches.data ?? [];

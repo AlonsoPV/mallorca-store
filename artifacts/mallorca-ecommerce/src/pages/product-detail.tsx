@@ -33,7 +33,7 @@ export default function ProductDetail() {
       queryKey: getGetProductQueryKey(slug || "", productParams),
       staleTime: PRODUCT_PRICE_REFRESH_INTERVAL_MS,
       refetchInterval: PRODUCT_PRICE_REFRESH_INTERVAL_MS,
-      refetchOnMount: "always",
+      refetchOnMount: true,
       refetchOnWindowFocus: true,
     },
   });

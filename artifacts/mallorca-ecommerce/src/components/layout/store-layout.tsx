@@ -14,6 +14,47 @@ import { cn } from "@/lib/utils";
 import footerLogo from "@assets/MallorcaFooter_1789166205501.webp";
 import mallorcaLogo from "@assets/mallorca_logo.webp";
 
+const PUBLIC_CATALOG_FALLBACK_INTERVAL_MS = 60_000;
+
+type CatalogChange = {
+  productId: number;
+  reason: "product" | "promotion" | "inventory";
+  changedAt: string;
+};
+
+function parseCatalogChange(data: string): CatalogChange | null {
+  try {
+    const value = JSON.parse(data) as Partial<CatalogChange>;
+    if (
+      !Number.isInteger(value.productId) ||
+      (value.productId ?? 0) < 1 ||
+      !["product", "promotion", "inventory"].includes(value.reason ?? "") ||
+      typeof value.changedAt !== "string"
+    ) {
+      return null;
+    }
+    return value as CatalogChange;
+  } catch {
+    return null;
+  }
+}
+
+function cacheHasProduct(data: unknown, productIds: Set<number>): boolean {
+  if (!data || typeof data !== "object") return false;
+  if (Array.isArray(data)) return data.some((item) => cacheHasProduct(item, productIds));
+
+  const value = data as Record<string, unknown>;
+  const id = value.id;
+  if (
+    typeof id === "number" &&
+    productIds.has(id) &&
+    ("slug" in value || "sku" in value || "availability" in value || "variants" in value)
+  ) {
+    return true;
+  }
+  return Object.values(value).some((item) => cacheHasProduct(item, productIds));
+}
+
 export function StoreLayout({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -28,6 +69,8 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   const { data: footerBranches } = useListBranches();
   
   const { cartId, openMiniCart, clearCartSession } = useCart();
+  const cartIdRef = useRef(cartId);
+  cartIdRef.current = cartId;
   const { data: cart, isError: cartError, error: cartErrorValue } = useGetCart(cartId!, {
     query: {
       enabled: !!cartId,
@@ -91,28 +134,117 @@ export function StoreLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let events: EventSource | null = null;
-    const onChange = () => {
+    let catalogFallbackTimer: ReturnType<typeof setInterval> | null = null;
+    let reconnectNeedsRefresh = false;
+    let pendingChanges: CatalogChange[] = [];
+    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const invalidateCatalog = (changes: CatalogChange[], refreshAll = false) => {
+      const productIds = new Set(changes.map((change) => change.productId));
+      const refreshProductLists =
+        refreshAll ||
+        changes.some((change) => change.reason === "product" || change.reason === "inventory");
       void queryClient.invalidateQueries({
         predicate: (query) => {
           const key = query.queryKey[0];
-          return typeof key === "string" && key.startsWith("/api/products");
+          if (typeof key !== "string") return false;
+          const isPublicProductQuery = key.startsWith("/api/products");
+          if (!isPublicProductQuery) return false;
+          if (refreshAll) return true;
+
+          const isProductCollection = key === "/api/products";
+          if (isProductCollection && refreshProductLists) return true;
+          return cacheHasProduct(query.state.data, productIds);
         },
+      });
+
+      const activeCartId = cartIdRef.current;
+      if (activeCartId) {
+        void queryClient.invalidateQueries({
+          queryKey: getGetCartQueryKey(activeCartId),
+          exact: true,
+          predicate: (query) => {
+            if (refreshAll) return true;
+            const items = (query.state.data as { items?: Array<{ productId?: number }> } | undefined)?.items;
+            return !!items?.some((item) => typeof item.productId === "number" && productIds.has(item.productId));
+          },
+        });
+      }
+    };
+
+    const flushChanges = (refreshAll = false) => {
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      invalidateTimer = null;
+      const changes = pendingChanges;
+      pendingChanges = [];
+      invalidateCatalog(changes, refreshAll);
+    };
+
+    const queueChange = (change: CatalogChange | null) => {
+      if (!change) {
+        pendingChanges = [];
+        flushChanges(true);
+        return;
+      }
+      pendingChanges.push(change);
+      if (invalidateTimer) return;
+      invalidateTimer = setTimeout(() => flushChanges(), 100);
+    };
+
+    const onChange = (event: Event) => {
+      const change = parseCatalogChange((event as MessageEvent<string>).data);
+      queueChange(change);
+    };
+
+    const onOpen = () => {
+      if (!reconnectNeedsRefresh) return;
+      reconnectNeedsRefresh = false;
+      queueChange(null);
+    };
+
+    const onError = () => {
+      reconnectNeedsRefresh = true;
+    };
+
+    const refreshActiveProductCollections = () => {
+      if (document.visibilityState !== "visible") return;
+      void queryClient.refetchQueries({
+        type: "active",
+        predicate: (query) => query.queryKey[0] === "/api/products",
       });
     };
 
     const syncConnection = () => {
       if (document.visibilityState === "hidden") {
+        if (catalogFallbackTimer) clearInterval(catalogFallbackTimer);
+        catalogFallbackTimer = null;
+        if (invalidateTimer) clearTimeout(invalidateTimer);
+        invalidateTimer = null;
+        pendingChanges = [];
         events?.removeEventListener("catalog-change", onChange);
+        events?.removeEventListener("open", onOpen);
+        events?.removeEventListener("error", onError);
         events?.close();
         events = null;
       } else if (!events) {
         events = new EventSource("/api/catalog/events");
         events.addEventListener("catalog-change", onChange);
+        events.addEventListener("open", onOpen);
+        events.addEventListener("error", onError);
+      }
+      if (document.visibilityState === "visible" && !catalogFallbackTimer) {
+        catalogFallbackTimer = setInterval(
+          refreshActiveProductCollections,
+          PUBLIC_CATALOG_FALLBACK_INTERVAL_MS,
+        );
       }
     };
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") onChange();
+      if (document.visibilityState === "visible") {
+        pendingChanges = [];
+        flushChanges(true);
+      }
       syncConnection();
     };
 
@@ -121,7 +253,11 @@ export function StoreLayout({ children }: { children: ReactNode }) {
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       events?.removeEventListener("catalog-change", onChange);
+      events?.removeEventListener("open", onOpen);
+      events?.removeEventListener("error", onError);
       events?.close();
+      if (catalogFallbackTimer) clearInterval(catalogFallbackTimer);
+      if (invalidateTimer) clearTimeout(invalidateTimer);
     };
   }, [queryClient]);
 

@@ -2,6 +2,7 @@ import {
   and,
   asc,
   eq,
+  exists,
   gt,
   ilike,
   inArray,
@@ -111,6 +112,7 @@ export {
   promotionStatus,
   resolveCatalogPrice,
   selectPromotionForBranch,
+  type PromotionCandidate,
   type PromotionStatus,
 } from "./catalog-promotions.ts";
 
@@ -160,6 +162,13 @@ async function activePromotionCandidates(
   return byProduct;
 }
 
+export async function getActivePromotionCandidates(
+  productIds: number[],
+  now = new Date(),
+) {
+  return activePromotionCandidates(productIds, now);
+}
+
 export function serializePromotion(
   candidate: PromotionCandidate,
   basePrice: number,
@@ -181,6 +190,23 @@ export function serializePromotion(
     savings,
     branchIds: candidate.branchIds,
   };
+}
+
+export function groupAvailabilityRowsByProduct<
+  T extends { branchProduct: { productId: number } },
+>(rows: T[]) {
+  const grouped = new Map<number, T[]>();
+  for (const row of rows) {
+    const productId = row.branchProduct.productId;
+    const productRows = grouped.get(productId) ?? [];
+    productRows.push(row);
+    grouped.set(productId, productRows);
+  }
+  return grouped;
+}
+
+export function detailProductCardFilters(productId: number): ProductFilters {
+  return { productIds: [productId], publicOnly: false };
 }
 
 export async function getActivePromotion(
@@ -245,6 +271,44 @@ export async function listProductCards(filters: ProductFilters = {}) {
     conditions.push(inArray(productsTable.id, filters.productIds));
   }
 
+  if (filters.branchIds) {
+    conditions.push(
+      exists(
+        db
+          .select({ id: branchProductsTable.id })
+          .from(branchProductsTable)
+          .innerJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
+          .where(
+            and(
+              eq(branchProductsTable.productId, productsTable.id),
+              eq(branchesTable.active, true),
+              inArray(branchesTable.id, filters.branchIds),
+            ),
+          ),
+      ),
+    );
+  }
+
+  if (filters.branchSlug && !filters.includeUnavailable) {
+    conditions.push(
+      exists(
+        db
+          .select({ id: branchProductsTable.id })
+          .from(branchProductsTable)
+          .innerJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
+          .where(
+            and(
+              eq(branchProductsTable.productId, productsTable.id),
+              eq(branchesTable.slug, filters.branchSlug),
+              eq(branchesTable.active, true),
+              eq(branchProductsTable.available, true),
+              gt(branchProductsTable.inventory, 0),
+            ),
+          ),
+      ),
+    );
+  }
+
   const productRows = await db
     .select({
       product: productsTable,
@@ -288,11 +352,11 @@ export async function listProductCards(filters: ProductFilters = {}) {
   const reservedByBp = await loadReservedByBranchProductIds(
     availabilityRows.map(({ branchProduct }) => branchProduct.id),
   );
+  const availabilityByProduct = groupAvailabilityRowsByProduct(availabilityRows);
 
   return productRows
     .map(({ product, categoryName, categorySlug }) => {
-      const availability = availabilityRows
-        .filter(({ branchProduct }) => branchProduct.productId === product.id)
+      const availability = (availabilityByProduct.get(product.id) ?? [])
         .map(({ branchProduct, branchId, branchSlug, branchName, branchPrep }) => {
           const preparationTimeMinutes =
             branchProduct.preparationTimeMinutes ??
@@ -409,10 +473,7 @@ export async function getProductDetailBySlug(slug: string, branchId?: number) {
 
   if (!row) return null;
 
-  const [card] = await listProductCards({
-    search: row.product.sku,
-    publicOnly: false,
-  });
+  const [card] = await listProductCards(detailProductCardFilters(row.product.id));
 
   if (!card) return null;
 

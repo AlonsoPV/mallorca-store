@@ -14,6 +14,59 @@ declare global {
 }
 
 const LOCAL_DEV_AUTH_TOKEN = "local-dev";
+const CLERK_PROFILE_REFRESH_INTERVAL_MS = 15 * 60_000;
+const MAX_CLERK_PROFILE_REFRESH_USERS = 10_000;
+const clerkProfileRefreshAttempts = new Map<string, number>();
+
+type UserProfile = Pick<User, "email" | "firstName" | "lastName">;
+type UserProfileInput = {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+export function userProfileChanges(
+  current: UserProfile,
+  profile: UserProfileInput,
+): Partial<UserProfile> {
+  const changes: Partial<UserProfile> = {};
+  if (profile.email !== undefined && profile.email !== current.email) changes.email = profile.email;
+  if (profile.firstName !== undefined && profile.firstName !== current.firstName) {
+    changes.firstName = profile.firstName;
+  }
+  if (profile.lastName !== undefined && profile.lastName !== current.lastName) {
+    changes.lastName = profile.lastName;
+  }
+  return changes;
+}
+
+export function shouldRefreshClerkProfile(userId: string, now = Date.now()): boolean {
+  const lastAttempt = clerkProfileRefreshAttempts.get(userId);
+  if (lastAttempt !== undefined && now - lastAttempt < CLERK_PROFILE_REFRESH_INTERVAL_MS) {
+    clerkProfileRefreshAttempts.delete(userId);
+    clerkProfileRefreshAttempts.set(userId, lastAttempt);
+    return false;
+  }
+
+  clerkProfileRefreshAttempts.delete(userId);
+  clerkProfileRefreshAttempts.set(userId, now);
+  if (clerkProfileRefreshAttempts.size > MAX_CLERK_PROFILE_REFRESH_USERS) {
+    const oldestUserId = clerkProfileRefreshAttempts.keys().next().value;
+    if (oldestUserId !== undefined) clerkProfileRefreshAttempts.delete(oldestUserId);
+  }
+  return true;
+}
+
+export function shouldPromoteInitialAdmin(
+  user: Pick<User, "email" | "role">,
+  initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase(),
+): boolean {
+  return Boolean(
+    initialAdminEmail &&
+      user.role !== "admin" &&
+      user.email.toLowerCase() === initialAdminEmail.trim().toLowerCase(),
+  );
+}
 
 function isLocalDevAuthEnabled(): boolean {
   if (process.env.NODE_ENV !== "development") return false;
@@ -23,6 +76,16 @@ function isLocalDevAuthEnabled(): boolean {
 
 function claimString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+export async function findOrProvisionUser<T>(
+  lookup: () => Promise<T | undefined>,
+  provision: () => Promise<T | undefined>,
+): Promise<T | undefined> {
+  const existing = await lookup();
+  if (existing) return existing;
+  const created = await provision();
+  return created ?? lookup();
 }
 
 function readBearerToken(req: Request): string | undefined {
@@ -59,20 +122,21 @@ async function provisionLocalDevUser(req: Request): Promise<User | undefined> {
   const lastName = process.env.LOCAL_DEV_USER_LAST_NAME?.trim() || "Local";
   const role = "admin" as const;
 
-  const [user] = await db
-    .insert(usersTable)
-    .values({ id: userId, email, firstName, lastName, role })
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      set: {
-        email,
-        firstName,
-        lastName,
-        role,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
+  const user = await findOrProvisionUser(
+    async () => {
+      const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+      return existing;
+    },
+    async () => {
+      const [created] = await db
+        .insert(usersTable)
+        .values({ id: userId, email, firstName, lastName, role })
+        .onConflictDoNothing({ target: usersTable.id })
+        .returning();
+      return created;
+    },
+  );
+  if (!user) return undefined;
 
   req.userId = userId;
   req.localUser = user;
@@ -107,37 +171,87 @@ export async function provisionUser(req: Request): Promise<User | undefined> {
   const claims = (auth.sessionClaims ?? {}) as unknown as Record<string, unknown>;
   const userId = auth.userId ?? claimString(claims.userId);
   if (!userId) return undefined;
-  const claimEmail =
-    claimString(claims.email) ??
-    claimString(claims.email_address) ??
-    undefined;
-  const claimFirstName = claimString(claims.first_name) ?? claimString(claims.firstName);
-  const claimLastName = claimString(claims.last_name) ?? claimString(claims.lastName);
-  const clerkProfile = claimEmail && claimFirstName !== undefined && claimLastName !== undefined
-    ? {}
-    : await resolveClerkProfile(userId);
-  const email = claimEmail ?? clerkProfile.email ?? `${userId}@clerk.invalid`;
-  const firstName = claimFirstName ?? clerkProfile.firstName;
-  const lastName = claimLastName ?? clerkProfile.lastName;
-  const initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
-  const role = initialAdminEmail && email.toLowerCase() === initialAdminEmail ? "admin" : undefined;
-  const [user] = await db
-    .insert(usersTable)
-    .values({ id: userId, email, firstName, lastName, ...(role ? { role } : {}) })
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      set: {
-        email,
-        firstName,
-        lastName,
-        ...(role ? { role } : {}),
-        updatedAt: new Date(),
-      },
-    })
+  const lookup = async () => {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    return user;
+  };
+  const claimProfile: UserProfileInput = {
+    email: claimString(claims.email) ?? claimString(claims.email_address),
+    firstName: claimString(claims.first_name) ?? claimString(claims.firstName),
+    lastName: claimString(claims.last_name) ?? claimString(claims.lastName),
+  };
+  let createdUser = false;
+  const user = await findOrProvisionUser(
+    lookup,
+    async () => {
+      const hasMissingClaims =
+        !claimProfile.email || claimProfile.firstName === undefined || claimProfile.lastName === undefined;
+      const clerkProfile = !hasMissingClaims
+        ? {}
+        : await resolveClerkProfile(userId);
+      const email = claimProfile.email ?? clerkProfile.email ?? `${userId}@clerk.invalid`;
+      const firstName = claimProfile.firstName ?? clerkProfile.firstName;
+      const lastName = claimProfile.lastName ?? clerkProfile.lastName;
+      const initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
+      const role = initialAdminEmail && email.toLowerCase() === initialAdminEmail ? "admin" : undefined;
+      const [created] = await db
+        .insert(usersTable)
+        .values({ id: userId, email, firstName, lastName, ...(role ? { role } : {}) })
+        .onConflictDoNothing({ target: usersTable.id })
+        .returning();
+      createdUser = Boolean(created);
+      return created;
+    },
+  );
+  if (!user) return undefined;
+  const currentUser = createdUser
+    ? user
+    : await syncExistingUserProfile(user, userId, claimProfile);
+  if (!currentUser) return undefined;
+  const authorizedUser = await promoteInitialAdmin(currentUser);
+  if (!authorizedUser) return undefined;
+  req.userId = authorizedUser.id;
+  req.localUser = authorizedUser;
+  return authorizedUser;
+}
+
+async function promoteInitialAdmin(user: User): Promise<User | undefined> {
+  if (!shouldPromoteInitialAdmin(user)) return user;
+  const [promoted] = await db
+    .update(usersTable)
+    .set({ role: "admin", updatedAt: new Date() })
+    .where(eq(usersTable.id, user.id))
     .returning();
-  req.userId = userId;
-  req.localUser = user;
-  return user;
+  return promoted;
+}
+
+async function syncExistingUserProfile(
+  user: User,
+  userId: string,
+  claimProfile: UserProfileInput,
+): Promise<User | undefined> {
+  const hasMissingClaims =
+    claimProfile.email === undefined ||
+    claimProfile.firstName === undefined ||
+    claimProfile.lastName === undefined;
+  const clerkProfile =
+    hasMissingClaims && shouldRefreshClerkProfile(userId)
+      ? await resolveClerkProfile(userId)
+      : {};
+  const profile: UserProfileInput = {
+    email: claimProfile.email ?? clerkProfile.email,
+    firstName: claimProfile.firstName ?? clerkProfile.firstName,
+    lastName: claimProfile.lastName ?? clerkProfile.lastName,
+  };
+  const changes = userProfileChanges(user, profile);
+  if (Object.keys(changes).length === 0) return user;
+
+  const [updated] = await db
+    .update(usersTable)
+    .set({ ...changes, updatedAt: new Date() })
+    .where(eq(usersTable.id, userId))
+    .returning();
+  return updated;
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   productsTable,
@@ -6,7 +6,12 @@ import {
   branchProductsTable,
   couponsTable,
 } from "@workspace/db";
-import { getActivePromotion, resolveCatalogPrice } from "./catalog";
+import {
+  getActivePromotionCandidates,
+  resolveCatalogPrice,
+  selectPromotionForBranch,
+  type PromotionCandidate,
+} from "./catalog";
 import { computeDeliveryFee } from "./delivery-validation";
 import { loadReservedByBranchProductIds, sellableUnits } from "./reserved-stock";
 import {
@@ -74,110 +79,187 @@ export async function priceCatalogLine(params: {
   quantity: number;
   allowUnavailable?: boolean;
 }): Promise<PricedOrderLine> {
-  const [product] = await db
+  return (await priceCatalogLines({
+    branchId: params.branchId,
+    lines: [params],
+    allowUnavailable: params.allowUnavailable,
+  }))[0];
+}
+
+async function priceCatalogLines(params: {
+  branchId: number;
+  lines: Array<{
+    productId: number;
+    variantId?: number | null;
+    quantity: number;
+  }>;
+  allowUnavailable?: boolean;
+}): Promise<PricedOrderLine[]> {
+  if (!params.lines.length) return [];
+  const productIds = [...new Set(params.lines.map((line) => line.productId))];
+  const products = await db
     .select({ product: productsTable, bp: branchProductsTable })
     .from(branchProductsTable)
     .innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id))
     .where(
       and(
         eq(branchProductsTable.branchId, params.branchId),
-        eq(productsTable.id, params.productId),
+        inArray(productsTable.id, productIds),
       ),
     );
-  if (!product) {
-    return {
-      productId: params.productId,
-      variantId: params.variantId ?? null,
-      sku: "UNKNOWN",
-      name: "Producto",
-      variantLabel: null,
-      quantity: params.quantity,
-      listUnitPrice: 0,
-      unitPrice: 0,
-      lineTotal: 0,
-      promotionId: null,
-      promotionDiscount: 0,
-      manualLineItem: false,
-      available: false,
-      inventory: null,
-      reason: "Producto no encontrado en la sucursal",
-    };
-  }
+  const productById = new Map(products.map((row) => [row.product.id, row]));
+  const requestedVariantIds = [
+    ...new Set(
+      params.lines
+        .filter((line) => line.variantId)
+        .map((line) => line.variantId as number),
+    ),
+  ];
+  const variants = requestedVariantIds.length
+    ? await db
+        .select()
+        .from(productVariantsTable)
+        .where(
+          and(
+            inArray(productVariantsTable.id, requestedVariantIds),
+            eq(productVariantsTable.active, true),
+          ),
+        )
+    : [];
+  const variantById = new Map(variants.map((variant) => [variant.id, variant]));
+  const validItems = params.lines.flatMap((line) => {
+    const product = productById.get(line.productId);
+    const variant = line.variantId ? variantById.get(line.variantId) : undefined;
+    return product && (!line.variantId || variant?.productId === line.productId)
+      ? [{ line, product, variant }]
+      : [];
+  });
+  const validProductIds = [...new Set(validItems.map(({ product }) => product.product.id))];
+  const promotionsByProduct = validProductIds.length
+    ? await getActivePromotionCandidates(validProductIds)
+    : new Map();
+  const branchProductIds = [
+    ...new Set(validItems.map(({ product }) => product.bp.id)),
+  ];
+  const reservedByBranchProduct = await loadReservedByBranchProductIds(branchProductIds);
 
-  const variant = params.variantId
-    ? (
-        await db
-          .select()
-          .from(productVariantsTable)
-          .where(
-            and(
-              eq(productVariantsTable.id, params.variantId),
-              eq(productVariantsTable.productId, params.productId),
-              eq(productVariantsTable.active, true),
-            ),
-          )
-      )[0]
-    : undefined;
+  return priceCatalogLinesFromLoadedData({
+    ...params,
+    products,
+    variants,
+    promotionsByProduct,
+    reservedByBranchProduct,
+  });
+}
 
-  if (params.variantId && !variant) {
+export function priceCatalogLinesFromLoadedData(params: {
+  branchId: number;
+  lines: Array<{
+    productId: number;
+    variantId?: number | null;
+    quantity: number;
+  }>;
+  allowUnavailable?: boolean;
+  products: Array<{
+    product: typeof productsTable.$inferSelect;
+    bp: typeof branchProductsTable.$inferSelect;
+  }>;
+  variants: Array<typeof productVariantsTable.$inferSelect>;
+  promotionsByProduct: Map<number, PromotionCandidate[]>;
+  reservedByBranchProduct: Map<number, number>;
+}): PricedOrderLine[] {
+  const productById = new Map(params.products.map((row) => [row.product.id, row]));
+  const variantById = new Map(params.variants.map((variant) => [variant.id, variant]));
+
+  return params.lines.map((line) => {
+    const product = productById.get(line.productId);
+    if (!product) {
+      return {
+        productId: line.productId,
+        variantId: line.variantId ?? null,
+        sku: "UNKNOWN",
+        name: "Producto",
+        variantLabel: null,
+        quantity: line.quantity,
+        listUnitPrice: 0,
+        unitPrice: 0,
+        lineTotal: 0,
+        promotionId: null,
+        promotionDiscount: 0,
+        manualLineItem: false,
+        available: false,
+        inventory: null,
+        reason: "Producto no encontrado en la sucursal",
+      };
+    }
+
+    const variant = line.variantId ? variantById.get(line.variantId) : undefined;
+    if (line.variantId && variant?.productId !== line.productId) {
+      return {
+        productId: line.productId,
+        variantId: line.variantId,
+        sku: product.product.sku,
+        name: product.product.name,
+        variantLabel: null,
+        quantity: line.quantity,
+        listUnitPrice: 0,
+        unitPrice: 0,
+        lineTotal: 0,
+        promotionId: null,
+        promotionDiscount: 0,
+        manualLineItem: false,
+        available: false,
+        inventory: product.bp.inventory,
+        reason: "Variante no disponible",
+      };
+    }
+
+    const listUnitPrice = variant?.price ?? product.bp.priceOverride ?? product.product.price;
+    const legacySalePrice =
+      variant?.salePrice ?? product.bp.salePriceOverride ?? product.product.salePrice;
+    const promotion = selectPromotionForBranch(
+      params.promotionsByProduct.get(product.product.id),
+      params.branchId,
+    );
+    const unitPrice = resolveCatalogPrice(
+      listUnitPrice,
+      legacySalePrice,
+      promotion?.promotion,
+    ).finalPrice;
+    const reserved = params.reservedByBranchProduct.get(product.bp.id) ?? 0;
+    const inventory = sellableUnits(product.bp.inventory, reserved);
+    const available =
+      product.product.status === "active" &&
+      product.bp.available &&
+      inventory >= line.quantity;
+    const reason = available
+      ? null
+      : product.product.status !== "active"
+        ? "Producto inactivo"
+        : !product.bp.available
+          ? "No disponible en esta sucursal"
+          : inventory < line.quantity
+            ? "Stock insuficiente"
+            : null;
+
     return {
-      productId: params.productId,
-      variantId: params.variantId,
-      sku: product.product.sku,
+      productId: product.product.id,
+      variantId: variant?.id ?? null,
+      sku: variant?.sku ?? product.product.sku,
       name: product.product.name,
-      variantLabel: null,
-      quantity: params.quantity,
-      listUnitPrice: 0,
-      unitPrice: 0,
-      lineTotal: 0,
-      promotionId: null,
-      promotionDiscount: 0,
+      variantLabel: variant ? `${variant.name}: ${variant.value}` : null,
+      quantity: line.quantity,
+      listUnitPrice,
+      unitPrice,
+      lineTotal: roundMoney(unitPrice * line.quantity),
+      promotionId: promotion?.promotion.id ?? null,
+      promotionDiscount: roundMoney(Math.max(0, listUnitPrice - unitPrice) * line.quantity),
       manualLineItem: false,
-      available: false,
-      inventory: product.bp.inventory,
-      reason: "Variante no disponible",
+      available: available || Boolean(params.allowUnavailable),
+      inventory,
+      reason: params.allowUnavailable ? null : reason,
     };
-  }
-
-  const listUnitPrice = variant?.price ?? product.bp.priceOverride ?? product.product.price;
-  const legacySalePrice =
-    variant?.salePrice ?? product.bp.salePriceOverride ?? product.product.salePrice;
-  const promotion = await getActivePromotion(product.product.id, params.branchId);
-  const resolved = resolveCatalogPrice(listUnitPrice, legacySalePrice, promotion?.promotion);
-  const unitPrice = resolved.finalPrice;
-  const reserved = await loadReservedByBranchProductIds([product.bp.id]);
-  const inventory = sellableUnits(product.bp.inventory, reserved.get(product.bp.id) ?? 0);
-  const available =
-    product.product.status === "active" &&
-    product.bp.available &&
-    inventory >= params.quantity;
-  const reason = available
-    ? null
-    : product.product.status !== "active"
-      ? "Producto inactivo"
-      : !product.bp.available
-        ? "No disponible en esta sucursal"
-        : inventory < params.quantity
-          ? "Stock insuficiente"
-          : null;
-
-  return {
-    productId: product.product.id,
-    variantId: variant?.id ?? null,
-    sku: variant?.sku ?? product.product.sku,
-    name: product.product.name,
-    variantLabel: variant ? `${variant.name}: ${variant.value}` : null,
-    quantity: params.quantity,
-    listUnitPrice,
-    unitPrice,
-    lineTotal: roundMoney(unitPrice * params.quantity),
-    promotionId: promotion?.promotion.id ?? null,
-    promotionDiscount: roundMoney(Math.max(0, listUnitPrice - unitPrice) * params.quantity),
-    manualLineItem: false,
-    available: available || Boolean(params.allowUnavailable),
-    inventory,
-    reason: params.allowUnavailable ? null : reason,
-  };
+  });
 }
 
 export function priceManualLine(params: {
@@ -251,15 +333,22 @@ export async function priceOrderLines(params: {
   allowUnavailable?: boolean;
 }): Promise<OrderTotals & { errors: string[] }> {
   const errors: string[] = [];
-  const lines: PricedOrderLine[] = [];
+  const pricedByRequestIndex = new Map<number, PricedOrderLine>();
+  const catalogIndexes: number[] = [];
+  const catalogRequests: Array<{
+    productId: number;
+    variantId?: number | null;
+    quantity: number;
+  }> = [];
 
-  for (const line of params.lines) {
+  for (const [index, line] of params.lines.entries()) {
     if (line.manualLineItem) {
       if (line.unitPrice == null || line.unitPrice < 0) {
         errors.push("Precio inválido en línea manual");
         continue;
       }
-      lines.push(
+      pricedByRequestIndex.set(
+        index,
         priceManualLine({
           description: line.description ?? "Concepto manual",
           quantity: line.quantity,
@@ -272,16 +361,25 @@ export async function priceOrderLines(params: {
       errors.push("Producto requerido");
       continue;
     }
-    lines.push(
-      await priceCatalogLine({
-        branchId: params.branchId,
-        productId: line.productId,
-        variantId: line.variantId,
-        quantity: line.quantity,
-        allowUnavailable: params.allowUnavailable,
-      }),
-    );
+    catalogIndexes.push(index);
+    catalogRequests.push({
+      productId: line.productId,
+      variantId: line.variantId,
+      quantity: line.quantity,
+    });
   }
+
+  const catalogLines = await priceCatalogLines({
+    branchId: params.branchId,
+    lines: catalogRequests,
+    allowUnavailable: params.allowUnavailable,
+  });
+  catalogLines.forEach((line, index) => {
+    pricedByRequestIndex.set(catalogIndexes[index], line);
+  });
+  const lines = [...pricedByRequestIndex.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, line]) => line);
 
   for (const line of lines) {
     if (!line.available && !line.manualLineItem) {

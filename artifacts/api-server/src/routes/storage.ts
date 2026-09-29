@@ -4,16 +4,200 @@ import {
   RequestUploadUrlResponse,
 } from '@workspace/api-zod';
 import { Router, type IRouter, type Request, type Response } from 'express';
+import { sql } from 'drizzle-orm';
+import { db } from '@workspace/db';
 
 import { ObjectPermission } from '../lib/objectAcl';
 import {
   ObjectNotFoundError,
   ObjectStorageService,
 } from '../lib/objectStorage';
-import { requireRole } from "../middlewares/auth";
+import { getRequestUser, requireRole } from "../middlewares/auth";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+const PUBLIC_IMAGE_CONTENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+]);
+const INACTIVE_IMAGE_VIEW_ROLES = new Set([
+  'staff',
+  'branch_manager',
+  'operations_manager',
+  'operations',
+  'manager',
+  'admin',
+]);
+
+function canonicalObjectPath(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  let path = value.trim();
+  if (path.startsWith('/api/storage/objects/')) {
+    path = path.slice('/api/storage'.length);
+  }
+  if (!path.startsWith('/objects/')) return undefined;
+
+  const segments = path.slice('/objects/'.length).split('/');
+  if (
+    segments.length === 0 ||
+    segments.some(
+      (segment) =>
+        !segment ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.includes('\\'),
+    )
+  ) {
+    return undefined;
+  }
+  return `/objects/${segments.join('/')}`;
+}
+
+async function isPublicImageReference(path: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT (
+      EXISTS (
+        SELECT 1 FROM products p
+        WHERE p.status = 'active'
+          AND (
+            p.image_url = ${path}
+            OR p.gallery @> ${JSON.stringify([path])}::jsonb
+          )
+      )
+      OR EXISTS (
+        SELECT 1 FROM branches b
+        WHERE b.status = 'active' AND b.active = true
+          AND (
+            b.image_url = ${path}
+            OR b.og_image_url = ${path}
+            OR b.gallery @> ${JSON.stringify([path])}::jsonb
+          )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM branch_images bi
+        INNER JOIN branches b ON b.id = bi.branch_id
+        WHERE bi.url = ${path}
+          AND bi.active = true
+          AND b.status = 'active'
+          AND b.active = true
+      )
+      OR EXISTS (
+        SELECT 1 FROM categories c
+        WHERE c.active = true AND c.image_url = ${path}
+      )
+    ) AS referenced
+  `);
+  return result.rows[0]?.referenced === true;
+}
+
+async function isInactiveImageReference(path: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT (
+      EXISTS (
+        SELECT 1 FROM products p
+        WHERE p.status <> 'active'
+          AND (
+            p.image_url = ${path}
+            OR p.gallery @> ${JSON.stringify([path])}::jsonb
+          )
+      )
+      OR EXISTS (
+        SELECT 1 FROM branches b
+        WHERE (b.status <> 'active' OR b.active = false)
+          AND (
+            b.image_url = ${path}
+            OR b.og_image_url = ${path}
+            OR b.gallery @> ${JSON.stringify([path])}::jsonb
+          )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM branch_images bi
+        INNER JOIN branches b ON b.id = bi.branch_id
+        WHERE bi.url = ${path}
+          AND (
+            bi.active = false
+            OR b.status <> 'active'
+            OR b.active = false
+          )
+      )
+      OR EXISTS (
+        SELECT 1 FROM categories c
+        WHERE c.active = false AND c.image_url = ${path}
+      )
+    ) AS referenced
+  `);
+  return result.rows[0]?.referenced === true;
+}
+
+async function catalogImageContentType(
+  objectFile: Awaited<ReturnType<ObjectStorageService['getObjectEntityFile']>>,
+): Promise<{ contentType: string; etag?: string } | undefined> {
+  const [metadata] = await objectFile.getMetadata();
+  let contentType = String(metadata.contentType || '')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+  if (!contentType) {
+    contentType = (await sniffLegacyImageContentType(objectFile)) || '';
+  }
+  if (!PUBLIC_IMAGE_CONTENT_TYPES.has(contentType)) return undefined;
+  const etag =
+    typeof metadata.etag === 'string'
+      ? metadata.etag.startsWith('"')
+        ? metadata.etag
+        : `"${metadata.etag}"`
+      : undefined;
+  return { contentType, etag };
+}
+
+async function sniffLegacyImageContentType(
+  objectFile: Awaited<ReturnType<ObjectStorageService['getObjectEntityFile']>>,
+): Promise<string | undefined> {
+  const chunks: Buffer[] = [];
+  let length = 0;
+  for await (const chunk of objectFile.createReadStream({ start: 0, end: 31 })) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    chunks.push(bytes);
+    length += bytes.length;
+    if (length >= 32) break;
+  }
+  const signature = Buffer.concat(chunks, length);
+  if (
+    signature.length >= 3 &&
+    signature[0] === 0xff &&
+    signature[1] === 0xd8 &&
+    signature[2] === 0xff
+  ) {
+    return 'image/jpeg';
+  }
+  if (signature.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    return 'image/png';
+  }
+  if (
+    signature.subarray(0, 6).toString('ascii') === 'GIF87a' ||
+    signature.subarray(0, 6).toString('ascii') === 'GIF89a'
+  ) {
+    return 'image/gif';
+  }
+  if (
+    signature.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    signature.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  if (
+    signature.subarray(4, 8).toString('ascii') === 'ftyp' &&
+    ['avif', 'avis'].includes(signature.subarray(8, 12).toString('ascii'))
+  ) {
+    return 'image/avif';
+  }
+  return undefined;
+}
 
 /**
  * POST /storage/uploads/request-url
@@ -96,37 +280,104 @@ router.get(
 /**
  * GET /storage/objects/*
  *
- * Serve object entities from PRIVATE_OBJECT_DIR.
- * These are served from a separate path from /public-objects and can optionally
- * be protected with authentication or ACL checks based on the use case.
+ * Serve public product/branch images only when referenced by active catalog
+ * records. Inactive catalog images are staff-only; other objects require ACL.
  */
 router.get('/storage/objects/*path', async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join('/') : raw;
-    const objectPath = `/objects/${wildcardPath}`;
+    const objectPath = canonicalObjectPath(`/objects/${wildcardPath}`);
+    if (!objectPath) {
+      res.status(404).json({ error: 'Object not found' });
+      return;
+    }
+    const isPublicImage = await isPublicImageReference(objectPath);
     const objectFile =
       await objectStorageService.getObjectEntityFile(objectPath);
 
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
+    let publicImageContentType: string | undefined;
+    let publicImageEtag: string | undefined;
+    if (isPublicImage) {
+      const imageMetadata = await catalogImageContentType(objectFile);
+      if (!imageMetadata) {
+        res.status(404).json({ error: 'Object not found' });
+        return;
+      }
+      publicImageContentType = imageMetadata.contentType;
+      publicImageEtag = imageMetadata.etag;
+    }
+
+    if (!isPublicImage) {
+      const user = await getRequestUser(req);
+      const canViewInactiveCatalogImage =
+        Boolean(user && INACTIVE_IMAGE_VIEW_ROLES.has(user.role)) &&
+        (await isInactiveImageReference(objectPath));
+      if (canViewInactiveCatalogImage) {
+        const imageMetadata = await catalogImageContentType(objectFile);
+        if (!imageMetadata) {
+          res.status(404).json({ error: 'Object not found' });
+          return;
+        }
+        publicImageContentType = imageMetadata.contentType;
+      }
+      const canRead = await objectStorageService.canAccessObjectEntity({
+        userId: user?.id,
+        objectFile,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!canViewInactiveCatalogImage && !canRead) {
+        res.status(404).json({ error: 'Object not found' });
+        return;
+      }
+    }
+
+    if (publicImageContentType) {
+      res.setHeader('Content-Type', publicImageContentType);
+    }
+    if (publicImageEtag) res.setHeader('ETag', publicImageEtag);
+    res.setHeader(
+      'Cache-Control',
+      isPublicImage
+        ? 'public, max-age=0, must-revalidate'
+        : 'private, no-store',
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    const ifNoneMatch = req.get('if-none-match');
+    if (
+      isPublicImage &&
+      publicImageEtag &&
+      ifNoneMatch
+        ?.split(',')
+        .some((candidate) => {
+          const trimmed = candidate.trim();
+          return (
+            trimmed === '*' ||
+            trimmed === publicImageEtag ||
+            trimmed === `W/${publicImageEtag}`
+          );
+        })
+    ) {
+      res.status(304).end();
+      return;
+    }
 
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
+    if (publicImageContentType) {
+      res.setHeader('Content-Type', publicImageContentType);
+    }
+    if (publicImageEtag) res.setHeader('ETag', publicImageEtag);
+    res.setHeader(
+      'Cache-Control',
+      isPublicImage
+        ? 'public, max-age=0, must-revalidate'
+        : 'private, no-store',
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
 
     if (response.body) {
       const nodeStream = Readable.fromWeb(

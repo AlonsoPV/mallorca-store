@@ -1,6 +1,8 @@
 import { getImageUrl } from "@/lib/image-url";
 
 const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
+const MAX_OPTIMIZED_IMAGE_DIMENSION = 2560;
+const JPEG_OPTIMIZATION_QUALITY = 0.94;
 const ACCEPTED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -41,7 +43,55 @@ export function assetsFromPaths(
   }));
 }
 
+async function optimizeImageForUpload(file: File): Promise<File> {
+  // Keep formats with transparency, animation, or already-compressed modern
+  // codecs byte-for-byte. Only downscale very large JPEGs for storefront use.
+  if (
+    file.type !== "image/jpeg" ||
+    typeof createImageBitmap !== "function" ||
+    typeof document === "undefined"
+  ) {
+    return file;
+  }
+
+  let bitmap: ImageBitmap | undefined;
+  try {
+    bitmap = await createImageBitmap(file);
+    const longestSide = Math.max(bitmap.width, bitmap.height);
+    if (longestSide <= MAX_OPTIMIZED_IMAGE_DIMENSION) return file;
+
+    const scale = MAX_OPTIMIZED_IMAGE_DIMENSION / longestSide;
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(bitmap, 0, 0, width, height);
+    const optimizedBlob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", JPEG_OPTIMIZATION_QUALITY),
+    );
+    if (!optimizedBlob || optimizedBlob.size >= file.size) return file;
+
+    return new File([optimizedBlob], file.name, {
+      type: "image/jpeg",
+      lastModified: file.lastModified,
+    });
+  } catch {
+    // Optimization is best-effort; a browser decoding/canvas limitation must
+    // never make an otherwise valid original image impossible to upload.
+    return file;
+  } finally {
+    bitmap?.close();
+  }
+}
+
 export async function uploadImageFile(file: File): Promise<string> {
+  const uploadFile = await optimizeImageForUpload(file);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   // Local mock + api-client token getter both use this bearer for admin routes.
   try {
@@ -58,9 +108,9 @@ export async function uploadImageFile(file: File): Promise<string> {
     credentials: "include",
     headers,
     body: JSON.stringify({
-      name: file.name,
-      size: file.size,
-      contentType: file.type,
+      name: uploadFile.name,
+      size: uploadFile.size,
+      contentType: uploadFile.type,
     }),
   });
   if (!response.ok) throw new Error("No se pudo preparar la subida.");
@@ -72,13 +122,13 @@ export async function uploadImageFile(file: File): Promise<string> {
   await new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", upload.uploadURL!, true);
-    request.setRequestHeader("Content-Type", file.type);
+    request.setRequestHeader("Content-Type", uploadFile.type);
     request.onload = () =>
       request.status >= 200 && request.status < 300
         ? resolve()
         : reject(new Error("El almacenamiento rechazó la imagen."));
     request.onerror = () => reject(new Error("No se pudo completar la subida."));
-    request.send(file);
+    request.send(uploadFile);
   });
 
   return upload.objectPath;

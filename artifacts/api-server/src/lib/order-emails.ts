@@ -23,6 +23,8 @@ import { buildOrderEmail } from "../../order-receipt.mjs";
 import { logger } from "./logger";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export const ORDER_EMAIL_WORKER_INTERVAL_MS = 2 * 60_000;
+
 export async function emailConfigured() {
   const origin = process.env.PUBLIC_APP_URL;
   if (!origin || !/^https?:\/\//.test(origin)) return false;
@@ -123,12 +125,11 @@ export async function processOrderEmails() {
   if (running || !(await emailConfigured())) return;
   running = true;
   try {
-    await pool.query(
-      "UPDATE order_email_jobs SET status = 'failed', last_error = 'REVIEW_UNCERTAIN_SEND' WHERE status = 'sending' AND attempts >= 6 AND next_attempt_at <= now()",
-    );
     // Do not keep retrying uncertain sends after a day; Hostinger SMTP does not dedupe.
     await pool.query(
-      "UPDATE order_email_jobs SET status = 'failed', last_error = 'REVIEW_UNCERTAIN_SEND' WHERE status IN ('pending', 'sending') AND attempts > 0 AND first_attempt_at < now() - interval '23 hours'",
+      `UPDATE order_email_jobs SET status = 'failed', last_error = 'REVIEW_UNCERTAIN_SEND'
+       WHERE (status = 'sending' AND attempts >= 6 AND next_attempt_at <= now())
+          OR (status IN ('pending', 'sending') AND attempts > 0 AND first_attempt_at < now() - interval '23 hours')`,
     );
     for (let count = 0; count < 10; count++) {
       const { rows } =
@@ -217,7 +218,7 @@ export async function processOrderEmails() {
 }
 export function startOrderEmailWorker() {
   void processOrderEmails();
-  const timer = setInterval(() => void processOrderEmails(), 30000);
+  const timer = setInterval(() => void processOrderEmails(), ORDER_EMAIL_WORKER_INTERVAL_MS);
   timer.unref();
   return timer;
 }
