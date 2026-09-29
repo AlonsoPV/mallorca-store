@@ -16,7 +16,10 @@ export interface AdminUserUpdate {
   phone?: string | null;
   /** @nullable */
   username?: string | null;
-  /** @nullable */
+  /**
+     * @minLength 15
+     * @nullable
+     */
   password?: string | null;
   generatePassword?: boolean;
   role?: AdminStaffRole;

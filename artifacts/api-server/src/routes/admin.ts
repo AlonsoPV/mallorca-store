@@ -396,7 +396,7 @@ router.get("/admin/users/:id", async (req, res): Promise<void> => {
 const adminUserCreateBody = z.object({
   email: z.string().email(),
   username: z.string().trim().nullable().optional(),
-  password: z.string().trim().min(8).nullable().optional(),
+  password: z.string().trim().min(15, "La contraseña debe tener al menos 15 caracteres").nullable().optional(),
   generatePassword: z.boolean().default(false),
   firstName: z.string().trim().nullable().optional(),
   lastName: z.string().trim().nullable().optional(),
@@ -413,7 +413,7 @@ const adminUserUpdateBody = z.object({
   lastName: z.string().trim().nullable().optional(),
   phone: z.string().trim().nullable().optional(),
   username: z.string().trim().nullable().optional(),
-  password: z.string().trim().min(8).nullable().optional(),
+  password: z.string().trim().min(15, "La contraseña debe tener al menos 15 caracteres").nullable().optional(),
   generatePassword: z.boolean().optional(),
   role: z.enum(["staff", "branch_manager", "operations", "operations_manager", "manager", "admin"]).optional(),
 });
@@ -426,7 +426,7 @@ router.post("/admin/users", async (req, res): Promise<void> => {
   }
   const body = adminUserCreateBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    res.status(400).json({ error: body.error.issues[0]?.message ?? "Datos inválidos" });
     return;
   }
   const role = body.data.role as AdminStaffRole;
@@ -532,7 +532,12 @@ router.post("/admin/users", async (req, res): Promise<void> => {
       created = true;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "No se pudo crear el usuario";
+    const providerErrors = (error as { errors?: Array<{ code?: string }> } | null)?.errors;
+    const message = providerErrors?.some((item) => item.code === "form_password_length_too_short")
+      ? "La contraseña debe tener al menos 15 caracteres"
+      : providerErrors?.some((item) => item.code?.startsWith("form_password_"))
+        ? "La contraseña no cumple los requisitos de seguridad. Prueba con otra."
+        : "No se pudo crear el usuario. Revisa el correo y el usuario e inténtalo de nuevo.";
     res.status(400).json({ error: message, code: "USER_CREATE_FAILED" });
     return;
   }
@@ -578,7 +583,7 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
   }
   const body = adminUserUpdateBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    res.status(400).json({ error: body.error.issues[0]?.message ?? "Datos inválidos" });
     return;
   }
 

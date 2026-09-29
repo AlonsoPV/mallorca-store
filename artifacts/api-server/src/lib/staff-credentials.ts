@@ -24,8 +24,8 @@ export function generateUsername(
   return username.length >= 4 ? username : `user${suffix}`;
 }
 
-export function generatePassword(length = 12, random: () => number = Math.random): string {
-  const size = Math.max(8, length);
+export function generatePassword(length = 20, random: () => number = Math.random): string {
+  const size = Math.max(15, length);
   let out = "";
   for (let i = 0; i < size; i += 1) {
     const index = Math.min(

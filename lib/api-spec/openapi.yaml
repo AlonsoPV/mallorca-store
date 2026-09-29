@@ -2893,7 +2893,7 @@ components:
       properties:
         email: { type: string, format: email }
         username: { type: ["string", "null"] }
-        password: { type: ["string", "null"] }
+        password: { type: ["string", "null"], minLength: 15 }
         generatePassword: { type: boolean, default: false }
         firstName: { type: ["string", "null"] }
         lastName: { type: ["string", "null"] }
@@ -2911,7 +2911,7 @@ components:
         lastName: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
         username: { type: ["string", "null"] }
-        password: { type: ["string", "null"] }
+        password: { type: ["string", "null"], minLength: 15 }
         generatePassword: { type: boolean, default: false }
         role: { $ref: "#/components/schemas/AdminStaffRole" }
     AdminUserMutationResult:

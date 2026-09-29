@@ -12,7 +12,10 @@ export interface AdminUserCreate {
   email: string;
   /** @nullable */
   username?: string | null;
-  /** @nullable */
+  /**
+     * @minLength 15
+     * @nullable
+     */
   password?: string | null;
   generatePassword?: boolean;
   /** @nullable */

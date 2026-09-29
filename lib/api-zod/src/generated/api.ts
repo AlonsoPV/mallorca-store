@@ -5639,6 +5639,8 @@ export const ListAdminUsersResponseItem = zod.object({
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
 
+export const createAdminUserBodyPasswordMin = 15;
+
 export const createAdminUserBodyGeneratePasswordDefault = false;
 export const createAdminUserBodyBranchRoleDefault = `staff`;
 export const createAdminUserBodyIsPrimaryDefault = false;
@@ -5647,7 +5649,7 @@ export const createAdminUserBodySendInviteDefault = true;
 export const CreateAdminUserBody = zod.object({
   "email": zod.string().email(),
   "username": zod.string().nullish(),
-  "password": zod.string().nullish(),
+  "password": zod.string().min(createAdminUserBodyPasswordMin).nullish(),
   "generatePassword": zod.boolean().default(createAdminUserBodyGeneratePasswordDefault),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -5701,6 +5703,8 @@ export const UpdateAdminUserParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const updateAdminUserBodyPasswordMin = 15;
+
 export const updateAdminUserBodyGeneratePasswordDefault = false;
 
 export const UpdateAdminUserBody = zod.object({
@@ -5708,7 +5712,7 @@ export const UpdateAdminUserBody = zod.object({
   "lastName": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "username": zod.string().nullish(),
-  "password": zod.string().nullish(),
+  "password": zod.string().min(updateAdminUserBodyPasswordMin).nullish(),
   "generatePassword": zod.boolean().default(updateAdminUserBodyGeneratePasswordDefault),
   "role": zod.enum(['staff', 'branch_manager', 'operations', 'operations_manager', 'manager', 'admin']).optional()
 })

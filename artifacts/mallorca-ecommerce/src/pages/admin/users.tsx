@@ -196,6 +196,10 @@ export default function AdminUsers() {
       toast({ title: "El correo es obligatorio", variant: "destructive" });
       return;
     }
+    if (form.password.trim() && form.password.trim().length < 15) {
+      toast({ title: "La contraseña debe tener al menos 15 caracteres", variant: "destructive" });
+      return;
+    }
     const payload: AdminUserCreate = {
       email: form.email.trim(),
       username: form.username.trim() || null,
@@ -232,6 +236,10 @@ export default function AdminUsers() {
 
   const submitEdit = async () => {
     if (!editing) return;
+    if (editForm.password.trim() && editForm.password.trim().length < 15) {
+      toast({ title: "La contraseña debe tener al menos 15 caracteres", variant: "destructive" });
+      return;
+    }
     try {
       await updateUser.mutateAsync({
         id: editing.id,
@@ -497,6 +505,7 @@ export default function AdminUsers() {
                     Generar
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">Mínimo 15 caracteres para acceder.</p>
               </div>
               <div className="space-y-1">
                 <Label>Teléfono</Label>
@@ -677,6 +686,7 @@ export default function AdminUsers() {
                     Generar
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">Mínimo 15 caracteres; déjala vacía para conservar la actual.</p>
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <Label>Teléfono</Label>

@@ -21,8 +21,9 @@ test("generates a seeded username from name", () => {
   assert.match(username, /^ana_perez\d{3}$/);
 });
 
-test("generates an 12-character password from the safe alphabet", () => {
+test("generates a password long enough for Clerk from the safe alphabet", () => {
   const password = generatePassword(12, () => 0.1);
-  assert.equal(password.length, 12);
+  assert.equal(password.length, 15);
   assert.match(password, /^[A-HJ-NP-Za-km-z2-9]+$/);
+  assert.equal(generatePassword().length, 20);
 });
