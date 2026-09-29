@@ -16,6 +16,7 @@ declare global {
 const LOCAL_DEV_AUTH_TOKEN = "local-dev";
 
 function isLocalDevAuthEnabled(): boolean {
+  if (process.env.NODE_ENV !== "development") return false;
   const flag = process.env.LOCAL_DEV_AUTH?.trim().toLowerCase();
   return flag === "1" || flag === "true";
 }

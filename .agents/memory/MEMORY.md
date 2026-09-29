@@ -10,4 +10,4 @@
 - [GitHub connector push safety](github-connector-push-safety.md) — Keep exact Git IDs and fast-forward only; large shell output can lose object bytes.
 - [Workspace dependency hydration](workspace-dependency-hydration.md) — A stale local install can crash on declared runtime packages even when the publish lockfile is correct.
 - [Clerk staff password policy](clerk-staff-password-policy.md) — Production Clerk rejected short staff passwords; keep generated and manual credentials above its observed minimum.
-- [Clerk staff login identifier](clerk-staff-login-identifier.md) — Production Clerk accepts email, not the app's internal username, for staff sign-in.
+- [Clerk staff username bridge](clerk-staff-login-identifier.md) — Clerk accepts email, not app usernames; verify the local password before resolving a staff email for Clerk.

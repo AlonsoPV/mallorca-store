@@ -131,7 +131,7 @@ export default function AdminUsers() {
   });
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
-  const [issued, setIssued] = useState<{ email: string; password: string; name: string } | null>(null);
+  const [issued, setIssued] = useState<{ username: string; email: string; password: string; name: string } | null>(null);
 
   const canManage =
     me.data?.role === "admin" || me.data?.role === "operations_manager";
@@ -216,6 +216,7 @@ export default function AdminUsers() {
     };
     try {
       const result = await createUser.mutateAsync({ data: payload });
+      const username = result.username || result.user.username || form.username;
       const password = result.temporaryPassword || form.password;
       toast({
         title: result.promoted
@@ -225,7 +226,7 @@ export default function AdminUsers() {
       });
       setCreateOpen(false);
       if (password) {
-        setIssued({ email: result.user.email, password, name: result.user.name });
+        setIssued({ username, email: result.user.email, password, name: result.user.name });
       }
       refresh();
     } catch (e) {
@@ -256,6 +257,7 @@ export default function AdminUsers() {
       setEditOpen(false);
       if (editForm.password.trim()) {
         setIssued({
+          username: editForm.username.trim() || editing.username || "",
           email: editing.email,
           password: editForm.password.trim(),
           name: [editForm.firstName, editForm.lastName].filter(Boolean).join(" ") || editing.name,
@@ -413,7 +415,7 @@ export default function AdminUsers() {
             <DialogHeader>
               <DialogTitle>Nuevo usuario</DialogTitle>
               <DialogDescription>
-                Para iniciar sesión se usa el correo electrónico. Copia la contraseña al crear; no se vuelve a mostrar.
+                Genera usuario y contraseña. También se puede iniciar sesión con el correo. Copia la contraseña al crear; no se vuelve a mostrar.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -732,12 +734,28 @@ export default function AdminUsers() {
             <DialogHeader>
               <DialogTitle>Credenciales listas</DialogTitle>
               <DialogDescription>
-                Para iniciar sesión usa este correo y contraseña. La contraseña no se vuelve a mostrar.
+                Inicia sesión con el usuario o correo y esta contraseña. La contraseña no se vuelve a mostrar.
               </DialogDescription>
             </DialogHeader>
             {issued ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">{issued.name}</p>
+                {issued.username ? (
+                  <div className="space-y-1">
+                    <Label>Usuario</Label>
+                    <div className="flex gap-2">
+                      <Input className="rounded-none font-mono" readOnly value={issued.username} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-none"
+                        onClick={() => copyText(issued.username, "Usuario")}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="space-y-1">
                   <Label>Correo electrónico</Label>
                   <div className="flex gap-2">

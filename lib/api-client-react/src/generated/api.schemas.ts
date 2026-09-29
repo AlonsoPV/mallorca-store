@@ -13,6 +13,24 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface StaffUsernameCredentials {
+  /**
+     * @minLength 4
+     * @maxLength 64
+     * @pattern ^[a-zA-Z0-9._-]+$
+     */
+  username: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  password: string;
+}
+
+export interface StaffUsernameResolution {
+  email: string;
+}
+
 export interface PasswordResetRequestInput {
   /**
      * @minLength 1

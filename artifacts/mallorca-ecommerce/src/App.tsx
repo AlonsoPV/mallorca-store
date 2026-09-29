@@ -317,6 +317,9 @@ function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
 
   if (!clerkPubKey) {
+    if (import.meta.env.PROD) {
+      return <div className="min-h-screen bg-background p-8 text-center text-foreground">El inicio de sesión no está disponible. Contacta al administrador.</div>;
+    }
     return (
       <LocalAuthProvider>
         <AppShell>

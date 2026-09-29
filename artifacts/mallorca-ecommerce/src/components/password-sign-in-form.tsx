@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import {
   captchaMatches,
   generateCaptchaChallenge,
-  isValidEmailIdentifier,
   isSignInLocked,
   readSignInGate,
   registerSignInFailure,
@@ -42,7 +41,6 @@ function GoogleMark(props: SVGProps<SVGSVGElement>) {
 
 type PasswordSignInFormProps = {
   onAuthenticate: (identifier: string, password: string) => Promise<string | null>;
-  emailOnly?: boolean;
   subtitle?: string;
   onGoogleSignIn?: () => void | Promise<void>;
   googleLoading?: boolean;
@@ -56,7 +54,6 @@ function storage(): Storage | null {
 
 export function PasswordSignInForm({
   onAuthenticate,
-  emailOnly = false,
   subtitle = "Solo usuario y contraseña. No se pueden crear cuentas desde aquí.",
   onGoogleSignIn,
   googleLoading = false,
@@ -113,12 +110,7 @@ export function PasswordSignInForm({
     }
 
     if (!identifier.trim() || !password) {
-      setError(emailOnly ? "Escribe correo y contraseña." : "Escribe usuario y contraseña.");
-      return;
-    }
-
-    if (emailOnly && !isValidEmailIdentifier(identifier)) {
-      setError("Escribe un correo electrónico válido.");
+      setError("Escribe usuario o correo y contraseña.");
       return;
     }
 
@@ -203,18 +195,18 @@ export function PasswordSignInForm({
 
       <div className="space-y-2">
         <Label htmlFor="sign-in-identifier" className="text-sm font-semibold">
-          {emailOnly ? "Correo electrónico" : "Usuario"}
+          Usuario o correo
         </Label>
         <Input
           id="sign-in-identifier"
-          name={emailOnly ? "email" : "username"}
-          type={emailOnly ? "email" : "text"}
+          name="username"
+          type="text"
           value={identifier}
           onChange={(event) => setIdentifier(event.target.value)}
-          autoComplete={emailOnly ? "email" : "username"}
+          autoComplete="username"
           autoCapitalize="none"
           disabled={disabled}
-          placeholder={emailOnly ? "nombre@ejemplo.com" : "Usuario o correo"}
+          placeholder="Usuario o correo"
           className="h-11 rounded-none"
         />
       </div>

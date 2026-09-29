@@ -65,6 +65,7 @@ function clerkConfigured(): boolean {
 }
 
 function localDevAuthEnabled(): boolean {
+  if (process.env.NODE_ENV !== "development") return false;
   const flag = process.env.LOCAL_DEV_AUTH?.trim().toLowerCase();
   return flag === "1" || flag === "true";
 }
@@ -80,6 +81,9 @@ export async function resolveIdentityForAdminUser(params: {
   const email = params.email.trim().toLowerCase();
   const sendInvite = params.sendInvite !== false && !params.password;
 
+  if (process.env.NODE_ENV !== "development" && !clerkConfigured()) {
+    throw new Error("Clerk is required to create production staff accounts");
+  }
   if (!clerkConfigured() || localDevAuthEnabled()) {
     const slug = email.replace(/[^a-z0-9]+/g, "_").slice(0, 40);
     return {

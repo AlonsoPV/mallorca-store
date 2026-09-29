@@ -7,6 +7,7 @@ import { useAppAuth, useAppSignInLocalDev } from "@/lib/app-auth";
 import {
   clerkSignInErrorMessage,
   credentialsMatch,
+  isValidEmailIdentifier,
 } from "@/lib/sign-in-security";
 import { LOCAL_DEV_USER } from "@/lib/local-dev-user";
 import { storeLogo } from "@/lib/store-media";
@@ -89,14 +90,31 @@ function ClerkPasswordGate({
 
   return (
     <PasswordSignInForm
-      subtitle="Correo electrónico y contraseña, o continúa con Google."
-      emailOnly
+      subtitle="Usuario o correo y contraseña, o continúa con Google."
       googleError={googleError}
       googleLoading={googleLoading}
       onGoogleSignIn={signInWithGoogle}
       onAuthenticate={async (identifier, password) => {
         try {
-          const result = await clerkSignIn.create({ identifier, password });
+          let email = identifier;
+          if (!identifier.includes("@")) {
+            const response = await fetch("/api/auth/resolve-username", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username: identifier, password }),
+            });
+            if (response.status === 429) return "Demasiados intentos. Intenta de nuevo más tarde.";
+            if (response.status === 503) return "No se pudo verificar el usuario. Intenta de nuevo más tarde.";
+            if (!response.ok) return "Usuario o contraseña incorrectos.";
+            const resolved = (await response.json()) as { email?: string };
+            if (!resolved.email || !isValidEmailIdentifier(resolved.email)) {
+              return "No se pudo verificar el usuario. Intenta de nuevo más tarde.";
+            }
+            email = resolved.email;
+          } else if (!isValidEmailIdentifier(identifier)) {
+            return "Escribe un correo electrónico válido.";
+          }
+          const result = await clerkSignIn.create({ identifier: email, password });
           if (result.status === "complete" && result.createdSessionId) {
             await setActive({ session: result.createdSessionId });
             onSuccess();

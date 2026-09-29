@@ -43,6 +43,29 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Only staff with an app-managed password can use this flow. Clerk still authenticates the resolved email and password.
+ * @summary Privately resolve a staff username after verifying its password
+ */
+export const resolveStaffUsernameBodyUsernameMin = 4;
+export const resolveStaffUsernameBodyUsernameMax = 64;
+
+
+export const resolveStaffUsernameBodyUsernameRegExp = new RegExp('^[a-zA-Z0-9._-]+$');
+export const resolveStaffUsernameBodyPasswordMax = 128;
+
+
+
+export const ResolveStaffUsernameBody = zod.object({
+  "username": zod.string().min(resolveStaffUsernameBodyUsernameMin).max(resolveStaffUsernameBodyUsernameMax).regex(resolveStaffUsernameBodyUsernameRegExp),
+  "password": zod.string().min(1).max(resolveStaffUsernameBodyPasswordMax)
+})
+
+export const ResolveStaffUsernameResponse = zod.object({
+  "email": zod.string().email()
+})
+
+
+/**
  * Always gives the same success response for valid identifiers, whether or not an account exists.
  * @summary Request a one-time password reset link
  */

@@ -41,7 +41,7 @@ test("matches local credentials by username or email", () => {
   assert.equal(credentialsMatch("otro", "mallorca-local", allowed), false);
 });
 
-test("Clerk sign-in only submits email identifiers", () => {
+test("checks resolved emails before sending them to Clerk", () => {
   assert.equal(isValidEmailIdentifier(" persona@ejemplo.com "), true);
   assert.equal(isValidEmailIdentifier("usuario"), false);
   assert.equal(isValidEmailIdentifier("persona@"), false);

@@ -571,7 +571,7 @@ router.post("/admin/users", async (req, res): Promise<void> => {
       ? "Cliente existente promovido a usuario operativo"
       : inviteSent
         ? "Usuario creado. Se envió invitación de acceso."
-        : "Usuario creado. Para iniciar sesión usa el correo y la contraseña; la contraseña no se vuelve a mostrar.",
+        : "Usuario creado. Inicia sesión con el usuario o correo y la contraseña; la contraseña no se vuelve a mostrar.",
   });
 });
 

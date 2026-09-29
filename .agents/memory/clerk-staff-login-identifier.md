@@ -1,10 +1,10 @@
 ---
-name: Clerk staff login identifier
-description: Production Clerk sign-in policy and the distinction between app usernames and authentication identifiers.
+name: Clerk staff username bridge
+description: Production Clerk sign-in policy and the security boundary for app-username access.
 ---
 
-The production Clerk public authentication configuration reports that usernames are disabled as sign-in identifiers. A staff member's app username is still useful internally, but sending it directly to Clerk sign-in produces `form_param_format_invalid` for `identifier`; the account's email is the supported identifier.
+Production Clerk has usernames disabled as sign-in identifiers. Sending an app username directly to Clerk produces `form_param_format_invalid`; Clerk accepts the account email. The app can offer staff username access by verifying its own password hash on the server first, returning the associated email only upon a match, and then letting Clerk independently authenticate that email and password to establish the session.
 
-**Why:** The app previously advertised username login and displayed the username with the generated password, leading staff to try an identifier that production Clerk rejects.
+**Why:** Staff were issued usernames they could not use in production, but a public username-to-email lookup would disclose account addresses. The app's local hash and Clerk password can diverge after a direct change in Clerk or a failed credential sync.
 
-**How to apply:** For Clerk-backed staff sign-in and credential handoff, use the account email. Local-development authentication may still accept usernames; do not silently expose a public username-to-email lookup or assume Clerk development and production have identical policies.
+**How to apply:** Preserve direct email login as a fallback. Never resolve a username without password verification and durable throttling, or treat local verification as a Clerk session. Keep local-development tokens disabled outside an explicit development runtime. If a password changed directly in Clerk, the staff member may need to sign in by email until the app-managed password is synchronized.

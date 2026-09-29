@@ -15,6 +15,7 @@ export const LOCAL_DEV_USER = {
 } as const;
 
 export function isLocalDevAuthPreferred(): boolean {
+  if (!import.meta.env.DEV) return false;
   const flag = import.meta.env.VITE_LOCAL_DEV_AUTH;
   if (flag === "0" || flag === "false") return false;
   // Default on when Clerk publishable key is missing (local Windows).
@@ -24,6 +25,7 @@ export function isLocalDevAuthPreferred(): boolean {
 
 export function readLocalDevSignedIn(): boolean {
   if (typeof window === "undefined") return false;
+  if (!import.meta.env.DEV) return false;
   const stored = window.localStorage.getItem(LOCAL_DEV_AUTH_STORAGE_KEY);
   if (stored === "0") return false;
   if (stored === "1") return true;

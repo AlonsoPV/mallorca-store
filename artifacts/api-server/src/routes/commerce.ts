@@ -20,6 +20,7 @@ import {
   GetGuestOrderDetailsResponse, GetMeResponse, UpdateMeBody, UpdateMeResponse,
   ListMyOrdersResponse, ListCheckoutPaymentMethodsQueryParams, ListCheckoutPaymentMethodsResponse,
   RequestPasswordResetBody, ConfirmPasswordResetBody,
+  ResolveStaffUsernameBody, ResolveStaffUsernameResponse,
   type Cart as CartShape,
 } from "@workspace/api-zod";
 import {
@@ -33,6 +34,7 @@ import { getRequestUser, requireAuth } from "../middlewares/auth";
 import { findUserByIdentifier } from "../lib/admin-users";
 import { verifyPassword } from "../lib/password";
 import { confirmPasswordReset, requestPasswordReset } from "../lib/password-reset";
+import { resolveStaffUsername } from "../lib/staff-username-resolution";
 import crypto from "node:crypto";
 import { applyInventoryAlert } from "../lib/inventory-alerts";
 import { validateDeliveryCoverage } from "../lib/delivery-validation";
@@ -599,6 +601,11 @@ router.get("/guest/orders/:id/:token/confirmation", (req, res) => sendOrder(req,
 router.get("/orders/:id", requireAuth, (req, res) => sendOrder(req, res));
 router.get("/guest/orders/:id/:token", (req, res) => sendOrder(req, res, true));
 router.post("/auth/local-login", async (req, res): Promise<void> => {
+  const localDev = process.env.LOCAL_DEV_AUTH?.trim().toLowerCase();
+  if (process.env.NODE_ENV !== "development" || (localDev !== "1" && localDev !== "true")) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const identifier = String(req.body?.identifier ?? "").trim();
   const password = String(req.body?.password ?? "");
   if (!identifier || !password) {
@@ -621,6 +628,30 @@ router.post("/auth/local-login", async (req, res): Promise<void> => {
       role: user.role,
     },
   });
+});
+
+router.post("/auth/resolve-username", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
+  const body = ResolveStaffUsernameBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Escribe un usuario y una contraseña válidos." });
+    return;
+  }
+  try {
+    const result = await resolveStaffUsername(body.data.username, body.data.password);
+    if (result.status === "limited") {
+      res.status(429).json({ error: "Demasiados intentos. Intenta de nuevo más tarde." });
+      return;
+    }
+    if (result.status === "invalid") {
+      res.status(401).json({ error: "Usuario o contraseña incorrectos." });
+      return;
+    }
+    res.json(ResolveStaffUsernameResponse.parse({ email: result.email }));
+  } catch (error) {
+    req.log.error({ error }, "Unable to verify staff username");
+    res.status(503).json({ error: "No se pudo verificar el usuario. Intenta de nuevo más tarde." });
+  }
 });
 
 router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
