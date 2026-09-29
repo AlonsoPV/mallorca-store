@@ -101,7 +101,7 @@ export function clerkSignInErrorMessage(error: unknown): string {
     return "No se pudo conectar. Intenta de nuevo.";
   }
   if (code.includes("strategy") || code.includes("not_allowed")) {
-    return "Este acceso solo admite usuario y contraseña.";
+    return "Este método de acceso no está disponible.";
   }
   return "Usuario o contraseña incorrectos.";
 }

@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { AuthenticateWithRedirectCallback } from "@clerk/react";
 import { useSignIn } from "@clerk/react/legacy";
 import { Link, useLocation } from "wouter";
 import { PasswordSignInForm } from "@/components/password-sign-in-form";
@@ -47,8 +48,21 @@ function localDevCredentials() {
   };
 }
 
-function ClerkPasswordGate({ onSuccess }: { onSuccess: () => void }) {
+function isSsoCallbackPath(path: string) {
+  const clean = path.split("?")[0]?.replace(/\/+$/, "") || "";
+  return clean.endsWith("/sign-in/sso-callback") || clean === "/sso-callback";
+}
+
+function ClerkPasswordGate({
+  onSuccess,
+  redirectPath,
+}: {
+  onSuccess: () => void;
+  redirectPath: string;
+}) {
   const { isLoaded, signIn, setActive } = useSignIn();
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   if (!isLoaded || !signIn || !setActive) {
     return (
@@ -56,8 +70,27 @@ function ClerkPasswordGate({ onSuccess }: { onSuccess: () => void }) {
     );
   }
 
+  async function signInWithGoogle() {
+    setGoogleError(null);
+    setGoogleLoading(true);
+    try {
+      await signIn.authenticateWithRedirect({
+        strategy: "oauth_google",
+        redirectUrl: `${basePath}/sign-in/sso-callback`,
+        redirectUrlComplete: redirectPath,
+      });
+    } catch (error) {
+      setGoogleLoading(false);
+      setGoogleError(clerkSignInErrorMessage(error));
+    }
+  }
+
   return (
     <PasswordSignInForm
+      subtitle="Usuario y contraseña, o continúa con Google."
+      googleError={googleError}
+      googleLoading={googleLoading}
+      onGoogleSignIn={signInWithGoogle}
       onAuthenticate={async (identifier, password) => {
         try {
           const result = await signIn.create({ identifier, password });
@@ -66,7 +99,7 @@ function ClerkPasswordGate({ onSuccess }: { onSuccess: () => void }) {
             onSuccess();
             return null;
           }
-          return "Este acceso solo admite usuario y contraseña.";
+          return "Completa el inicio de sesión o usa Google.";
         } catch (error) {
           return clerkSignInErrorMessage(error);
         }
@@ -83,6 +116,7 @@ function LocalPasswordGate({
   const allowed = localDevCredentials();
   return (
     <PasswordSignInForm
+      subtitle="En local usa usuario y contraseña. Google requiere Clerk en el servidor."
       onAuthenticate={async (identifier, password) => {
         try {
           const response = await fetch("/api/auth/local-login", {
@@ -112,14 +146,26 @@ export default function SignInPage() {
   const redirectPath = getRedirectPath();
   const { isSignedIn } = useAppAuth();
   const signInLocalDev = useAppSignInLocalDev();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (isSignedIn) setLocation(toAppPath(redirectPath));
-  }, [isSignedIn, redirectPath, setLocation]);
+    if (isSignedIn && !isSsoCallbackPath(location)) {
+      setLocation(toAppPath(redirectPath));
+    }
+  }, [isSignedIn, redirectPath, setLocation, location]);
 
   function goToRedirect() {
     setLocation(toAppPath(redirectPath));
+  }
+
+  if (clerkConfigured && isSsoCallbackPath(location)) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-4">
+        <p className="text-sm text-muted-foreground">Completando acceso con Google…</p>
+        <AuthenticateWithRedirectCallback />
+        <div id="clerk-captcha" />
+      </div>
+    );
   }
 
   return (
@@ -134,7 +180,7 @@ export default function SignInPage() {
         </Link>
       </div>
       {clerkConfigured ? (
-        <ClerkPasswordGate onSuccess={goToRedirect} />
+        <ClerkPasswordGate onSuccess={goToRedirect} redirectPath={redirectPath} />
       ) : (
         <LocalPasswordGate
           onSuccess={(token) => {
