@@ -90,7 +90,7 @@ export function StoreLayout({ children }: { children: ReactNode }) {
   }, [isHeroHeader, isLargeHeader, isScrolled]);
 
   useEffect(() => {
-    const events = new EventSource("/api/catalog/events");
+    let events: EventSource | null = null;
     const onChange = () => {
       void queryClient.invalidateQueries({
         predicate: (query) => {
@@ -99,10 +99,29 @@ export function StoreLayout({ children }: { children: ReactNode }) {
         },
       });
     };
-    events.addEventListener("catalog-change", onChange);
+
+    const syncConnection = () => {
+      if (document.visibilityState === "hidden") {
+        events?.removeEventListener("catalog-change", onChange);
+        events?.close();
+        events = null;
+      } else if (!events) {
+        events = new EventSource("/api/catalog/events");
+        events.addEventListener("catalog-change", onChange);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") onChange();
+      syncConnection();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    syncConnection();
     return () => {
-      events.removeEventListener("catalog-change", onChange);
-      events.close();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      events?.removeEventListener("catalog-change", onChange);
+      events?.close();
     };
   }, [queryClient]);
 

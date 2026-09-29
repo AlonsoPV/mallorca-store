@@ -9,13 +9,13 @@ import {
   getGetProductQueryKey,
 } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus, Minus, Info, AlertCircle, ShoppingBag } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { ProductCard } from "@/components/product-card";
 import { formatMxn, formatLeadTime, productAvailabilityCopy } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
@@ -44,30 +44,6 @@ export default function ProductDetail() {
   const createSession = useCreateCartSession();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (!product) return;
-
-    const productQueryKey = getGetProductQueryKey(slug || "", productParams);
-    const events = new EventSource("/api/catalog/events");
-    const handleCatalogChange = (message: MessageEvent<string>) => {
-      try {
-        const event = JSON.parse(message.data) as { productId?: number };
-        if (event.productId === product.id) {
-          void queryClient.invalidateQueries({ queryKey: productQueryKey });
-        }
-      } catch {
-        // Ignore malformed events; periodic refresh remains the fallback.
-      }
-    };
-
-    events.addEventListener("catalog-change", handleCatalogChange as EventListener);
-    return () => {
-      events.removeEventListener("catalog-change", handleCatalogChange as EventListener);
-      events.close();
-    };
-  }, [product?.id, productParams?.branchId, queryClient, slug]);
-
   // If a branch is selected, make sure we only show price/availability for that branch.
   const currentBranchAvailability = useMemo(() => {
     if (!product || !branchId) return null;
