@@ -7,7 +7,7 @@ import { Search, Filter, X } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
-import { storeBannerImage } from "@/lib/store-media";
+import { storeHeroSlides } from "@/lib/store-media";
 
 export default function Store() {
   const [, setLocation] = useLocation();
@@ -68,48 +68,54 @@ export default function Store() {
 
   return (
     <StoreLayout>
-      <section className="relative isolate overflow-hidden bg-[var(--mallorca-burgundy)] text-primary-foreground">
-        <div className="absolute inset-y-0 right-0 hidden w-[46%] md:block">
-          <img
-            src={storeBannerImage}
-            alt=""
-            aria-hidden="true"
-            className="mallorca-image h-full w-full object-cover object-center opacity-90"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[var(--mallorca-burgundy)] via-[var(--mallorca-burgundy)]/65 to-transparent" />
-          <div className="absolute inset-0 bg-black/10" />
-        </div>
-        <div className="absolute -right-24 -top-28 h-80 w-80 rounded-full border border-white/15 md:right-[28%] md:-top-44 md:h-[32rem] md:w-[32rem]" />
-        <div className="absolute -right-8 -top-16 h-56 w-56 rounded-full border border-white/10 md:right-[31%] md:-top-28 md:h-80 md:w-80" />
-        <div className="absolute right-5 top-8 hidden text-right text-[10px] font-bold uppercase tracking-[0.32em] text-white/55 md:block">
-          Mallorca México
-          <br />
-          Desde 2016
-        </div>
-
-        <div className="container relative mx-auto flex min-h-[21rem] items-end px-4 pb-10 pt-20 sm:min-h-[23rem] sm:pb-12 md:min-h-[23rem] md:px-6 md:pb-14 md:pt-24">
-          <div className="max-w-2xl md:max-w-[58%]">
-            <span className="mallorca-kicker text-[var(--mallorca-butter)]">La vitrina está abierta</span>
-            <h1 className="mallorca-display mt-4 max-w-3xl text-[clamp(3rem,11vw,4.5rem)] leading-[0.92] md:text-7xl">
-              Descubre la pastelería.
-            </h1>
-            <p className="mt-5 max-w-xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base md:mt-6 md:text-lg">
-              Panadería, pasteles y antojos hechos para cambiarte el día.
+      <section className="bg-[var(--mallorca-burgundy)] text-primary-foreground">
+        <div className="grid md:min-h-[26rem] md:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.95fr)]">
+          <div className="order-2 flex flex-col justify-between gap-8 px-5 py-8 sm:px-8 sm:py-10 md:order-1 md:px-10 md:py-12 lg:px-14">
+            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/50">
+              Mallorca México · Desde 2016
             </p>
-            <div className="mt-8 flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
-              <span className="h-px w-10 bg-[var(--mallorca-butter)]" />
-              <span>Explora la selección</span>
+            <div className="max-w-xl">
+              <span className="mallorca-kicker text-[var(--mallorca-butter)]">La vitrina está abierta</span>
+              <h1 className="mallorca-display mt-3 text-[clamp(2.6rem,6vw,4.6rem)] leading-[0.92] text-balance">
+                Descubre la pastelería.
+              </h1>
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">
+                Panadería, pasteles y antojos hechos para cambiarte el día.
+              </p>
+              <button
+                type="button"
+                onClick={() => document.getElementById("seleccion")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="mt-7 inline-flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-white/80 transition-colors hover:text-white"
+              >
+                <span className="h-px w-10 bg-[var(--mallorca-butter)]" />
+                Explora la selección
+              </button>
             </div>
+          </div>
+          <div className="order-1 relative min-h-[13.5rem] sm:min-h-[16rem] md:order-2 md:min-h-full">
+            <img
+              src={storeHeroSlides[0]?.src}
+              alt="Mesa de temporada Pastelería Mallorca"
+              className="absolute inset-0 h-full w-full object-cover object-[center_40%]"
+            />
           </div>
         </div>
       </section>
 
-      <div className="container mx-auto px-4 md:px-6 pb-24">
-           <div className="mb-8 flex items-end justify-between gap-4 border-b border-border pb-5 sm:mb-10 sm:items-center">
-             <p className="max-w-[18rem] text-sm leading-relaxed text-muted-foreground">
-              {categorySlug ? "Una selección para ese antojo." : "Todo lo que hoy se hornea con cariño."}
-            </p>
-             <span className="mallorca-kicker hidden shrink-0 text-muted-foreground sm:block">Hecho en CDMX</span>
+      <div id="seleccion" className="container mx-auto scroll-mt-24 px-4 pb-24 md:px-6">
+          <div className="mb-8 flex flex-col gap-5 border-b border-border py-8 sm:mb-10 sm:flex-row sm:items-end sm:justify-between sm:gap-10 sm:py-10">
+            <div className="min-w-0">
+              <p className="mallorca-kicker text-[var(--mallorca-red)]">Hecho en CDMX</p>
+              <p className="mallorca-display mt-3 max-w-xl text-[clamp(1.7rem,3vw,2.35rem)] leading-[1.05] text-foreground">
+                {categorySlug ? "Una selección para ese antojo." : "Todo lo que hoy se hornea con cariño."}
+              </p>
+            </div>
+            {products ? (
+              <p className="shrink-0 text-sm leading-snug text-muted-foreground sm:pb-1 sm:text-right">
+                <span className="mallorca-display block text-3xl leading-none text-foreground">{products.length}</span>
+                {products.length === 1 ? "pieza en la vitrina" : "piezas en la vitrina"}
+              </p>
+            ) : null}
           </div>
            <div className="flex flex-col items-start gap-6 md:flex-row md:gap-8">
           
