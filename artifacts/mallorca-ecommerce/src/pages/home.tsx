@@ -813,11 +813,6 @@ export default function Home() {
                     alt={image.alt}
                     className="mallorca-image aspect-[3/4] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04] sm:aspect-[4/5]"
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--mallorca-cacao)]/75 via-[var(--mallorca-cacao)]/15 to-transparent" />
-                  <figcaption className="absolute inset-x-0 bottom-0 p-4 text-white sm:p-5">
-                    <span className="mallorca-kicker text-white/65">{image.kicker}</span>
-                    <p className="mallorca-display mt-1.5 text-2xl leading-none sm:text-3xl">{image.title}</p>
-                  </figcaption>
                 </figure>
               </CarouselItem>
             ))}

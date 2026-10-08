@@ -134,9 +134,10 @@ function branch(id, name, slug, shortName, neighborhood) {
     lomas: "/images/lomas-sucursal.webp",
     reforma: "/images/reforma-sucursal.webp",
   };
+  const stock = (n) => `/images/stock/temporada-${String(n).padStart(2, "0")}.webp`;
   const branchGalleries = {
-    lomas: ["/images/lomas-sucursal.webp", "/images/pasteleria-mallorca-1.webp", "/images/pasteleria-mallorca-4.webp"],
-    reforma: ["/images/reforma-sucursal.webp", "/images/reforma-sucursal-alt.webp", "/images/pasteleria-mallorca-2.webp"],
+    lomas: ["/images/lomas-sucursal.webp", "/images/pasteleria-mallorca-1.webp", "/images/pasteleria-mallorca-4.webp", stock(1), stock(2), stock(3), stock(4), stock(6)],
+    reforma: ["/images/reforma-sucursal.webp", "/images/reforma-sucursal-alt.webp", "/images/pasteleria-mallorca-2.webp", stock(7), stock(8), stock(9), stock(10), stock(11)],
   };
   return {
     id,
@@ -276,6 +277,7 @@ const products = [
     tags: ["Chocolate", "Regalo"],
     crossSellProductIds: [3],
     imageUrl: "/images/panettone-chocolate.webp",
+    gallery: [12, 13, 14, 15].map((n) => `/images/stock/temporada-${String(n).padStart(2, "0")}.webp`),
     featured: true,
     seasonal: false,
     minimumLeadTimeHours: 4,
@@ -298,6 +300,7 @@ const products = [
     tags: ["Navidad", "Temporada"],
     crossSellProductIds: [1, 3],
     imageUrl: "/images/panettone-tradicional.webp",
+    gallery: [16, 17, 18, 19].map((n) => `/images/stock/temporada-${String(n).padStart(2, "0")}.webp`),
     featured: true,
     seasonal: true,
     minimumLeadTimeHours: 6,
@@ -320,6 +323,7 @@ const products = [
     tags: [],
     crossSellProductIds: [],
     imageUrl: "/images/pasteleria-mallorca-4.webp",
+    gallery: [20, 21, 22, 23].map((n) => `/images/stock/temporada-${String(n).padStart(2, "0")}.webp`),
     featured: true,
     seasonal: false,
     minimumLeadTimeHours: 0,
@@ -1319,7 +1323,7 @@ const server = http.createServer(async (req, res) => {
     send(res, 200, {
       ...found,
       description: found.shortDescription,
-      gallery: found.imageUrl ? [] : [],
+      gallery: Array.isArray(found.gallery) ? found.gallery : [],
       ingredients: null,
       allergens: null,
       conservation: null,
@@ -3231,7 +3235,21 @@ function readDatabaseUrl() {
   return null;
 }
 
+function stockPhotoPath(index) {
+  return `/images/stock/temporada-${String(index).padStart(2, "0")}.webp`;
+}
+
+const PORTRAIT_STOCK = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44];
+
+function galleryForEmptyBranch(slug) {
+  const paths = PORTRAIT_STOCK.map(stockPhotoPath);
+  if (slug === "lomas") return paths.slice(0, 8);
+  if (slug === "reforma") return paths.slice(8, 16);
+  return paths.slice(0, 6);
+}
+
 function branchFromDatabaseRow(row) {
+  const storedGallery = Array.isArray(row.gallery) ? row.gallery.filter((url) => typeof url === "string" && url.trim()) : [];
   return {
     id: row.id,
     name: row.name,
@@ -3265,7 +3283,7 @@ function branchFromDatabaseRow(row) {
     reservationUrl: row.reservation_url,
     reservationCta: row.reservation_cta,
     imageUrl: row.image_url,
-    gallery: Array.isArray(row.gallery) ? row.gallery : [],
+    gallery: storedGallery.length ? storedGallery : galleryForEmptyBranch(row.slug),
     hours: Array.isArray(row.hours) ? row.hours : [],
     pickupAvailable: row.pickup_available,
     deliveryAvailable: row.delivery_available,
