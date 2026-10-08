@@ -14,8 +14,8 @@ import {
   ChevronDown,
   ChevronRight,
   CreditCard,
+  FileText,
   Mail,
-  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useListInventoryAlerts, getListInventoryAlertsQueryKey } from "@workspace/api-client-react";
@@ -30,10 +30,10 @@ const primaryNav = [
 ];
 
 const configNav = [
-  { href: "/admin/roles", label: "Roles y accesos", icon: ShieldCheck },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },
   { href: "/admin/formas-de-pago", label: "Formas de pago", icon: CreditCard },
   { href: "/admin/correos", label: "Correos", icon: Mail },
+  { href: "/admin/menus", label: "Menús", icon: FileText },
   { href: "/admin/importar", label: "Importar", icon: Upload },
   { href: "/admin/reportes", label: "Reportes", icon: BarChart3 },
 ];

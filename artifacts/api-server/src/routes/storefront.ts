@@ -23,6 +23,7 @@ import {
   serializeBranch,
 } from "../lib/catalog";
 import { subscribeToCatalogChanges } from "../lib/catalog-events";
+import { listStoreMenus, readStoreMenuFile } from "../lib/store-menus";
 
 const router: IRouter = Router();
 
@@ -157,6 +158,30 @@ router.get("/products/:slug", async (req, res): Promise<void> => {
   }
 
   res.json(GetProductResponse.parse(product));
+});
+
+router.get("/menus", async (_req, res): Promise<void> => {
+  try {
+    res.json({ menus: await listStoreMenus() });
+  } catch {
+    res.status(503).json({ error: "Aplica la migración de menús (009_store_menus.sql)." });
+  }
+});
+
+router.get("/menus/:key/file", async (req, res): Promise<void> => {
+  try {
+    const file = await readStoreMenuFile(String(req.params.key || ""));
+    if (!file) {
+      res.status(404).json({ error: "Menú no encontrado" });
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", file.disposition);
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(file.data);
+  } catch {
+    res.status(503).json({ error: "Aplica la migración de menús (009_store_menus.sql)." });
+  }
 });
 
 export default router;

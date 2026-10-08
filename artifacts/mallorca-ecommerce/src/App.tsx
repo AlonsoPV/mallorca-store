@@ -1,4 +1,3 @@
-import AdminRoles from "@/pages/admin/roles";
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ClerkProvider } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
@@ -48,6 +47,7 @@ import AdminReports from '@/pages/admin/reports';
 import AdminUsers from '@/pages/admin/users';
 import AdminPaymentMethods from '@/pages/admin/payment-methods';
 import AdminMailboxes from '@/pages/admin/mailboxes';
+import AdminMenus from '@/pages/admin/menus';
 import { AdminGuard } from '@/components/layout/admin-guard';
 
 import { CartProvider } from '@/lib/cart-context';
@@ -277,7 +277,7 @@ function AppRoutes() {
         <AdminGuard><AdminReports /></AdminGuard>
       </Route>
       <Route path="/admin/roles">
-        <AdminGuard><AdminRoles /></AdminGuard>
+        <Redirect to="/admin/usuarios?tab=roles" />
       </Route>
       <Route path="/admin/usuarios">
         <AdminGuard><AdminUsers /></AdminGuard>
@@ -292,6 +292,9 @@ function AppRoutes() {
       </Route>
       <Route path="/admin/correos">
         <AdminGuard><AdminMailboxes /></AdminGuard>
+      </Route>
+      <Route path="/admin/menus">
+        <AdminGuard><AdminMenus /></AdminGuard>
       </Route>
       <Route path="/admin/alertas">
         <AdminGuard><AdminAlerts /></AdminGuard>

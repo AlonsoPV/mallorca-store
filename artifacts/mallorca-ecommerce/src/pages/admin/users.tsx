@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Copy, Eye, EyeOff, KeyRound, Pencil, RefreshCw, UserPlus, Users } from "lucide-react";
 import { readSearchParam, withSearchParams } from "@/lib/admin-search-params";
 import AdminAssignmentsPanel from "@/pages/admin/responsibles";
+import AdminRolesPanel from "@/pages/admin/roles";
 import {
   useCreateAdminUser,
   useGetMe,
@@ -97,10 +98,12 @@ function errorMessage(error: unknown) {
   return e?.data?.error || e?.error || e?.message || "La operación no pudo completarse.";
 }
 
-type UsersTab = "directorio" | "asignaciones";
+type UsersTab = "directorio" | "asignaciones" | "roles";
 
 function parseUsersTab(search: string): UsersTab {
-  return readSearchParam(search, "tab") === "asignaciones" ? "asignaciones" : "directorio";
+  const tab = readSearchParam(search, "tab");
+  if (tab === "asignaciones" || tab === "roles") return tab;
+  return "directorio";
 }
 
 export default function AdminUsers() {
@@ -274,9 +277,15 @@ export default function AdminUsers() {
       <AdminPageShell>
         <AdminPageHeader
           title="Usuarios"
-          description="Gestiona las cuentas y contraseñas del equipo."
+          description={
+            tab === "roles"
+              ? "Define qué módulos puede utilizar cada rol del equipo."
+              : tab === "asignaciones"
+                ? "Responsables por sucursal y por categoría."
+                : "Gestiona las cuentas y contraseñas del equipo."
+          }
           actions={
-            canManage ? (
+            tab === "directorio" && canManage ? (
               <Button className="rounded-none" onClick={openCreate}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Nuevo usuario
@@ -290,6 +299,7 @@ export default function AdminUsers() {
             [
               { id: "directorio", label: "Directorio" },
               { id: "asignaciones", label: "Asignaciones" },
+              { id: "roles", label: "Roles y accesos" },
             ] as const
           ).map((item) => (
             <button
@@ -317,6 +327,8 @@ export default function AdminUsers() {
 
         {tab === "asignaciones" ? (
           <AdminAssignmentsPanel />
+        ) : tab === "roles" ? (
+          <AdminRolesPanel />
         ) : (
           <>
             {!canManage ? (

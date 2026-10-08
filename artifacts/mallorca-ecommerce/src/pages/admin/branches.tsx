@@ -272,7 +272,7 @@ export default function AdminBranches() {
         ) : (
           <>
             <div className="@container">
-              <div className="grid grid-cols-2 gap-2 @min-[42rem]:grid-cols-4 @min-[42rem]:gap-3">
+              <div className="grid grid-cols-2 gap-2 @min-[34rem]:grid-cols-4 @min-[34rem]:gap-3">
                 <SummaryStat label="Total" value={summary.total} />
                 <SummaryStat label="Activas" value={summary.active} />
                 <SummaryStat label="Pedidos hoy" value={summary.ordersToday} />
@@ -571,16 +571,20 @@ function SummaryStat({
   return (
     <div
       className={cn(
-        "min-w-0 border border-border bg-background px-3 py-2.5 sm:px-4 sm:py-3",
+        "flex h-full min-w-0 flex-col justify-between gap-2 border border-border bg-background px-3 py-3",
         alert && "border-amber-300/80 bg-amber-50/40",
       )}
     >
-      <div className="flex items-start gap-1.5 text-[11px] font-medium uppercase leading-tight tracking-wide text-muted-foreground sm:text-xs">
-        {alert ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" /> : null}
-        <span className="min-w-0 break-words">{label}</span>
+      <div className="flex items-start gap-1.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted-foreground @min-[34rem]:min-h-8 @min-[34rem]:text-[11px]">
+        {alert ? <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-700" /> : null}
+        <span className="min-w-0">{label}</span>
       </div>
-      <div className="mt-1 font-serif text-xl tracking-tight tabular-nums sm:text-2xl">{value}</div>
-      {hint ? <div className="mt-0.5 text-xs leading-snug text-muted-foreground">{hint}</div> : null}
+      <div>
+        <div className="font-serif text-2xl leading-none tracking-tight tabular-nums">{value}</div>
+        <div className={cn("mt-1.5 text-[11px] leading-tight text-muted-foreground", !hint && "invisible")}>
+          {hint || "\u00a0"}
+        </div>
+      </div>
     </div>
   );
 }

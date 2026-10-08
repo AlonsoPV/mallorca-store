@@ -23,3 +23,4 @@ export * from "./role-access";
 export * from "./auth";
 
 export * from "./order-email";
+export * from "./store-menus";

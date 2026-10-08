@@ -28,6 +28,7 @@ import {
   formatPriceMx,
   ORDER_STATUS_LABELS,
 } from "@/lib/order-status";
+import { cn } from "@/lib/utils";
 
 const TYPE_LABEL: Record<string, string> = {
   LOW_STOCK: "Stock bajo",
@@ -96,42 +97,54 @@ export default function AdminDashboard() {
           description="Centro de acción del día."
         />
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <ActionCard
-            href="/admin/pedidos?day=today"
-            title="Pedidos hoy"
-            primary={`${summary.ordersToday}`}
-            secondary={`${summary.ordersPending} pendientes · ${summary.ordersNextHour} en 60 min`}
-            icon={<ShoppingCart className="h-4 w-4" />}
-          />
-          <ActionCard
-            href="/admin/inventario?state=LOW_STOCK"
-            title="Inventario"
-            primary={`${summary.lowStockProducts + (summary.criticalStockProducts ?? 0) + summary.outOfStockProducts}`}
-            secondary={`${summary.lowStockProducts} bajo · ${summary.criticalStockProducts ?? 0} crítico · ${summary.outOfStockProducts} agotado`}
-            icon={<Package className="h-4 w-4" />}
-            alert={
-              summary.lowStockProducts +
-                (summary.criticalStockProducts ?? 0) +
-                summary.outOfStockProducts >
-              0
-            }
-          />
-          <ActionCard
-            href="/admin/alertas"
-            title="Alertas"
-            primary={`${summary.alertsCount}`}
-            secondary="requieren atención"
-            icon={<AlertTriangle className="h-4 w-4" />}
-            alert={summary.alertsCount > 0}
-          />
-          <ActionCard
-            href="/admin/reportes"
-            title="Ventas"
-            primary={formatPriceMx(summary.salesToday)}
-            secondary="hoy"
-            icon={<CalendarDays className="h-4 w-4" />}
-          />
+        <div className="@container">
+          <div className="grid grid-cols-2 gap-2 @min-[34rem]:grid-cols-4 @min-[34rem]:gap-3">
+            <ActionCard
+              href="/admin/pedidos?day=today"
+              title="Pedidos hoy"
+              primary={`${summary.ordersToday}`}
+              secondary={
+                <>
+                  <p>{summary.ordersPending} pendientes</p>
+                  <p>{summary.ordersNextHour} en 60 min</p>
+                </>
+              }
+              icon={<ShoppingCart className="h-4 w-4" />}
+            />
+            <ActionCard
+              href="/admin/inventario?state=LOW_STOCK"
+              title="Inventario"
+              primary={`${summary.lowStockProducts + (summary.criticalStockProducts ?? 0) + summary.outOfStockProducts}`}
+              secondary={
+                <>
+                  <p>{summary.lowStockProducts} bajo · {summary.criticalStockProducts ?? 0} crítico</p>
+                  <p>{summary.outOfStockProducts} agotado</p>
+                </>
+              }
+              icon={<Package className="h-4 w-4" />}
+              alert={
+                summary.lowStockProducts +
+                  (summary.criticalStockProducts ?? 0) +
+                  summary.outOfStockProducts >
+                0
+              }
+            />
+            <ActionCard
+              href="/admin/alertas"
+              title="Alertas"
+              primary={`${summary.alertsCount}`}
+              secondary={<p>requieren atención</p>}
+              icon={<AlertTriangle className="h-4 w-4" />}
+              alert={summary.alertsCount > 0}
+            />
+            <ActionCard
+              href="/admin/reportes"
+              title="Ventas"
+              primary={formatPriceMx(summary.salesToday)}
+              secondary={<p>hoy</p>}
+              icon={<CalendarDays className="h-4 w-4" />}
+            />
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -365,23 +378,29 @@ function ActionCard({
   href: string;
   title: string;
   primary: string;
-  secondary: string;
+  secondary: ReactNode;
   icon: ReactNode;
   alert?: boolean;
 }) {
   return (
-    <Link href={href}>
-      <div
-        className={`h-full cursor-pointer border bg-background px-4 py-3 transition-colors hover:border-primary/40 ${
-          alert ? "border-amber-500/50" : "border-border"
-        }`}
-      >
-        <div className="mb-1 flex items-center justify-between text-muted-foreground">
-          <span className="text-xs font-medium uppercase tracking-wide">{title}</span>
-          {icon}
+    <Link
+      href={href}
+      className={cn(
+        "flex h-full min-w-0 flex-col justify-between gap-3 border bg-background px-3 py-3 transition-colors hover:border-foreground/30",
+        alert ? "border-amber-300/80 bg-amber-50/40" : "border-border",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2 text-muted-foreground">
+        <span className="text-[10px] font-semibold uppercase leading-tight tracking-[0.06em] @min-[34rem]:min-h-8 @min-[34rem]:text-[11px]">
+          {title}
+        </span>
+        <span className={cn("shrink-0", alert && "text-amber-700")}>{icon}</span>
+      </div>
+      <div>
+        <p className="text-xl font-semibold leading-none tracking-tight tabular-nums">{primary}</p>
+        <div className="mt-2 min-h-8 space-y-0.5 text-[11px] leading-tight text-muted-foreground">
+          {secondary}
         </div>
-        <p className="text-xl font-medium leading-tight">{primary}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{secondary}</p>
       </div>
     </Link>
   );

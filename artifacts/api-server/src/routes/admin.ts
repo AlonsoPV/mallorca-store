@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import express, { Router, type IRouter } from "express";
 import { and, eq, gt, gte, lt, sql, inArray, desc, isNull, or, ilike } from "drizzle-orm";
 import {
   branchProductsTable,
@@ -97,6 +97,8 @@ import {
 } from "../lib/payments";
 import { fulfillmentSchedule, isValidSlotTime, mexicoDate } from "../lib/fulfillment-schedule";
 import { getMailboxCatalog, upsertMailbox } from "../lib/mailboxes";
+import { deleteStoreMenu, listStoreMenus, saveStoreMenu } from "../lib/store-menus";
+import { parseMenuKey } from "../../store-menu.mjs";
 import { isMailboxRole, parseMailboxUpdate } from "../../mailbox-config.mjs";
 import {
   calculatePromotionPrice,
@@ -1358,6 +1360,68 @@ router.put("/admin/mailboxes/:role", async (req, res): Promise<void> => {
     res.json(await upsertMailbox(role, parsed.data));
   } catch {
     res.status(503).json({ error: "Aplica la migración de buzones (007_mailboxes.sql)." });
+  }
+});
+
+async function assertMenuScope(req: Parameters<typeof getRequestUser>[0], res: { status: (code: number) => { json: (body: unknown) => void } }, rawKey: string) {
+  const parsed = parseMenuKey(rawKey);
+  if (!parsed) {
+    res.status(404).json({ error: "Menú no válido." });
+    return null;
+  }
+  if (parsed.scope === "global") {
+    const user = await getRequestUser(req);
+    if (!user || !hasGlobalBranchAccess(user)) {
+      res.status(403).json({ error: "Solo operación global puede cambiar el menú de toda la tienda." });
+      return null;
+    }
+  } else if (!(await canAccessBranch(req, parsed.branchId))) {
+    res.status(403).json({ error: "No puedes editar el menú de esta sucursal." });
+    return null;
+  }
+  return parsed;
+}
+
+router.get("/admin/menus", async (_req, res): Promise<void> => {
+  try {
+    res.json({ menus: await listStoreMenus() });
+  } catch {
+    res.status(503).json({ error: "Aplica la migración de menús (009_store_menus.sql)." });
+  }
+});
+
+router.put(
+  "/admin/menus/:key",
+  express.raw({ type: ["application/pdf", "application/octet-stream"], limit: "8mb" }),
+  async (req, res): Promise<void> => {
+    const parsed = await assertMenuScope(req, res, String(req.params.key || ""));
+    if (!parsed) return;
+    const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    try {
+      const saved = await saveStoreMenu(parsed.key, String(req.query.fileName || "menu.pdf"), data);
+      if (!saved.ok) {
+        res.status(saved.status).json({ error: saved.error });
+        return;
+      }
+      res.json({ menus: saved.menus });
+    } catch {
+      res.status(503).json({ error: "Aplica la migración de menús (009_store_menus.sql)." });
+    }
+  },
+);
+
+router.delete("/admin/menus/:key", async (req, res): Promise<void> => {
+  const parsed = await assertMenuScope(req, res, String(req.params.key || ""));
+  if (!parsed) return;
+  try {
+    const removed = await deleteStoreMenu(parsed.key);
+    if (!removed.ok) {
+      res.status(removed.status).json({ error: removed.error });
+      return;
+    }
+    res.json({ menus: removed.menus });
+  } catch {
+    res.status(503).json({ error: "Aplica la migración de menús (009_store_menus.sql)." });
   }
 });
 

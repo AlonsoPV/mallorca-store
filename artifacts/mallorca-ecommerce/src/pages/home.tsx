@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
 import { StoreLayout } from "@/components/layout/store-layout";
 import { useListBranches, useListProducts, getListProductsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
@@ -24,6 +26,21 @@ import {
 } from "@/lib/store-media";
 
 const HERO_SLIDES = storeHeroSlides;
+const fallbackMenuHref = `${import.meta.env.BASE_URL}menu.pdf`;
+
+type StoreMenu = {
+  key: string;
+  scope: "global" | "branch";
+  branchId: number | null;
+  updatedAt: string;
+};
+
+function resolveMenuHref(menus: StoreMenu[] | undefined, branchId: number | null) {
+  const branchMenu = branchId != null ? menus?.find((menu) => menu.key === `branch-${branchId}`) : undefined;
+  const chosen = branchMenu || menus?.find((menu) => menu.key === "global");
+  if (!chosen) return fallbackMenuHref;
+  return `/api/menus/${chosen.key}/file?v=${encodeURIComponent(chosen.updatedAt)}`;
+}
 
 const HISTORY_MILESTONES: { year?: string; title: string; body: string }[] = [
   {
@@ -63,6 +80,13 @@ function todayHoursLabel(hours: Array<{ day: string; open: string; close: string
 
 export default function Home() {
   const { branchId, selectedTime } = useCart();
+  const menus = useQuery({
+    queryKey: ["store-menus"],
+    queryFn: () => customFetch<{ menus: StoreMenu[] }>("/api/menus"),
+    retry: 1,
+    staleTime: 30_000,
+  });
+  const menuHref = resolveMenuHref(menus.data?.menus, branchId);
   const { data: branchesData } = useListBranches();
   const branches = Array.isArray(branchesData) ? branchesData : undefined;
   const selectedBranch = branches?.find((branch) => branch.id === branchId);
@@ -255,6 +279,33 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="border-y border-[var(--mallorca-cacao)]/10 bg-[var(--mallorca-white)]">
+        <div className="container mx-auto flex flex-col items-start justify-between gap-6 px-5 py-10 md:flex-row md:items-center md:gap-10 md:px-8 md:py-12">
+          <div className="max-w-xl">
+            <span className="mallorca-kicker text-[var(--mallorca-red)]">Carta</span>
+            <h2 className="mallorca-display mt-3 text-[clamp(2rem,5vw,3.5rem)] leading-[0.95]">
+              El menú de la casa
+            </h2>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground md:text-base">
+              Pastelería, bollería y lo que sale del horno cada mañana.
+            </p>
+          </div>
+          <a
+            href={menuHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex shrink-0 items-center gap-4 text-[var(--mallorca-cacao)]"
+          >
+            <span className="border-b border-[var(--mallorca-cacao)]/30 pb-1 text-[0.72rem] font-bold uppercase tracking-[0.18em] transition-colors group-hover:border-[var(--mallorca-red)] group-hover:text-[var(--mallorca-red)]">
+              Ver menú
+            </span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white shadow-[0_8px_20px_rgba(212,59,43,0.28)] transition-all duration-300 group-hover:scale-105 group-hover:bg-[var(--mallorca-red-dark)]">
+              <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </span>
+          </a>
         </div>
       </section>
 

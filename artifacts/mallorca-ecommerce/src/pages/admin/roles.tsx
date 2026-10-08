@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShieldCheck, Save, LockKeyhole } from "lucide-react";
+import { ShieldCheck, LockKeyhole } from "lucide-react";
 import { useGetMe } from "@workspace/api-client-react";
-import { AdminLayout } from "@/components/layout/admin-layout";
-import { AdminPageShell, AdminPageHeader, AdminLoading, AdminError } from "@/components/admin";
+import { AdminLoading, AdminError } from "@/components/admin";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { accessKey, customFetch, modules, roles, type Policy, type RoleAccessResponse } from "@/lib/role-access";
 
-export default function AdminRoles() {
+export default function AdminRolesPanel() {
   const me = useGetMe();
   const canManage = me.data?.role === "admin";
   const qc = useQueryClient();
@@ -43,8 +42,8 @@ export default function AdminRoles() {
     setDraft({ ...current, policy: { ...current.policy, [selected]: { ...current.policy[selected], ...values } } as Policy });
   }
   const enabledCount = modules.filter(m => policy?.[selected]?.[m.id]).length;
-  return <AdminLayout><AdminPageShell>
-    <AdminPageHeader title="Roles y accesos" description="Define qué módulos puede utilizar cada rol del equipo." actions={<Button disabled={!canManage || !changed || save.isPending} onClick={() => current && save.mutate(current)}><Save className="mr-2 h-4 w-4" />{save.isPending ? "Guardando…" : "Guardar cambios"}</Button>} />
+  return (
+    <>
     {!canManage ? <p role="alert" className="border p-6">Solo Admin puede configurar los accesos de los roles.</p> : query.isLoading ? <AdminLoading /> : query.isError ? <AdminError title="No se pudo cargar la configuración de accesos" onRetry={() => query.refetch()} /> : policy ? <>
       <div className="flex items-start gap-3 border bg-muted/30 p-4 text-sm"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div><p className="font-medium">Acceso por módulo</p><p className="mt-1 text-muted-foreground">Los cambios afectan a todos los usuarios del rol. Se mantienen los límites de sucursal y las autorizaciones de edición existentes. Pedidos y agenda comparten acceso; catálogo, inventario e importaciones también.</p></div></div>
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
@@ -59,5 +58,6 @@ export default function AdminRoles() {
       </div>
       <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border bg-background p-4 shadow-sm"><p role="status" className="text-sm text-muted-foreground">{changed ? "Tienes cambios sin guardar." : query.data?.updatedAt ? `Última actualización: ${new Date(query.data.updatedAt).toLocaleString("es-MX")}` : "Configuración inicial: se conservan los accesos existentes."}</p><div className="flex gap-2"><Button variant="outline" disabled={!changed || save.isPending} onClick={() => { setDraft(null); void query.refetch(); }}>Descartar cambios</Button><Button disabled={!changed || save.isPending} onClick={() => current && save.mutate(current)}>{save.isPending ? "Guardando…" : "Guardar accesos"}</Button></div></div>
     </> : null}
-  </AdminPageShell></AdminLayout>;
+    </>
+  );
 }

@@ -4,6 +4,7 @@ import { previewOrderEmails, previewEmailStatus } from "./local-order-emails.mjs
 import { exportLocalProducts, previewLocalProducts, importLocalProducts } from "./local-product-transfer.mjs";
 import { handleRoleAccess } from "./local-role-access.mjs";
 import { catalogMailboxes, isMailboxRole, parseMailboxUpdate } from "./mailbox-config.mjs";
+import { isPdfBuffer, parseMenuKey, pdfContentDisposition, safePdfName } from "./store-menu.mjs";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 /**
@@ -954,6 +955,70 @@ function encryptMailboxSecret(plain) {
 
 function mailboxCatalog() {
   return catalogMailboxes([...storedMailboxes.values()]);
+}
+
+const menuDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "data", "menus");
+
+function readMenuCatalog() {
+  if (!fs.existsSync(menuDir)) return [];
+  return fs
+    .readdirSync(menuDir)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(menuDir, name), "utf8"));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function writeMenu(parsed, fileName, data) {
+  fs.mkdirSync(menuDir, { recursive: true });
+  const meta = {
+    key: parsed.key,
+    scope: parsed.scope,
+    branchId: parsed.branchId,
+    fileName: safePdfName(fileName),
+    updatedAt: new Date().toISOString(),
+  };
+  fs.writeFileSync(path.join(menuDir, `${parsed.key}.pdf`), data);
+  fs.writeFileSync(path.join(menuDir, `${parsed.key}.json`), JSON.stringify(meta));
+  return meta;
+}
+
+function deleteMenu(parsed) {
+  for (const ext of [".pdf", ".json"]) {
+    const file = path.join(menuDir, `${parsed.key}${ext}`);
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+}
+
+function readMenuFile(parsed) {
+  const pdfPath = path.join(menuDir, `${parsed.key}.pdf`);
+  const metaPath = path.join(menuDir, `${parsed.key}.json`);
+  if (!fs.existsSync(pdfPath) || !fs.existsSync(metaPath)) return null;
+  return {
+    meta: JSON.parse(fs.readFileSync(metaPath, "utf8")),
+    data: fs.readFileSync(pdfPath),
+  };
+}
+
+function canEditMockMenu(req, parsed) {
+  const role = req.localUser?.role;
+  const global = role === "admin" || role === "operations_manager" || role === "operations" || role === "manager";
+  if (parsed.scope === "global") return global;
+  return global || role === "staff" || role === "branch_manager";
+}
+
+function readRaw(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
 }
 
 function send(res, status, body) {
@@ -2291,6 +2356,72 @@ const server = http.createServer(async (req, res) => {
         .catch(() => send(res, 400, { error: "Invalid body" }));
       return;
     }
+  }
+
+  if (req.method === "GET" && path === "/api/menus") {
+    send(res, 200, { menus: readMenuCatalog() });
+    return;
+  }
+
+  const menuFileMatch = path.match(/^\/api\/menus\/([^/]+)\/file$/);
+  if (req.method === "GET" && menuFileMatch) {
+    const parsed = parseMenuKey(decodeURIComponent(menuFileMatch[1]));
+    const stored = parsed && readMenuFile(parsed);
+    if (!stored) {
+      send(res, 404, { error: "Menú no encontrado" });
+      return;
+    }
+    res.writeHead(200, {
+      "content-type": "application/pdf",
+      "content-disposition": pdfContentDisposition(stored.meta.fileName),
+      "content-length": stored.data.length,
+      "cache-control": "no-cache",
+      "access-control-allow-origin": "*",
+    });
+    res.end(stored.data);
+    return;
+  }
+
+  if (req.method === "GET" && path === "/api/admin/menus") {
+    send(res, 200, { menus: readMenuCatalog() });
+    return;
+  }
+
+  const adminMenuMatch = path.match(/^\/api\/admin\/menus\/([^/]+)$/);
+  if (adminMenuMatch && (req.method === "PUT" || req.method === "DELETE")) {
+    const parsed = parseMenuKey(decodeURIComponent(adminMenuMatch[1]));
+    if (!parsed) {
+      send(res, 404, { error: "Menú no válido." });
+      return;
+    }
+    if (!canEditMockMenu(req, parsed)) {
+      send(res, 403, {
+        error: parsed.scope === "global"
+          ? "Solo operación global puede cambiar el menú de toda la tienda."
+          : "No puedes editar el menú de esta sucursal.",
+      });
+      return;
+    }
+    if (parsed.scope === "branch" && !branches.some((branch) => branch.id === parsed.branchId)) {
+      send(res, 404, { error: "Sucursal no encontrada." });
+      return;
+    }
+    if (req.method === "DELETE") {
+      deleteMenu(parsed);
+      send(res, 200, { menus: readMenuCatalog() });
+      return;
+    }
+    readRaw(req)
+      .then((data) => {
+        if (!isPdfBuffer(data)) {
+          send(res, 400, { error: "Sube un archivo PDF de hasta 8 MB." });
+          return;
+        }
+        writeMenu(parsed, url.searchParams.get("fileName") || "menu.pdf", data);
+        send(res, 200, { menus: readMenuCatalog() });
+      })
+      .catch(() => send(res, 400, { error: "No se pudo leer el archivo." }));
+    return;
   }
 
   if (req.method === "GET" && path === "/api/admin/mailboxes") {

@@ -55,3 +55,6 @@ Thumbs.db
 
 # Local package-manager cache
 .pnpm-store/
+
+# Menús PDF subidos en el servidor local
+artifacts/api-server/data/

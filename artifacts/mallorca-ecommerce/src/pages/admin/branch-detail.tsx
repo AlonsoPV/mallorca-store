@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { formatOrderTime, formatPriceMx, ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
+import { ArrowLeft } from "lucide-react";
 
 const tabs = [
   "Resumen",
@@ -34,6 +35,16 @@ const tabs = [
   "Alertas",
   "Configuración",
 ] as const;
+
+const BRANCH_STATUS_LABEL: Record<string, string> = {
+  active: "Activa",
+  inactive: "Inactiva",
+  archived: "Archivada",
+};
+
+function branchStatus(branch: { status?: string | null; active?: boolean | null }) {
+  return branch.status || (branch.active ? "active" : "inactive");
+}
 
 function DataTable({
   columns,
@@ -109,6 +120,7 @@ export default function AdminBranchDetail() {
   const data = query.data;
   const summary = (data as any)?.summary;
   const branch = data?.branch;
+  const status = branch ? branchStatus(branch) : "inactive";
 
   const agendaOrders = useMemo(() => {
     const orders = Array.isArray(data?.orders) ? [...data.orders] : [];
@@ -138,70 +150,91 @@ export default function AdminBranchDetail() {
 
   return (
     <AdminLayout>
-      <div className="p-6 md:p-10 space-y-6 overflow-auto">
+      <div className="@container space-y-6 overflow-auto p-4 sm:p-6 md:p-10">
         {query.isLoading ? (
           <p>Cargando sucursal…</p>
         ) : query.error || !data || !branch ? (
           <p className="text-destructive">No se pudo cargar la sucursal.</p>
         ) : (
           <>
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-              <div>
-                <Link href="/admin/sucursales" className="text-sm text-muted-foreground hover:text-foreground">
-                  ← Sucursales
-                </Link>
-                <h1 className="text-3xl font-serif font-bold mt-1">{branch.name}</h1>
-                <p className="text-muted-foreground">
-                  {branch.address} · {branch.phone}
-                </p>
-                <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                  <span className="rounded-full bg-muted px-2 py-0.5 font-mono">{branch.branchCode}</span>
-                  <span className="rounded-full bg-muted px-2 py-0.5">
-                    {(branch as any).status || (branch.active ? "active" : "inactive")}
-                  </span>
+            <div className="space-y-4">
+              <Link
+                href="/admin/sucursales"
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Sucursales
+              </Link>
+              <div className="flex flex-col gap-4 @min-[46rem]:flex-row @min-[46rem]:items-end @min-[46rem]:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h1 className="font-serif text-[1.75rem] font-bold leading-tight sm:text-3xl">{branch.name}</h1>
+                    {branch.branchCode ? (
+                      <span className="font-mono text-xs tracking-wide text-muted-foreground">{branch.branchCode}</span>
+                    ) : null}
+                    <span
+                      className={cn(
+                        "text-[11px] font-semibold uppercase tracking-[0.12em]",
+                        status === "active" && "text-emerald-700",
+                        status === "inactive" && "text-amber-800",
+                        status === "archived" && "text-muted-foreground",
+                      )}
+                    >
+                      {BRANCH_STATUS_LABEL[status] || status}
+                    </span>
+                  </div>
+                  <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+                    {branch.address}
+                    {branch.phone ? <span className="whitespace-nowrap"> · {branch.phone}</span> : null}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 @min-[24rem]:grid-cols-3 @min-[46rem]:flex @min-[46rem]:shrink-0">
+                  <Button variant="outline" className="h-9 rounded-none px-3" asChild>
+                    <Link href={`/admin/sucursales/${branchId}/editar`}>Editar</Link>
+                  </Button>
+                  <Button variant="outline" className="h-9 rounded-none px-3" asChild>
+                    <Link href={`/admin/pedidos/nuevo?branchId=${branchId}`}>Nuevo pedido</Link>
+                  </Button>
+                  <Button className="col-span-2 h-9 rounded-none px-3 @min-[24rem]:col-span-1" asChild>
+                    <Link href={`/admin/pedidos?view=agenda&branchId=${branchId}`}>Abrir agenda</Link>
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" asChild>
-                  <Link href={`/admin/sucursales/${branchId}/editar`}>Editar</Link>
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href={`/admin/pedidos/nuevo?branchId=${branchId}`}>Nuevo pedido</Link>
-                </Button>
-                <Button asChild>
-                  <Link href={`/admin/pedidos?view=agenda&branchId=${branchId}`}>Abrir agenda</Link>
-                </Button>
-              </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Pedidos hoy</div>
-                <div className="text-2xl font-semibold">{summary?.ordersToday ?? 0}</div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Ventas hoy</div>
-                <div className="text-2xl font-semibold">{formatPriceMx(summary?.salesToday ?? 0)}</div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Alertas</div>
-                <div className="text-2xl font-semibold">{summary?.alertsOpen ?? 0}</div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Agotados</div>
-                <div className="text-2xl font-semibold">{summary?.outOfStock ?? 0}</div>
-              </div>
+            <div className="grid grid-cols-2 gap-2 @min-[34rem]:grid-cols-4 @min-[34rem]:gap-3">
+              {[
+                ["Pedidos hoy", String(summary?.ordersToday ?? 0)],
+                ["Ventas hoy", formatPriceMx(summary?.salesToday ?? 0)],
+                ["Alertas", String(summary?.alertsOpen ?? 0)],
+                ["Agotados", String(summary?.outOfStock ?? 0)],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0 border border-border bg-background px-3 py-3">
+                  <div className="text-[10px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted-foreground @min-[34rem]:text-[11px]">
+                    {label}
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold leading-none tracking-tight tabular-nums">{value}</div>
+                </div>
+              ))}
             </div>
 
-            <div className="flex gap-1 overflow-x-auto border-b">
+            <div
+              role="tablist"
+              aria-label="Secciones de la sucursal"
+              className="grid grid-cols-3 border-b border-border @min-[32rem]:grid-cols-5 @min-[58rem]:grid-cols-9"
+            >
               {tabs.map((label, i) => (
                 <button
                   key={label}
                   type="button"
+                  role="tab"
+                  aria-selected={tab === i}
                   onClick={() => setTab(i)}
                   className={cn(
-                    "px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px",
-                    tab === i ? "border-foreground font-medium" : "border-transparent text-muted-foreground",
+                    "-mb-px border-b-2 px-2 py-2 text-center text-sm",
+                    tab === i
+                      ? "border-foreground font-medium text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {label}
