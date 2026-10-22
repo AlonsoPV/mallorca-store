@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ProductCard } from "@/components/product-card";
 import { formatMxn, formatLeadTime, productAvailabilityCopy } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
-import { isCartNotFoundError } from "@/lib/cart-recovery";
+import { isCartNotFoundError, isStaleCartMutationError } from "@/lib/cart-recovery";
 
 const PRODUCT_PRICE_REFRESH_INTERVAL_MS = 30_000;
 
@@ -180,7 +180,7 @@ export default function ProductDetail() {
           },
         });
       } catch (err) {
-        if (!isCartNotFoundError(err)) throw err;
+        if (!isStaleCartMutationError(err)) throw err;
         clearCartSession();
         activeCartId = await createFreshCart();
         await addCartItem.mutateAsync({

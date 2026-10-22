@@ -11,7 +11,7 @@ import { useState } from "react";
 import { ImageWithFallback } from "@/components/image-with-fallback";
 import { formatMxn, productAvailabilityCopy } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
-import { isCartNotFoundError } from "@/lib/cart-recovery";
+import { isStaleCartMutationError } from "@/lib/cart-recovery";
 
 interface ProductCardProps {
   product: ProductCardType;
@@ -84,7 +84,7 @@ export function ProductCard({ product, className, showBranchAvailability = false
           data: { productId: product.id, quantity: 1, variantId: null },
         });
       } catch (error) {
-        if (!isCartNotFoundError(error)) throw error;
+        if (!isStaleCartMutationError(error)) throw error;
         clearCartSession();
         activeCartId = await createFreshCart(activeBranchId);
         await addCartItem.mutateAsync({
