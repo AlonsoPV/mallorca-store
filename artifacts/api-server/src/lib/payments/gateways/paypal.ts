@@ -1,3 +1,4 @@
+import { logger } from "../../logger.ts";
 import {
   asNumber,
   asRecord,
@@ -126,16 +127,48 @@ async function accessToken(
   return { token, base };
 }
 
-async function readOrder(http: GatewayHttp, credentials: GatewayCredentials, orderId: string): Promise<GatewayPayment> {
+function paymentFromCapture(payload: Record<string, unknown>): GatewayPayment {
+  const amount = asRecord(payload.amount);
+  const related = asRecord(asRecord(payload.supplementary_data)?.related_ids);
+  const rawStatus = asString(payload.status) ?? "unknown";
+  return {
+    provider: "PAYPAL",
+    checkoutId: asString(related?.order_id) ?? asString(payload.id) ?? "",
+    providerPaymentId: asString(payload.id) ?? "",
+    status: mapCaptureStatus(rawStatus),
+    amount: asNumber(amount?.value),
+    currency: asString(amount?.currency_code)?.toUpperCase() ?? null,
+    externalReference: asString(payload.custom_id),
+    rawStatus,
+  };
+}
+
+async function readCapture(
+  http: GatewayHttp,
+  credentials: GatewayCredentials,
+  captureId: string,
+): Promise<GatewayPayment> {
   const { token, base } = await accessToken(http, credentials);
   const payload = assertProviderOk(
     await http({
       method: "GET",
-      url: `${base}/v2/checkout/orders/${encodeURIComponent(orderId)}`,
+      url: `${base}/v2/payments/captures/${encodeURIComponent(captureId)}`,
       headers: { Authorization: `Bearer ${token}` },
     }),
-    "payment",
+    "capture",
   ) as Record<string, unknown>;
+  return paymentFromCapture(payload);
+}
+
+async function readOrder(http: GatewayHttp, credentials: GatewayCredentials, orderId: string): Promise<GatewayPayment> {
+  const { token, base } = await accessToken(http, credentials);
+  const response = await http({
+    method: "GET",
+    url: `${base}/v2/checkout/orders/${encodeURIComponent(orderId)}`,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (response.status === 404) return readCapture(http, credentials, orderId);
+  const payload = assertProviderOk(response, "payment") as Record<string, unknown>;
   return paymentFromOrder(payload);
 }
 
@@ -172,7 +205,9 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
             payment_source: {
               paypal: {
                 experience_context: {
-                  brand_name: "Pastelería Mallorca",
+                  brand_name: "Pasteleria Mallorca",
+                  locale: "es-MX",
+                  landing_page: "LOGIN",
                   user_action: "PAY_NOW",
                   shipping_preference: "NO_SHIPPING",
                   return_url: input.returnUrl,
@@ -257,7 +292,12 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
       const transmissionSig = input.headers["paypal-transmission-sig"];
       const certUrl = input.headers["paypal-cert-url"];
       const authAlgo = input.headers["paypal-auth-algo"];
-      if (!webhookId || !transmissionId || !transmissionTime || !transmissionSig || !certUrl || !authAlgo) {
+      if (!webhookId) {
+        logger.warn({ provider: "PAYPAL", stage: "webhook_verify" }, "paypal webhook id missing");
+        return false;
+      }
+      if (!transmissionId || !transmissionTime || !transmissionSig || !certUrl || !authAlgo) {
+        logger.warn({ provider: "PAYPAL", stage: "webhook_verify" }, "paypal webhook headers missing");
         return false;
       }
       let parsedCert: URL;

@@ -355,7 +355,6 @@ export default function CheckoutPage() {
         try {
           const session = await startOrderPayment(order.id, { guestAccessToken: order.guestAccessToken });
           if (session.redirectUrl) {
-            try { clearCartSession(); } catch { /* Redirect even if cart storage is unavailable. */ }
             setRedirectingTo(selectedPayment);
             window.location.assign(session.redirectUrl);
             return;
@@ -579,9 +578,13 @@ export default function CheckoutPage() {
                         <PaymentProviderLogo provider={method.code} className="h-7 w-auto max-w-[9rem]" />
                         {method.customerLabel}
                       </Label>
-                      {method.customerDescription ? (
-                        <p className="text-sm text-muted-foreground mt-1">{method.customerDescription}</p>
-                      ) : null}
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {method.code === "PAYPAL"
+                          ? "Te redirigimos a PayPal para pagar en MXN. El cobro se confirma al volver a la tienda."
+                          : method.code === "MERCADO_PAGO" || method.code === "ONLINE"
+                            ? "Te redirigimos a Mercado Pago para pagar en MXN."
+                            : method.customerDescription}
+                      </p>
                     </div>
                   ))}
                 </RadioGroup>

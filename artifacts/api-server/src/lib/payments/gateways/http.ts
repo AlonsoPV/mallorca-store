@@ -23,13 +23,27 @@ export function readJson(body: string): unknown {
   }
 }
 
+export function providerErrorSummary(payload: unknown): string {
+  const record = asRecord(payload);
+  if (!record) return "";
+  const details = Array.isArray(record.details) ? record.details : [];
+  const issues = details
+    .map((row) => asString(asRecord(row)?.issue))
+    .filter((issue): issue is string => Boolean(issue))
+    .slice(0, 4);
+  const debugId = asString(record.debug_id);
+  const parts = [...issues, debugId ? `debug_id=${debugId}` : null].filter(Boolean);
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
 export function assertProviderOk(response: GatewayHttpResponse, action: string): unknown {
   const payload = readJson(response.body);
   if (response.status < 200 || response.status >= 300) {
+    const status = response.status === 401 || response.status === 403 ? response.status : 502;
     throw new PaymentGatewayError(
       "PAYMENT_PROVIDER_REJECTED",
-      `Payment provider rejected ${action}`,
-      502,
+      `Payment provider rejected ${action}${providerErrorSummary(payload)}`,
+      status,
     );
   }
   if (payload == null || typeof payload !== "object") {

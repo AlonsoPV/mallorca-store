@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { StoreLayout } from "@/components/layout/store-layout";
+import { useCart } from "@/lib/cart-context";
 import {
   useGetGuestOrderDetails,
   useGetOrderDetails,
@@ -34,9 +35,9 @@ import {
 } from "../../../../lib/purchase-result.mjs";
 
 const PAYMENT_RETURN_COPY: Record<string, string> = {
-  ok: "Recibimos tu regreso de la pasarela. Estamos confirmando el pago; esta página se actualiza sola.",
+  ok: "Estamos confirmando el cobro con PayPal. No cierres esta ventana; el estado se actualiza solo.",
   pendiente: "Tu pago quedó pendiente en la pasarela. Te avisaremos cuando se confirme.",
-  cancelado: "No se completó el pago. Tu pedido sigue guardado y puedes intentarlo de nuevo.",
+  cancelado: "No se completó el pago. Tu carrito y tu pedido siguen guardados; puedes intentarlo de nuevo.",
 };
 
 type Confirmation = {
@@ -64,10 +65,13 @@ export default function OrderDetailsPage() {
   const { id, token } = useParams<{ id: string; token?: string }>();
   const { isSignedIn, isLoaded } = useAppAuth();
   const { toast } = useToast();
+  const { clearCartSession } = useCart();
   const [downloading, setDownloading] = useState(false);
   const [startingPayment, setStartingPayment] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const syncedRef = useRef(false);
   const paymentReturn = new URLSearchParams(useSearch()).get("pago") ?? "";
-  const refetchInterval = paymentReturn === "ok" || paymentReturn === "pendiente" ? 5000 : 30000;
+  const refetchInterval = paymentReturn === "ok" || paymentReturn === "pendiente" ? 2500 : 30000;
   // A valid guest link remains usable even when the customer has signed in meanwhile.
   const isGuest = !!token && token !== "user";
   const guest = useGetGuestOrderDetails(id!, token!, {
@@ -86,6 +90,30 @@ export default function OrderDetailsPage() {
   });
   const query = isGuest ? guest : account;
   const order = query.data;
+
+  useEffect(() => {
+    if (order?.paymentStatus === "paid") {
+      try { clearCartSession(); } catch { /* Receipt remains usable without cart storage. */ }
+    }
+  }, [order?.paymentStatus, clearCartSession]);
+
+  useEffect(() => {
+    if (!order || !id || syncedRef.current) return;
+    if (paymentReturn !== "ok" && paymentReturn !== "pendiente") return;
+    if (order.paymentStatus === "paid" || order.paymentStatus === "failed") return;
+    syncedRef.current = true;
+    setSyncing(true);
+    void customFetch<{ paymentStatus?: string }>(`/api/orders/${encodeURIComponent(id)}/payment/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guestAccessToken: isGuest ? token : undefined }),
+    })
+      .then(() => query.refetch())
+      .catch(() => {
+        syncedRef.current = false;
+      })
+      .finally(() => setSyncing(false));
+  }, [id, isGuest, order, paymentReturn, query, token]);
   const base = isGuest
     ? `/api/guest/orders/${encodeURIComponent(id || "")}/${encodeURIComponent(token || "")}`
     : `/api/orders/${encodeURIComponent(id || "")}`;
@@ -220,13 +248,23 @@ export default function OrderDetailsPage() {
             <span className="border bg-background px-3 py-1">
               Pago: {result.paymentStatus}
             </span>
+            <span className="border bg-background px-3 py-1">
+              {payLabel} · {money(order.total)}
+            </span>
           </div>
-          {returnNotice ? (
+          {returnNotice || syncing ? (
             <p
               role="status"
               className="mx-auto mt-5 max-w-xl border bg-background px-4 py-3 text-sm"
             >
-              {returnNotice}
+              {syncing ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Confirmando el pago con la pasarela…
+                </span>
+              ) : (
+                returnNotice
+              )}
             </p>
           ) : null}
           <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
@@ -234,7 +272,7 @@ export default function OrderDetailsPage() {
             <Button
               className="h-12 px-7"
               onClick={payOnline}
-              disabled={startingPayment}
+              disabled={startingPayment || syncing}
             >
               {startingPayment ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -263,6 +301,11 @@ export default function OrderDetailsPage() {
               ? "Preparando comprobante…"
               : "Descargar comprobante PDF"}
           </Button>
+          {paymentReturn === "cancelado" && canPayOnline ? (
+            <Button asChild variant="outline" className="h-12 px-7">
+              <Link href="/checkout">Volver al checkout</Link>
+            </Button>
+          ) : null}
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             Comprobante de pedido; no es factura fiscal.

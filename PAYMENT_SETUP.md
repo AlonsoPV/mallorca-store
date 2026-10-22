@@ -70,7 +70,7 @@ Retorno del comprador (lo arma el backend, no hay que pegarlo en el panel salvo 
 - Pendiente: `…?pago=pendiente`
 - Cancelado: `…?pago=cancelado`
 
-Esa pantalla **consulta el pedido**; el estado real lo pone el webhook.
+Esa pantalla **no trata `?pago=ok` como cobro**. Al volver, el backend consulta PayPal, captura si la orden está `APPROVED` y recién entonces marca el pedido pagado. El webhook sigue siendo la conciliación asíncrona (si el comprador cierra el navegador).
 
 ## Pruebas Sandbox
 

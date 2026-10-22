@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { describe, it } from "node:test";
-import { amountsMatch } from "./http.ts";
+import { amountsMatch, providerErrorSummary } from "./http.ts";
 import { createMercadoPagoGateway, verifyMercadoPagoSignature } from "./mercado-pago.ts";
 import { decideGatewayOutcome } from "./outcome.ts";
 import { clearPayPalTokenCache, createPayPalGateway } from "./paypal.ts";
@@ -31,6 +31,17 @@ function scripted(handlers: Record<string, (url: string, body?: string) => { sta
     return match[1](request.url, request.body);
   };
 }
+
+describe("provider error summary", () => {
+  it("exposes PayPal issue names and debug id without the raw body", () => {
+    const summary = providerErrorSummary({
+      name: "UNPROCESSABLE_ENTITY",
+      debug_id: "abc123",
+      details: [{ issue: "INVALID_RETURN_URL" }, { issue: "PAYEE_ACCOUNT_RESTRICTED" }],
+    });
+    assert.equal(summary, " (INVALID_RETURN_URL, PAYEE_ACCOUNT_RESTRICTED, debug_id=abc123)");
+  });
+});
 
 describe("gateway money and outcome", () => {
   it("matches amounts by cents and refuses a short payment", () => {
@@ -350,6 +361,56 @@ describe("PayPal gateway", () => {
     assert.equal(payment.status, "approved");
     assert.equal(payment.providerPaymentId, "CAP9");
     assert.equal(calls.filter((call) => call.includes("/v1/oauth2/token")).length, 1);
+  });
+
+  it("looks up capture webhooks by PayPal order id, not capture id", () => {
+    const gateway = createPayPalGateway();
+    const parsed = gateway.parseWebhook({
+      headers: {},
+      query: {},
+      body: {
+        event_type: "PAYMENT.CAPTURE.COMPLETED",
+        resource: {
+          id: "CAP9",
+          custom_id: "order-9",
+          supplementary_data: { related_ids: { order_id: "ORDER9" } },
+        },
+      },
+    });
+    assert.deepEqual(parsed, {
+      kind: "payment",
+      lookupId: "ORDER9",
+      externalReference: "order-9",
+    });
+  });
+
+  it("reads a capture when the checkout order lookup is missing", async () => {
+    clearPayPalTokenCache();
+    const gateway = createPayPalGateway(async (request) => {
+      if (request.url.endsWith("/v1/oauth2/token")) {
+        return { status: 200, body: JSON.stringify({ access_token: "tok", expires_in: 3600 }) };
+      }
+      if (request.url.includes("/v2/checkout/orders/CAP9")) {
+        return { status: 404, body: "" };
+      }
+      if (request.url.endsWith("/v2/payments/captures/CAP9")) {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            id: "CAP9",
+            status: "COMPLETED",
+            custom_id: "order-9",
+            amount: { currency_code: "MXN", value: "10.00" },
+            supplementary_data: { related_ids: { order_id: "ORDER9" } },
+          }),
+        };
+      }
+      return { status: 404, body: "" };
+    });
+    const payment = await gateway.fetchPayment(payPalCredentials, "CAP9");
+    assert.equal(payment.status, "approved");
+    assert.equal(payment.checkoutId, "ORDER9");
+    assert.equal(payment.externalReference, "order-9");
   });
 
   it("rejects a webhook without PayPal transmission headers", async () => {

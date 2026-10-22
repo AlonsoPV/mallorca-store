@@ -18,5 +18,5 @@ export {
   resolveAvailableMethods,
 } from "./resolve.ts";
 export { gatewayCredentialsReady, gatewayCodeForMethod, gatewayCodeFromPath } from "./gateways/types.ts";
-export { startGatewayCheckout, applyGatewayWebhook } from "./gateways/session.ts";
+export { startGatewayCheckout, applyGatewayWebhook, reconcileGatewayPayment } from "./gateways/session.ts";
 export { PaymentGatewayError } from "./gateways/types.ts";

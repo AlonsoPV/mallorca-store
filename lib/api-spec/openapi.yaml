@@ -704,6 +704,28 @@ paths:
       responses:
         "200": { description: Payment session, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentStart" } } } }
         "503": { description: Payment provider unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentStart" } } } }
+  /orders/{id}/payment/sync:
+    post:
+      operationId: syncOrderPayment
+      tags: [storefront]
+      description: Reconciles an online payment with the provider after the buyer returns. Captures an approved PayPal order if needed. Does not treat ?pago=ok as proof of payment.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentStartInput" }
+      responses:
+        "200":
+          description: Reconciliation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applied: { type: boolean }
+                  reason: { type: string }
+                  paymentStatus: { type: string }
   /webhooks/payments/{provider}:
     post:
       operationId: receivePaymentWebhook
