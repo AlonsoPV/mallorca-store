@@ -245,7 +245,7 @@ export async function createOrder(
   if (cartId) {
     const [cart] = await db.select().from(cartsTable).where(eq(cartsTable.id, cartId));
     if (!cart || cart.status !== "active") {
-      throw new OrderCreateError("Cart is empty or already converted");
+      throw new OrderCreateError("Cart is empty or already converted", 409, "CART_ALREADY_CONVERTED");
     }
     if (cart.branchId !== input.branchId) {
       throw new OrderCreateError("Cart branch mismatch");

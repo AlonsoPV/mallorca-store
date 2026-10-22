@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cartLeadNotice, formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
+import { isCartNotFoundError } from "@/lib/cart-recovery";
 import { track } from "@/lib/analytics";
 import {
   formatSlotTime,
@@ -228,20 +229,24 @@ export default function CheckoutPage() {
   } : null;
 
   useEffect(() => {
-    if (!previewBody) return;
+    if (!previewBody || isSubmitting || redirectingTo) return;
     if (fulfillmentMethod === "delivery" && (!lat || !lng || !deliveryInfo?.eligible)) {
       setPreview(null);
       return;
     }
+    let cancelled = false;
     const handle = window.setTimeout(async () => {
       try {
         const result = await previewOrder.mutateAsync({ data: previewBody });
-        setPreview(result);
+        if (!cancelled) setPreview(result);
       } catch {
-        setPreview(null);
+        if (!cancelled) setPreview(null);
       }
     }, 350);
-    return () => window.clearTimeout(handle);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
   }, [
     cartId,
     selectedSlot,
@@ -253,6 +258,8 @@ export default function CheckoutPage() {
     lat,
     lng,
     deliveryInfo?.eligible,
+    isSubmitting,
+    redirectingTo,
   ]);
 
   const handleGetLocation = () => {
@@ -349,6 +356,7 @@ export default function CheckoutPage() {
         localStorage.setItem("mallorca_last_guest_order", orderUrl);
         sessionStorage.removeItem("mallorca_checkout_draft");
       } catch { /* Receipt remains accessible when browser storage is unavailable. */ }
+      try { clearCartSession(); } catch { /* Converted carts cannot be reused; retry payment from the receipt. */ }
       const isOnline =
         selectedPayment === "MERCADO_PAGO" || selectedPayment === "PAYPAL" || selectedPayment === "ONLINE";
       if (isOnline) {
@@ -362,17 +370,32 @@ export default function CheckoutPage() {
         } catch {
           toast({
             title: "No se pudo abrir el pago",
-            description: "El pedido quedó creado y el carrito se conserva. Puedes reintentar el pago desde el recibo.",
+            description: "El pedido quedó creado. Puedes reintentar el pago desde el recibo.",
             variant: "destructive",
           });
         }
         setLocation(orderUrl);
         return;
       }
-      try { clearCartSession(); } catch { /* Always show the created order. */ }
       setLocation(orderUrl);
     } catch (err: any) {
       setIsSubmitting(false);
+      if (isCartNotFoundError(err)) {
+        try {
+          const last = localStorage.getItem("mallorca_last_guest_order");
+          if (last) {
+            setLocation(last);
+            return;
+          }
+        } catch { /* Fall through to a fresh cart. */ }
+        try { clearCartSession(); } catch { /* */ }
+        toast({
+          title: "Este carrito ya se convirtió en pedido",
+          description: "Si ya confirmaste, entra desde el recibo. Si no, arma un carrito nuevo.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({ title: "Error creando pedido", description: err.message || "Ocurrió un error inesperado.", variant: "destructive" });
     }
   };
@@ -422,11 +445,29 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!isLoadingCart && (!cart || cart.items.length === 0)) {
+  if (!isLoadingCart && !isSubmitting && !redirectingTo && (!cart || cart.items.length === 0)) {
     return <Redirect to="/carrito" />;
   }
 
-  if (!cart) return null;
+  if (!cart) {
+    if (redirectingTo) {
+      return (
+        <StoreLayout>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--mallorca-cacao)]/70 px-6 text-center text-white">
+            <div>
+              <PaymentProviderLogo provider={redirectingTo} className="mx-auto mb-4 h-8 w-auto max-w-[10rem] brightness-0 invert" />
+              <p className="mallorca-kicker text-white/70">Pago seguro</p>
+              <p className="mt-2 font-serif text-2xl">
+                Redirigiendo a {paymentProviderTitle(redirectingTo) ?? "el pago"}…
+              </p>
+              <p className="mt-2 text-sm text-white/75">No cierres esta ventana ni pulses atrás.</p>
+            </div>
+          </div>
+        </StoreLayout>
+      );
+    }
+    return null;
+  }
 
   const payCopy = fulfillmentMethod === "delivery" ? "Pagas al recibirlo" : "Efectivo al recoger";
   const ctaLabel = fulfillmentMethod === "delivery" ? "Confirmar pedido · Pagas al recibirlo" : "Confirmar pedido";

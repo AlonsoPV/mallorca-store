@@ -126,13 +126,20 @@ router.post("/cart/session", async (req, res): Promise<void> => {
   const parsed = CreateCartSessionBody.safeParse(req.body); if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const user = await getRequestUser(req);
   let cart = parsed.data.cartId ? (await db.select().from(cartsTable).where(eq(cartsTable.id, parsed.data.cartId)))[0] : undefined;
-  if (cart && (cart.branchId !== parsed.data.branchId || cart.status !== "active")) { res.status(409).json({ error: "Cart branch mismatch" }); return; }
+  if (cart && cart.branchId !== parsed.data.branchId) { res.status(409).json({ error: "Cart branch mismatch" }); return; }
+  if (cart && cart.status !== "active") cart = undefined;
   if (!cart) [cart] = await db.insert(cartsTable).values({ id: id(), branchId: parsed.data.branchId, userId: user?.id }).returning();
   const view = await cartView(cart.id); res.json(CreateCartSessionResponse.parse(view));
 });
 
 router.get("/cart/:id", async (req, res): Promise<void> => {
   const p = GetCartParams.safeParse(req.params); if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
+  const [existing] = await db.select({ status: cartsTable.status }).from(cartsTable).where(eq(cartsTable.id, p.data.id));
+  if (!existing) { res.status(404).json({ error: "Cart not found" }); return; }
+  if (existing.status !== "active") {
+    res.status(409).json({ error: "Cart is empty or already converted", code: "CART_ALREADY_CONVERTED" });
+    return;
+  }
   const view = await cartView(p.data.id); if (!view) { res.status(404).json({ error: "Cart not found" }); return; } res.json(GetCartResponse.parse(view));
 });
 
@@ -197,10 +204,14 @@ router.post("/cart/:id/items", async (req, res): Promise<void> => {
   const p = AddCartItemParams.safeParse(req.params), b = AddCartItemBody.safeParse(req.body);
   if (!p.success || !b.success) { res.status(400).json({ error: "Invalid cart item" }); return; }
   const [cart] = await db.select({ cart: cartsTable, branch: branchesTable }).from(cartsTable).innerJoin(branchesTable, eq(cartsTable.branchId, branchesTable.id)).where(eq(cartsTable.id, p.data.id));
+  if (cart && cart.cart.status !== "active") {
+    res.status(409).json({ error: "Cart is empty or already converted", code: "CART_ALREADY_CONVERTED" });
+    return;
+  }
   const [product] = await db.select({ product: productsTable, bp: branchProductsTable }).from(branchProductsTable)
     .innerJoin(productsTable, eq(branchProductsTable.productId, productsTable.id))
     .where(and(eq(branchProductsTable.branchId, cart?.cart.branchId ?? -1), eq(productsTable.id, b.data.productId)));
-  if (!cart || cart.cart.status !== "active" || !cart.branch.active || !product?.bp.available || product.product.status !== "active") { res.status(409).json({ error: "Product unavailable" }); return; }
+  if (!cart || !cart.branch.active || !product?.bp.available || product.product.status !== "active") { res.status(409).json({ error: "Product unavailable" }); return; }
   const variant = b.data.variantId ? (await db.select().from(productVariantsTable).where(and(eq(productVariantsTable.id, b.data.variantId), eq(productVariantsTable.productId, b.data.productId), eq(productVariantsTable.active, true))))[0] : undefined;
   if (b.data.variantId && !variant) { res.status(409).json({ error: "Variant unavailable" }); return; }
   const basePrice = variant?.price ?? product.bp.priceOverride ?? product.product.price;
