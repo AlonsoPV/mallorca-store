@@ -2867,7 +2867,8 @@ export const GetAdminPaymentProviderResponse = zod.object({
   "configured": zod.boolean(),
   "publicKeyMasked": zod.string().nullish(),
   "accessTokenConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean()
+  "webhookSecretConfigured": zod.boolean(),
+  "credentialSource": zod.enum(["none", "replit_secrets", "admin", "mixed"]).optional()
 })
 
 
@@ -2888,7 +2889,8 @@ export const UpdateAdminPaymentProviderResponse = zod.object({
   "configured": zod.boolean(),
   "publicKeyMasked": zod.string().nullish(),
   "accessTokenConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean()
+  "webhookSecretConfigured": zod.boolean(),
+  "credentialSource": zod.enum(["none", "replit_secrets", "admin", "mixed"]).optional()
 })
 
 

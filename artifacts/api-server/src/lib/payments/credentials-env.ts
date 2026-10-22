@@ -49,3 +49,24 @@ export function overlayGatewayCredentials(
     webhookSecret: stored?.webhookSecret?.trim() || env.webhookSecret,
   };
 }
+
+export type PaymentCredentialSource = "none" | "replit_secrets" | "admin" | "mixed";
+
+function hasCredentialValue(credentials: GatewayCredentials | null | undefined): boolean {
+  if (!credentials) return false;
+  return Boolean(
+    credentials.publicKey?.trim() || credentials.secret?.trim() || credentials.webhookSecret?.trim(),
+  );
+}
+
+export function describeCredentialSource(
+  stored: GatewayCredentials | null,
+  env: GatewayCredentials,
+): PaymentCredentialSource {
+  const fromAdmin = hasCredentialValue(stored);
+  const fromEnv = hasCredentialValue(env);
+  if (fromAdmin && fromEnv) return "mixed";
+  if (fromAdmin) return "admin";
+  if (fromEnv) return "replit_secrets";
+  return "none";
+}

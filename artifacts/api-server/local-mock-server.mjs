@@ -951,6 +951,60 @@ const paymentProviders = {
   PAYPAL: blankProvider("PAYPAL"),
 };
 
+function envProviderSecrets(provider) {
+  if (provider === "PAYPAL") {
+    return {
+      publicKey: String(process.env.PAYPAL_CLIENT_ID || "").trim(),
+      secret: String(process.env.PAYPAL_CLIENT_SECRET || "").trim(),
+      webhookSecret: String(process.env.PAYPAL_WEBHOOK_ID || "").trim(),
+    };
+  }
+  return {
+    publicKey: String(process.env.MERCADOPAGO_PUBLIC_KEY || "").trim(),
+    secret: String(process.env.MERCADOPAGO_ACCESS_TOKEN || "").trim(),
+    webhookSecret: String(process.env.MERCADOPAGO_WEBHOOK_SECRET || "").trim(),
+  };
+}
+
+function maskProviderSecret(value) {
+  if (!value) return null;
+  if (value.length <= 8) return "••••";
+  return `${value.slice(0, 4)}••••${value.slice(-4)}`;
+}
+
+function overlayProviderResponse(row) {
+  const env = envProviderSecrets(row.provider);
+  const publicKey = row.publicKey || env.publicKey;
+  const secret = row.accessToken || env.secret;
+  const webhookSecret = row.webhookSecret || env.webhookSecret;
+  const configured = row.provider === "PAYPAL"
+    ? Boolean(publicKey && secret)
+    : Boolean(secret);
+  const fromAdmin = Boolean(row.publicKey || row.accessToken || row.webhookSecret);
+  const fromEnv = Boolean(env.publicKey || env.secret || env.webhookSecret);
+  const credentialSource = fromAdmin && fromEnv
+    ? "mixed"
+    : fromAdmin
+      ? "admin"
+      : fromEnv
+        ? "replit_secrets"
+        : "none";
+  if (configured) {
+    for (const method of paymentMethodConfigs) {
+      if (method.provider === row.provider) method.configurationStatus = "configured";
+    }
+  }
+  return {
+    provider: row.provider,
+    sandbox: true,
+    configured,
+    publicKeyMasked: maskProviderSecret(publicKey),
+    accessTokenConfigured: Boolean(secret),
+    webhookSecretConfigured: Boolean(webhookSecret),
+    credentialSource,
+  };
+}
+
 const storedMailboxes = new Map();
 
 function encryptMailboxSecret(plain) {
@@ -2314,14 +2368,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET") {
-      send(res, 200, {
-        provider: row.provider,
-        sandbox: row.sandbox,
-        configured: row.configured,
-        publicKeyMasked: row.publicKeyMasked,
-        accessTokenConfigured: row.accessTokenConfigured,
-        webhookSecretConfigured: row.webhookSecretConfigured,
-      });
+      send(res, 200, overlayProviderResponse(row));
       return;
     }
     if (req.method === "PUT") {
@@ -2348,14 +2395,7 @@ const server = http.createServer(async (req, res) => {
               if (method.provider === provider) method.configurationStatus = "configured";
             }
           }
-          send(res, 200, {
-            provider: row.provider,
-            sandbox: row.sandbox,
-            configured: row.configured,
-            publicKeyMasked: row.publicKeyMasked,
-            accessTokenConfigured: row.accessTokenConfigured,
-            webhookSecretConfigured: row.webhookSecretConfigured,
-          });
+          send(res, 200, overlayProviderResponse(row));
         })
         .catch(() => send(res, 400, { error: "Invalid body" }));
       return;

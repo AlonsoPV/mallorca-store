@@ -11,7 +11,12 @@ import {
   providerAvailabilityMap,
   resolveAvailableMethods as resolveAvailableMethodsPure,
 } from "./catalog.ts";
-import { credentialsFromEnv, overlayGatewayCredentials } from "./credentials-env.ts";
+import {
+  credentialsFromEnv,
+  describeCredentialSource,
+  overlayGatewayCredentials,
+  type PaymentCredentialSource,
+} from "./credentials-env.ts";
 import { gatewayCredentialsReady, isGatewayCode, type GatewayCredentials } from "./gateways/types.ts";
 import { getPaymentProvider, setOnlineProviderConfigured } from "./providers.ts";
 import { decryptSecret } from "./secrets.ts";
@@ -32,14 +37,28 @@ function mapConfig(row: typeof paymentMethodConfigsTable.$inferSelect): PaymentM
   };
 }
 
+async function syncOnlineProviderConfiguration(configs: PaymentMethodConfig[]): Promise<void> {
+  for (const provider of ["MERCADO_PAGO", "PAYPAL"] as const) {
+    const ready = gatewayCredentialsReady(await loadGatewayCredentials(provider));
+    setOnlineProviderConfigured(provider, ready);
+    if (ready) {
+      for (const config of configs) {
+        if (config.provider === provider) config.configurationStatus = "configured";
+      }
+    }
+  }
+}
+
 export async function loadPaymentMethodConfigs(): Promise<PaymentMethodConfig[]> {
+  let configs: PaymentMethodConfig[];
   try {
     const rows = await db.select().from(paymentMethodConfigsTable);
-    if (rows.length === 0) return DEFAULT_PAYMENT_METHOD_CONFIGS;
-    return mergePaymentConfigs(rows.map(mapConfig));
+    configs = rows.length === 0 ? DEFAULT_PAYMENT_METHOD_CONFIGS : mergePaymentConfigs(rows.map(mapConfig));
   } catch {
-    return DEFAULT_PAYMENT_METHOD_CONFIGS;
+    configs = DEFAULT_PAYMENT_METHOD_CONFIGS;
   }
+  await syncOnlineProviderConfiguration(configs);
+  return configs;
 }
 
 async function loadBranchOverlay(branchId: number): Promise<Record<string, boolean>> {
@@ -54,27 +73,37 @@ async function loadBranchOverlay(branchId: number): Promise<Record<string, boole
   }
 }
 
-export async function loadGatewayCredentials(provider: string): Promise<GatewayCredentials | null> {
+export async function inspectGatewayCredentials(provider: string): Promise<{
+  credentials: GatewayCredentials;
+  source: PaymentCredentialSource;
+} | null> {
   if (!isGatewayCode(provider)) return null;
   const fromEnv = credentialsFromEnv(provider);
+  let stored: GatewayCredentials | null = null;
   try {
     const [row] = await db
       .select()
       .from(paymentProviderSettingsTable)
       .where(eq(paymentProviderSettingsTable.provider, provider));
-    return overlayGatewayCredentials(
-      {
-        provider,
-        sandbox: row?.sandbox ?? true,
-        publicKey: row?.publicKey ?? null,
-        secret: decryptSecret(row?.accessTokenEncrypted),
-        webhookSecret: decryptSecret(row?.webhookSecretEncrypted),
-      },
-      fromEnv,
-    );
+    stored = {
+      provider,
+      sandbox: row?.sandbox ?? true,
+      publicKey: row?.publicKey ?? null,
+      secret: decryptSecret(row?.accessTokenEncrypted),
+      webhookSecret: decryptSecret(row?.webhookSecretEncrypted),
+    };
   } catch {
-    return overlayGatewayCredentials(null, fromEnv);
+    stored = null;
   }
+  return {
+    credentials: overlayGatewayCredentials(stored, fromEnv),
+    source: describeCredentialSource(stored, fromEnv),
+  };
+}
+
+export async function loadGatewayCredentials(provider: string): Promise<GatewayCredentials | null> {
+  const inspected = await inspectGatewayCredentials(provider);
+  return inspected?.credentials ?? null;
 }
 
 export async function loadMercadoPagoConfigured(): Promise<boolean> {
@@ -88,15 +117,6 @@ export async function resolveAvailableMethods(input: {
 }): Promise<CheckoutPaymentMethod[]> {
   const configs = await loadPaymentMethodConfigs();
   const overlay = await loadBranchOverlay(input.branchId);
-  for (const provider of ["MERCADO_PAGO", "PAYPAL"] as const) {
-    const ready = gatewayCredentialsReady(await loadGatewayCredentials(provider));
-    setOnlineProviderConfigured(provider, ready);
-    if (ready) {
-      for (const config of configs) {
-        if (config.provider === provider) config.configurationStatus = "configured";
-      }
-    }
-  }
 
   const uniqueProviders = [...new Set(configs.map((row) => row.provider))];
   const availability = await Promise.all(

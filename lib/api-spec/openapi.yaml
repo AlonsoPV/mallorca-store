@@ -2538,6 +2538,7 @@ components:
         publicKeyMasked: { type: ["string", "null"] }
         accessTokenConfigured: { type: boolean }
         webhookSecretConfigured: { type: boolean }
+        credentialSource: { type: string, enum: [none, replit_secrets, admin, mixed] }
       required: [provider, sandbox, configured, accessTokenConfigured, webhookSecretConfigured]
     PaymentProviderSettingsInput:
       type: object

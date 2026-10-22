@@ -38,6 +38,7 @@ const PROVIDERS = [
     publicKeyLabel: "Public key",
     secretLabel: "Access token",
     webhookLabel: "Webhook secret",
+    secretNames: ["MERCADOPAGO_PUBLIC_KEY", "MERCADOPAGO_ACCESS_TOKEN", "MERCADOPAGO_WEBHOOK_SECRET"],
   },
   {
     code: "PAYPAL",
@@ -46,8 +47,31 @@ const PROVIDERS = [
     publicKeyLabel: "Client ID",
     secretLabel: "Secret",
     webhookLabel: "Webhook ID",
+    secretNames: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_WEBHOOK_ID"],
   },
 ] as const;
+
+function credentialStatusCopy(
+  source: "none" | "replit_secrets" | "admin" | "mixed" | undefined,
+  configured: boolean,
+  secretNames: readonly string[],
+) {
+  if (source === "replit_secrets") {
+    return configured
+      ? "Credenciales activas desde Secrets de Replit. No hace falta pegarlas en este formulario."
+      : `Hay Secrets de Replit, pero faltan llaves para activarlo (${secretNames.join(", ")}).`;
+  }
+  if (configured && !source) {
+    return "Credenciales activas desde Secrets de Replit o este formulario.";
+  }
+  if (source === "admin") {
+    return "Credenciales guardadas aquí. Si también hay Secrets de Replit, las de este formulario tienen prioridad.";
+  }
+  if (source === "mixed") {
+    return "Hay llaves en admin y en Replit Secrets. Las de admin ganan; Replit completa las que falten.";
+  }
+  return `El servidor usa Replit → Secrets (${secretNames.join(", ")}) si existen. Este formulario es un respaldo opcional.`;
+}
 
 function methodIcon(code: string): LucideIcon {
   if (code === "CASH_ON_PICKUP") return Banknote;
@@ -208,6 +232,7 @@ function ProviderCredentialsCard({
   publicKeyLabel,
   secretLabel,
   webhookLabel,
+  secretNames,
 }: (typeof PROVIDERS)[number]) {
   const { toast } = useToast();
   const provider = useGetAdminPaymentProvider(code);
@@ -219,6 +244,7 @@ function ProviderCredentialsCard({
   const settings = provider.data;
   const sandboxValue = settings?.sandbox ?? sandbox;
   const configured = Boolean(settings?.configured);
+  const fromReplit = settings?.credentialSource === "replit_secrets" || settings?.credentialSource === "mixed";
 
   return (
     <article className="border border-border bg-card">
@@ -232,19 +258,37 @@ function ProviderCredentialsCard({
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{blurb}</p>
           </div>
         </div>
-        <StatusBadge configured={configured} />
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <StatusBadge configured={configured} />
+          {fromReplit ? (
+            <Badge
+              variant="outline"
+              className="rounded-none border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] border-border bg-muted/60 text-muted-foreground"
+            >
+              Replit Secrets
+            </Badge>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-5 px-5 py-5 sm:px-6">
         <p className="text-sm text-muted-foreground">
-          {configured
-            ? "Credenciales guardadas. Activa el método arriba para mostrarlo en la tienda."
-            : "Todavía sin credenciales. No se mostrará en checkout hasta configurarlo."}
+          {credentialStatusCopy(settings?.credentialSource, configured, secretNames)}
         </p>
 
         {settings?.publicKeyMasked ? (
           <p className="border border-border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground">
             {publicKeyLabel}: {settings.publicKeyMasked}
+          </p>
+        ) : null}
+        {settings?.accessTokenConfigured ? (
+          <p className="border border-border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground">
+            {secretLabel}: configurado
+          </p>
+        ) : null}
+        {settings?.webhookSecretConfigured ? (
+          <p className="border border-border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground">
+            {webhookLabel}: configurado
           </p>
         ) : null}
 
@@ -253,9 +297,11 @@ function ProviderCredentialsCard({
             <Label htmlFor={`${code}-sandbox`} className="text-sm font-medium">
               Modo sandbox
             </Label>
-            <p className="mt-0.5 text-xs text-muted-foreground">Pruebas sin cobros reales.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Forzado mientras PAYMENT_ENVIRONMENT no sea live.
+            </p>
           </div>
-          <Switch id={`${code}-sandbox`} checked={sandboxValue} onCheckedChange={setSandbox} />
+          <Switch id={`${code}-sandbox`} checked={sandboxValue} disabled onCheckedChange={setSandbox} />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-1">
@@ -267,6 +313,7 @@ function ProviderCredentialsCard({
               value={publicKey}
               onChange={(e) => setPublicKey(e.target.value)}
               autoComplete="off"
+              placeholder="Opcional si ya está en Replit Secrets"
             />
           </div>
           <div>
@@ -278,6 +325,7 @@ function ProviderCredentialsCard({
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
               autoComplete="new-password"
+              placeholder="Opcional si ya está en Replit Secrets"
             />
           </div>
           <div>
@@ -289,6 +337,7 @@ function ProviderCredentialsCard({
               value={webhookSecret}
               onChange={(e) => setWebhookSecret(e.target.value)}
               autoComplete="new-password"
+              placeholder="Opcional si ya está en Replit Secrets"
             />
           </div>
         </div>
@@ -350,7 +399,7 @@ export default function AdminPaymentMethods() {
       <AdminPageShell>
         <AdminPageHeader
           title="Formas de pago"
-          description="Decide qué métodos ve el cliente en checkout y guarda las credenciales de Mercado Pago y PayPal."
+          description="Decide qué métodos ve el cliente en checkout. PayPal y Mercado Pago toman las llaves de Replit Secrets; este formulario solo sirve para sobreescribirlas."
         />
 
         <div className="border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-5">
@@ -398,7 +447,7 @@ export default function AdminPaymentMethods() {
           <div>
             <h2 className="font-serif text-lg tracking-tight text-foreground sm:text-xl">Credenciales de proveedores</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Pega las llaves del panel de cada proveedor. Los secretos no se vuelven a mostrar después de guardar.
+              Primero Replit → Secrets. Pega llaves aquí solo si quieres sustituir las de Replit. Los secretos no se vuelven a mostrar.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

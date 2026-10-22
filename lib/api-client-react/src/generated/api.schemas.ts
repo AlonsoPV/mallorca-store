@@ -1182,6 +1182,7 @@ export interface PaymentProviderSettings {
   publicKeyMasked?: string | null;
   accessTokenConfigured: boolean;
   webhookSecretConfigured: boolean;
+  credentialSource?: "none" | "replit_secrets" | "admin" | "mixed";
 }
 
 export interface PaymentProviderSettingsInput {

@@ -6,6 +6,7 @@ import {
 } from "./catalog.ts";
 import {
   credentialsFromEnv,
+  describeCredentialSource,
   overlayGatewayCredentials,
   paymentSandboxFromEnv,
 } from "./credentials-env.ts";
@@ -195,6 +196,21 @@ describe("environment credential overlay", () => {
     assert.equal(paymentSandboxFromEnv(), true);
     process.env.PAYMENT_ENVIRONMENT = "live";
     assert.equal(paymentSandboxFromEnv(), false);
+    restoreEnv();
+  });
+
+  it("labels Replit Secrets as the source when admin is empty", () => {
+    process.env.PAYPAL_CLIENT_ID = "env-client";
+    process.env.PAYPAL_CLIENT_SECRET = "env-secret";
+    const env = credentialsFromEnv("PAYPAL");
+    assert.equal(describeCredentialSource(null, env), "replit_secrets");
+    assert.equal(
+      describeCredentialSource(
+        { provider: "PAYPAL", sandbox: true, publicKey: "admin-client", secret: "admin-secret", webhookSecret: null },
+        env,
+      ),
+      "mixed",
+    );
     restoreEnv();
   });
 

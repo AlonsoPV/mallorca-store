@@ -90,6 +90,7 @@ import {
   decideRecordPayment,
   encryptSecret,
   gatewayCredentialsReady,
+  inspectGatewayCredentials,
   loadGatewayCredentials,
   loadPaymentMethodConfigs,
   maskSecret,
@@ -1263,18 +1264,17 @@ router.patch("/admin/payment-methods/:code", async (req, res): Promise<void> => 
 const ONLINE_PROVIDERS = new Set(["MERCADO_PAGO", "PAYPAL"]);
 
 async function paymentProviderPayload(provider: string) {
-  const [row] = await db
-    .select()
-    .from(paymentProviderSettingsTable)
-    .where(eq(paymentProviderSettingsTable.provider, provider));
-  const configured = gatewayCredentialsReady(await loadGatewayCredentials(provider));
+  const inspected = await inspectGatewayCredentials(provider);
+  const credentials = inspected?.credentials;
+  const configured = gatewayCredentialsReady(credentials);
   return {
     provider,
-    sandbox: row?.sandbox ?? true,
+    sandbox: credentials?.sandbox ?? true,
     configured,
-    publicKeyMasked: maskSecret(row?.publicKey ?? null),
-    accessTokenConfigured: Boolean(row?.accessTokenEncrypted),
-    webhookSecretConfigured: Boolean(row?.webhookSecretEncrypted),
+    publicKeyMasked: maskSecret(credentials?.publicKey ?? null),
+    accessTokenConfigured: Boolean(credentials?.secret?.trim()),
+    webhookSecretConfigured: Boolean(credentials?.webhookSecret?.trim()),
+    credentialSource: inspected?.source ?? "none",
   };
 }
 
