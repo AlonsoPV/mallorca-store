@@ -664,6 +664,12 @@ export default function AdminOrderDetail() {
                   {order.paymentReference ? (
                     <p className="mt-2 text-xs text-muted-foreground">Ref: {order.paymentReference}</p>
                   ) : null}
+                  {order.providerCheckoutId ? (
+                    <p className="mt-1 break-all text-xs text-muted-foreground">Checkout: {order.providerCheckoutId}</p>
+                  ) : null}
+                  {order.providerPaymentId && order.providerPaymentId !== order.paymentReference ? (
+                    <p className="mt-1 break-all text-xs text-muted-foreground">Transacción: {order.providerPaymentId}</p>
+                  ) : null}
                   {order.paymentLinkUrl ? (
                     <a
                       className="mt-2 inline-block text-xs text-primary underline"

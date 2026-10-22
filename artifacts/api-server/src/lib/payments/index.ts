@@ -3,6 +3,14 @@ export * from "./catalog.ts";
 export * from "./providers.ts";
 export * from "./order-payment-state.ts";
 export * from "./secrets.ts";
+export { credentialsFromEnv, overlayGatewayCredentials, paymentSandboxFromEnv } from "./credentials-env.ts";
+export {
+  assertSandboxSafeRedirect,
+  enforceSandboxCredentials,
+  livePaymentsBlocked,
+  sandboxGuardedHttp,
+} from "./sandbox-lock.ts";
+export { webhookEventInsertResult, webhookEventKey } from "./gateways/webhook-event.ts";
 export {
   loadPaymentMethodConfigs,
   loadMercadoPagoConfigured,

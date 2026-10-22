@@ -1523,6 +1523,10 @@ export interface Order {
   /** @nullable */
   paymentReference?: string | null;
   /** @nullable */
+  providerCheckoutId?: string | null;
+  /** @nullable */
+  providerPaymentId?: string | null;
+  /** @nullable */
   paymentNote?: string | null;
   /** @nullable */
   paymentLinkUrl?: string | null;

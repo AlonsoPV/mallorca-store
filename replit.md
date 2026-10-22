@@ -10,6 +10,7 @@ Nueva tienda online administrable de Pastelería Mallorca México, con catálogo
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+- Pagos: credenciales de PayPal y Mercado Pago van en Replit Secrets o en Admin → Formas de pago. Ver `PAYMENT_SETUP.md`. Live no se activa solo.
 
 ## Stack
 
@@ -30,7 +31,7 @@ Nueva tienda online administrable de Pastelería Mallorca México, con catálogo
 
 ## Architecture decisions
 
-- La primera entrega cubre el núcleo de catálogo y administración; carrito, pagos y fulfillment se mantienen como fases posteriores.
+- PayPal (Orders API) y Mercado Pago (Checkout Pro) están cableados; el cobro real espera credenciales y el switch de Formas de pago. Guía: `PAYMENT_SETUP.md`.
 - Se usa PostgreSQL administrado por Replit en lugar de Supabase para mantener la integración nativa del entorno.
 - Un producto es global y su inventario/disponibilidad se relaciona por sucursal mediante `branch_products`; no se duplican productos.
 - Las imágenes iniciales son generadas para el proyecto y no copiadas del sitio de referencia.

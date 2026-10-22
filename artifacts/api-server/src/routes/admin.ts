@@ -93,6 +93,7 @@ import {
   loadGatewayCredentials,
   loadPaymentMethodConfigs,
   maskSecret,
+  paymentSandboxFromEnv,
   setOnlineProviderConfigured,
 } from "../lib/payments";
 import { fulfillmentSchedule, isValidSlotTime, mexicoDate } from "../lib/fulfillment-schedule";
@@ -1306,11 +1307,12 @@ router.put("/admin/payment-providers/:provider", async (req, res): Promise<void>
     ? encryptSecret(b.data.webhookSecret)
     : existing?.webhookSecretEncrypted ?? null;
   const publicKey = b.data.publicKey === undefined ? existing?.publicKey ?? null : (b.data.publicKey || null);
+  const sandbox = paymentSandboxFromEnv() ? true : (b.data.sandbox ?? existing?.sandbox ?? true);
   await db
     .insert(paymentProviderSettingsTable)
     .values({
       provider,
-      sandbox: b.data.sandbox ?? existing?.sandbox ?? true,
+      sandbox,
       publicKey,
       accessTokenEncrypted,
       webhookSecretEncrypted,
@@ -1318,7 +1320,7 @@ router.put("/admin/payment-providers/:provider", async (req, res): Promise<void>
     .onConflictDoUpdate({
       target: paymentProviderSettingsTable.provider,
       set: {
-        sandbox: b.data.sandbox ?? existing?.sandbox ?? true,
+        sandbox,
         publicKey,
         accessTokenEncrypted,
         webhookSecretEncrypted,

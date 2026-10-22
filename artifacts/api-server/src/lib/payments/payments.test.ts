@@ -4,6 +4,14 @@ import {
   DEFAULT_PAYMENT_METHOD_CONFIGS,
   resolveAvailableMethods,
 } from "./catalog.ts";
+import {
+  credentialsFromEnv,
+  overlayGatewayCredentials,
+  paymentSandboxFromEnv,
+} from "./credentials-env.ts";
+import { enforceSandboxCredentials, livePaymentsBlocked } from "./sandbox-lock.ts";
+import { PaymentGatewayError } from "./gateways/types.ts";
+import { webhookEventInsertResult, webhookEventKey } from "./gateways/webhook-event.ts";
 import { createMercadoPagoProvider, createPayPalProvider } from "./providers.ts";
 import {
   decideCancelPayment,
@@ -27,6 +35,21 @@ describe("resolveAvailableMethods", () => {
       audience: "storefront",
     });
     assert.deepEqual(methods.map((m) => m.code), ["CASH_ON_PICKUP"]);
+  });
+
+  it("hides PayPal on the storefront when the provider is not configured", () => {
+    const methods = resolveAvailableMethods({
+      fulfillmentMethod: "pickup",
+      configs: DEFAULT_PAYMENT_METHOD_CONFIGS.map((row) =>
+        row.code === "PAYPAL" ? { ...row, enabled: true } : row,
+      ),
+      providerAvailability: {
+        CASH_ON_PICKUP: { provider: "CASH_ON_PICKUP", available: true, configurationStatus: "configured" },
+        PAYPAL: { provider: "PAYPAL", available: false, configurationStatus: "not_configured" },
+      },
+      audience: "storefront",
+    });
+    assert.equal(methods.some((m) => m.code === "PAYPAL"), false);
   });
 
   it("does not list cash for delivery", () => {
@@ -149,6 +172,150 @@ describe("inventory hold with cash reservation", () => {
     assert.deepEqual(result.accepted, [true, false]);
     assert.equal(result.reserved, 1);
   });
+
+  it("rejects a hold when there is no physical stock", () => {
+    const result = applySequentialHolds(0, [1]);
+    assert.deepEqual(result.accepted, [false]);
+    assert.equal(result.reserved, 0);
+  });
+});
+
+describe("environment credential overlay", () => {
+  const previous = { ...process.env };
+
+  function restoreEnv() {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in previous)) delete process.env[key];
+    }
+    Object.assign(process.env, previous);
+  }
+
+  it("stays in sandbox unless PAYMENT_ENVIRONMENT is live", () => {
+    process.env.PAYMENT_ENVIRONMENT = "sandbox";
+    assert.equal(paymentSandboxFromEnv(), true);
+    process.env.PAYMENT_ENVIRONMENT = "live";
+    assert.equal(paymentSandboxFromEnv(), false);
+    restoreEnv();
+  });
+
+  it("uses env credentials when admin has no stored row", () => {
+    process.env.MERCADOPAGO_ACCESS_TOKEN = "TEST-token";
+    process.env.MERCADOPAGO_PUBLIC_KEY = "TEST-pub";
+    process.env.PAYMENT_ENVIRONMENT = "sandbox";
+    const overlaid = overlayGatewayCredentials(null, credentialsFromEnv("MERCADO_PAGO"));
+    assert.equal(overlaid.secret, "TEST-token");
+    assert.equal(overlaid.publicKey, "TEST-pub");
+    assert.equal(overlaid.sandbox, true);
+    restoreEnv();
+  });
+
+  it("fills missing admin secrets from env without inventing values", () => {
+    process.env.PAYPAL_CLIENT_ID = "env-client";
+    process.env.PAYPAL_CLIENT_SECRET = "env-secret";
+    process.env.PAYMENT_ENVIRONMENT = "sandbox";
+    const overlaid = overlayGatewayCredentials(
+      {
+        provider: "PAYPAL",
+        sandbox: true,
+        publicKey: null,
+        secret: null,
+        webhookSecret: null,
+      },
+      credentialsFromEnv("PAYPAL"),
+    );
+    assert.equal(overlaid.publicKey, "env-client");
+    assert.equal(overlaid.secret, "env-secret");
+    assert.equal(overlaid.sandbox, true);
+    restoreEnv();
+  });
+
+  it("ignores an admin live switch while PAYMENT_ENVIRONMENT is sandbox", () => {
+    process.env.PAYMENT_ENVIRONMENT = "sandbox";
+    const overlaid = overlayGatewayCredentials(
+      {
+        provider: "PAYPAL",
+        sandbox: false,
+        publicKey: "live-client",
+        secret: "live-secret",
+        webhookSecret: "wh",
+      },
+      credentialsFromEnv("PAYPAL"),
+    );
+    assert.equal(overlaid.sandbox, true);
+    assert.equal(overlaid.publicKey, "live-client");
+    restoreEnv();
+  });
+
+  it("allows an admin live switch only when PAYMENT_ENVIRONMENT is live", () => {
+    process.env.PAYMENT_ENVIRONMENT = "live";
+    const overlaid = overlayGatewayCredentials(
+      {
+        provider: "PAYPAL",
+        sandbox: false,
+        publicKey: "live-client",
+        secret: "live-secret",
+        webhookSecret: "wh",
+      },
+      credentialsFromEnv("PAYPAL"),
+    );
+    assert.equal(overlaid.sandbox, false);
+    restoreEnv();
+  });
+
+  it("blocks Mercado Pago live tokens while Sandbox is active", () => {
+    process.env.PAYMENT_ENVIRONMENT = "sandbox";
+    assert.equal(livePaymentsBlocked(), true);
+    assert.throws(
+      () =>
+        enforceSandboxCredentials({
+          provider: "MERCADO_PAGO",
+          sandbox: true,
+          publicKey: "TEST-pub",
+          secret: "APP_USR-live-token",
+          webhookSecret: "wh",
+        }),
+      (error: unknown) => error instanceof PaymentGatewayError && error.code === "PAYMENT_LIVE_BLOCKED",
+    );
+    restoreEnv();
+  });
+});
+
+describe("webhook event keys", () => {
+  it("uses PayPal transmission id and Mercado Pago request id", () => {
+    assert.equal(
+      webhookEventKey("PAYPAL", {
+        headers: { "paypal-transmission-id": "txn-1" },
+        query: {},
+        body: {},
+      }),
+      "paypal:txn-1",
+    );
+    assert.equal(
+      webhookEventKey("MERCADO_PAGO", {
+        headers: { "x-request-id": "req-9" },
+        query: { "data.id": "99" },
+        body: {},
+      }),
+      "mp:req-9:99",
+    );
+    assert.equal(
+      webhookEventKey("PAYPAL", { headers: {}, query: {}, body: {} }),
+      null,
+    );
+  });
+
+  it("treats a second insert of the same event_key as duplicate", () => {
+    const request = {
+      headers: { "paypal-transmission-id": "txn-1" },
+      query: {},
+      body: {},
+    };
+    const firstKey = webhookEventKey("PAYPAL", request);
+    const secondKey = webhookEventKey("PAYPAL", request);
+    assert.equal(firstKey, secondKey);
+    assert.equal(webhookEventInsertResult(1), "applied");
+    assert.equal(webhookEventInsertResult(0), "duplicate_event");
+  });
 });
 
 describe("online providers", () => {
@@ -159,6 +326,24 @@ describe("online providers", () => {
     assert.equal(paypal.configurationStatus, "not_configured");
     const ready = await createPayPalProvider({ configured: true }).getAvailability();
     assert.equal(ready.available, true);
+  });
+
+  it("lists PayPal on the storefront only when enabled and configured", () => {
+    const methods = resolveAvailableMethods({
+      fulfillmentMethod: "pickup",
+      configs: DEFAULT_PAYMENT_METHOD_CONFIGS.map((row) =>
+        row.code === "PAYPAL"
+          ? { ...row, enabled: true, configurationStatus: "configured" as const }
+          : row,
+      ),
+      providerAvailability: {
+        CASH_ON_PICKUP: { provider: "CASH_ON_PICKUP", available: true, configurationStatus: "configured" },
+        PAYPAL: { provider: "PAYPAL", available: true, configurationStatus: "configured" },
+        MERCADO_PAGO: { provider: "MERCADO_PAGO", available: false, configurationStatus: "not_configured" },
+      },
+      audience: "storefront",
+    });
+    assert.deepEqual(methods.map((m) => m.code), ["CASH_ON_PICKUP", "PAYPAL"]);
   });
 
   it("keeps Mercado Pago and PayPal unpaid until the gateway confirms", () => {

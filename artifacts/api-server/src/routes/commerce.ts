@@ -58,6 +58,7 @@ import { loadReservedByBranchProductIds, sellableUnits } from "../lib/reserved-s
 import {
   applyGatewayWebhook,
   gatewayCodeFromPath,
+  gatewayCredentialsReady,
   loadGatewayCredentials,
   PaymentGatewayError,
   resolveAvailableMethods,
@@ -478,7 +479,11 @@ router.post("/orders", async (req, res): Promise<void> => {
 });
 
 function publicBase(req: { protocol: string; get(name: string): string | undefined }, envName: string): string {
-  const configured = process.env[envName]?.replace(/\/$/, "");
+  const configured = (
+    process.env[envName] ||
+    process.env.APP_BASE_URL ||
+    (envName === "STOREFRONT_PUBLIC_URL" ? process.env.PUBLIC_APP_URL : "")
+  )?.replace(/\/$/, "");
   if (configured) return configured;
   const host = req.get("host");
   return `${req.protocol}://${host}`;
@@ -505,7 +510,7 @@ router.post("/orders/:id/payment", async (req, res): Promise<void> => {
     return;
   }
   const credentials = await loadGatewayCredentials(provider);
-  if (!credentials) {
+  if (!credentials || !gatewayCredentialsReady(credentials)) {
     res.status(503).json(StartOrderPaymentResponse.parse({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" }));
     return;
   }
@@ -539,7 +544,7 @@ router.post("/webhooks/payments/:provider", async (req, res): Promise<void> => {
   const provider = gatewayCodeFromPath(raw ?? "");
   if (!provider) { res.status(404).json({ error: "Unknown provider" }); return; }
   const credentials = await loadGatewayCredentials(provider);
-  if (!credentials) {
+  if (!credentials || !gatewayCredentialsReady(credentials)) {
     res.status(503).json({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" });
     return;
   }

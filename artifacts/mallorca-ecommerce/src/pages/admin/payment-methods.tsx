@@ -66,6 +66,9 @@ function ProviderCredentialsCard({
             ? "Credenciales guardadas. Activa el método para mostrarlo en la tienda."
             : "No configurado. No se mostrará en checkout."}
         </p>
+        <p className="text-xs text-muted-foreground">
+          Sandbox está forzado mientras PAYMENT_ENVIRONMENT no sea live. No se aceptan cobros reales.
+        </p>
         {settings?.publicKeyMasked ? (
           <p className="text-xs text-muted-foreground">{publicKeyLabel}: {settings.publicKeyMasked}</p>
         ) : null}

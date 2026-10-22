@@ -704,6 +704,19 @@ paths:
       responses:
         "200": { description: Payment session, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentStart" } } } }
         "503": { description: Payment provider unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/PaymentStart" } } } }
+  /webhooks/payments/{provider}:
+    post:
+      operationId: receivePaymentWebhook
+      tags: [storefront]
+      description: Provider notifications for PayPal and Mercado Pago. Authenticated by provider signatures, not a user session. The order is never marked paid from a browser return URL.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, enum: [paypal, mercado-pago] }
+      responses:
+        "200": { description: Received }
+        "401": { description: Invalid signature }
   /orders/{id}:
     get:
       operationId: getOrderDetails
@@ -2720,6 +2733,8 @@ components:
         paymentStatus: { type: string }
         paymentMethod: { type: ["string", "null"] }
         paymentReference: { type: ["string", "null"] }
+        providerCheckoutId: { type: ["string", "null"] }
+        providerPaymentId: { type: ["string", "null"] }
         paymentNote: { type: ["string", "null"] }
         paymentLinkUrl: { type: ["string", "null"] }
         amountPaid: { type: number }

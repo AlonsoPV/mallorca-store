@@ -4,6 +4,7 @@ import {
   branchesTable,
   orderAuditLogsTable,
   orderItemsTable,
+  orderPaymentsTable,
   ordersTable,
   productsTable,
   usersTable,
@@ -66,6 +67,7 @@ export function serializeAdminOrder(
   items: Array<typeof orderItemsTable.$inferSelect & { imageUrl?: string | null }>,
   branchName?: string | null,
   audit: ReturnType<typeof serializeAuditEvents> = [],
+  payment?: { providerCheckoutId?: string | null; providerPaymentId?: string | null } | null,
 ) {
   return {
     id: order.id,
@@ -75,7 +77,9 @@ export function serializeAdminOrder(
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod ?? null,
-    paymentReference: order.paymentReference ?? null,
+    paymentReference: order.paymentReference ?? payment?.providerPaymentId ?? null,
+    providerCheckoutId: payment?.providerCheckoutId ?? null,
+    providerPaymentId: payment?.providerPaymentId ?? order.paymentReference ?? null,
     paymentNote: order.paymentNote ?? null,
     paymentLinkUrl: order.paymentLinkUrl ?? null,
     amountPaid: order.amountPaid ?? 0,
@@ -157,11 +161,22 @@ export async function loadAdminOrder(orderId: string) {
     })),
   );
 
+  const [payment] = await db
+    .select({
+      providerCheckoutId: orderPaymentsTable.providerCheckoutId,
+      providerPaymentId: orderPaymentsTable.providerPaymentId,
+    })
+    .from(orderPaymentsTable)
+    .where(eq(orderPaymentsTable.orderId, order.id))
+    .orderBy(desc(orderPaymentsTable.id))
+    .limit(1);
+
   return serializeAdminOrder(
     order,
     items.map(({ item, imageUrl }) => ({ ...item, imageUrl })),
     branch?.name,
     audit,
+    payment,
   );
 }
 

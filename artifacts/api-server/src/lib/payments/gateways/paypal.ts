@@ -18,6 +18,7 @@ import {
   type GatewayWebhookRequest,
   type PaymentGateway,
 } from "./types.ts";
+import { assertSandboxSafeRedirect, sandboxGuardedHttp } from "../sandbox-lock.ts";
 
 type CachedToken = { token: string; expiresAt: number };
 const tokenCache = new Map<string, CachedToken>();
@@ -139,6 +140,7 @@ async function readOrder(http: GatewayHttp, credentials: GatewayCredentials, ord
 }
 
 export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): PaymentGateway {
+  const call = sandboxGuardedHttp(http);
   return {
     code: "PAYPAL",
     async createCheckout(credentials, input: CreateCheckoutInput) {
@@ -146,9 +148,9 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
       if (!(Number(value) > 0)) {
         throw new PaymentGatewayError("INVALID_AMOUNT", "Invalid payment amount", 400);
       }
-      const { token, base } = await accessToken(http, credentials);
+      const { token, base } = await accessToken(call, credentials);
       const payload = assertProviderOk(
-        await http({
+        await call({
           method: "POST",
           url: `${base}/v2/checkout/orders`,
           headers: {
@@ -194,15 +196,15 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
       return {
         provider: "PAYPAL",
         providerReference: reference,
-        redirectUrl: assertRedirectUrl(redirect),
+        redirectUrl: assertSandboxSafeRedirect(credentials, assertRedirectUrl(redirect)),
         mode: "redirect",
       };
     },
     async fetchPayment(credentials, lookupId) {
-      const current = await readOrder(http, credentials, lookupId);
+      const current = await readOrder(call, credentials, lookupId);
       if (current.rawStatus !== "APPROVED") return current;
-      const { token, base } = await accessToken(http, credentials);
-      const response = await http({
+      const { token, base } = await accessToken(call, credentials);
+      const response = await call({
         method: "POST",
         url: `${base}/v2/checkout/orders/${encodeURIComponent(lookupId)}/capture`,
         headers: {
@@ -212,7 +214,7 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
         },
         body: "{}",
       });
-      if (response.status === 422) return readOrder(http, credentials, lookupId);
+      if (response.status === 422) return readOrder(call, credentials, lookupId);
       const payload = assertProviderOk(response, "capture") as Record<string, unknown>;
       return paymentFromOrder(payload);
     },
@@ -265,8 +267,8 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
         return false;
       }
       if (parsedCert.protocol !== "https:" || !parsedCert.hostname.endsWith("paypal.com")) return false;
-      const { token, base } = await accessToken(http, credentials);
-      const response = await http({
+      const { token, base } = await accessToken(call, credentials);
+      const response = await call({
         method: "POST",
         url: `${base}/v1/notifications/verify-webhook-signature`,
         headers: {

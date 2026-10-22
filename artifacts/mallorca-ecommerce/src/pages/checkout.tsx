@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { PaymentProviderLogo, paymentProviderTitle } from "@/components/payment-provider-logo";
 import { MapPin, ArrowLeft, Loader2, Clock, AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -126,6 +127,7 @@ export default function CheckoutPage() {
   const [lng, setLng] = useState<number | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [redirectingTo, setRedirectingTo] = useState<string | null>(null);
 
   const validateDelivery = useValidateDelivery();
   const [deliveryInfo, setDeliveryInfo] = useState<{ eligible: boolean; fee: number; reason: string | null } | null>(null);
@@ -347,22 +349,28 @@ export default function CheckoutPage() {
         localStorage.setItem("mallorca_last_guest_order", orderUrl);
         sessionStorage.removeItem("mallorca_checkout_draft");
       } catch { /* Receipt remains accessible when browser storage is unavailable. */ }
-      try { clearCartSession(); } catch { /* Always show the created order. */ }
-      if (selectedPayment === "MERCADO_PAGO" || selectedPayment === "PAYPAL" || selectedPayment === "ONLINE") {
+      const isOnline =
+        selectedPayment === "MERCADO_PAGO" || selectedPayment === "PAYPAL" || selectedPayment === "ONLINE";
+      if (isOnline) {
         try {
           const session = await startOrderPayment(order.id, { guestAccessToken: order.guestAccessToken });
           if (session.redirectUrl) {
+            try { clearCartSession(); } catch { /* Redirect even if cart storage is unavailable. */ }
+            setRedirectingTo(selectedPayment);
             window.location.assign(session.redirectUrl);
             return;
           }
         } catch {
           toast({
             title: "No se pudo abrir el pago",
-            description: "El pedido quedó creado. Puedes revisarlo en el recibo.",
+            description: "El pedido quedó creado y el carrito se conserva. Puedes reintentar el pago desde el recibo.",
             variant: "destructive",
           });
         }
+        setLocation(orderUrl);
+        return;
       }
+      try { clearCartSession(); } catch { /* Always show the created order. */ }
       setLocation(orderUrl);
     } catch (err: any) {
       setIsSubmitting(false);
@@ -567,7 +575,8 @@ export default function CheckoutPage() {
                       onClick={() => setPaymentMethod(method.code as PaymentMethod)}
                     >
                       <RadioGroupItem value={method.code} id={`pay-${method.code}`} className="sr-only" />
-                      <Label htmlFor={`pay-${method.code}`} className="font-semibold cursor-pointer">
+                      <Label htmlFor={`pay-${method.code}`} className="flex cursor-pointer items-center gap-3 font-semibold">
+                        <PaymentProviderLogo provider={method.code} className="h-7 w-auto max-w-[9rem]" />
                         {method.customerLabel}
                       </Label>
                       {method.customerDescription ? (
@@ -724,6 +733,19 @@ export default function CheckoutPage() {
           </div>
         </form>
       </div>
+
+      {redirectingTo ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--mallorca-cacao)]/70 px-6 text-center text-white">
+          <div>
+            <PaymentProviderLogo provider={redirectingTo} className="mx-auto mb-4 h-8 w-auto max-w-[10rem] brightness-0 invert" />
+            <p className="mallorca-kicker text-white/70">Pago seguro</p>
+            <p className="mt-2 font-serif text-2xl">
+              Redirigiendo a {paymentProviderTitle(redirectingTo) ?? "el pago"}…
+            </p>
+            <p className="mt-2 text-sm text-white/75">No cierres esta ventana ni pulses atrás.</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden">
         <div className="mb-2 flex items-center justify-between text-sm">

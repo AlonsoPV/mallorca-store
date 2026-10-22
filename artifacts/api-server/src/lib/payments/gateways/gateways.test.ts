@@ -54,6 +54,58 @@ describe("gateway money and outcome", () => {
     if (short.action === "ignore") assert.equal(short.reason, "amount");
   });
 
+  it("maps rejected, cancelled, pending and refunded outcomes", () => {
+    const base = {
+      provider: "MERCADO_PAGO" as const,
+      checkoutId: "pref",
+      providerPaymentId: "1",
+      amount: 120,
+      currency: "MXN",
+      externalReference: "order",
+      rawStatus: "rejected",
+    };
+    assert.equal(
+      decideGatewayOutcome({
+        orderTotal: 120,
+        paymentStatus: "processing",
+        payment: { ...base, status: "rejected" },
+      }).action,
+      "mark_failed",
+    );
+    assert.equal(
+      decideGatewayOutcome({
+        orderTotal: 120,
+        paymentStatus: "processing",
+        payment: { ...base, status: "cancelled", rawStatus: "cancelled" },
+      }).action,
+      "mark_failed",
+    );
+    assert.equal(
+      decideGatewayOutcome({
+        orderTotal: 120,
+        paymentStatus: "unpaid",
+        payment: { ...base, status: "pending", rawStatus: "pending" },
+      }).action,
+      "mark_processing",
+    );
+    assert.equal(
+      decideGatewayOutcome({
+        orderTotal: 120,
+        paymentStatus: "paid",
+        payment: { ...base, status: "refunded", rawStatus: "refunded" },
+      }).action,
+      "mark_refunded",
+    );
+    assert.equal(
+      decideGatewayOutcome({
+        orderTotal: 120,
+        paymentStatus: "paid",
+        payment: { ...base, status: "rejected" },
+      }).action,
+      "ignore",
+    );
+  });
+
   it("marks a matching approval as paid and ignores a second one", () => {
     const payment = {
       provider: "PAYPAL" as const,
@@ -69,6 +121,7 @@ describe("gateway money and outcome", () => {
     assert.deepEqual(first, { action: "mark_paid", amount: 120 });
     const second = decideGatewayOutcome({ orderTotal: 120, paymentStatus: "paid", payment });
     assert.equal(second.action, "ignore");
+    if (second.action === "ignore") assert.equal(second.reason, "already_paid");
   });
 });
 
@@ -112,6 +165,87 @@ describe("Mercado Pago gateway", () => {
     assert.equal(payment.status, "approved");
     assert.equal(payment.providerPaymentId, "99");
     assert.equal(payment.externalReference, "order-1");
+  });
+
+  it("reads rejected and pending payments from Checkout Pro", async () => {
+    const gateway = createMercadoPagoGateway(scripted({
+      "/v1/payments/10": () => ({
+        status: 200,
+        body: JSON.stringify({
+          id: 10,
+          status: "rejected",
+          transaction_amount: 250,
+          currency_id: "MXN",
+          external_reference: "order-1",
+        }),
+      }),
+      "/v1/payments/11": () => ({
+        status: 200,
+        body: JSON.stringify({
+          id: 11,
+          status: "pending",
+          transaction_amount: 250,
+          currency_id: "MXN",
+          external_reference: "order-1",
+        }),
+      }),
+    }));
+    const rejected = await gateway.fetchPayment(mercadoPagoCredentials, "10");
+    assert.equal(rejected.status, "rejected");
+    const pending = await gateway.fetchPayment(mercadoPagoCredentials, "11");
+    assert.equal(pending.status, "pending");
+  });
+
+  it("does not fall back to a live checkout URL in sandbox", async () => {
+    const gateway = createMercadoPagoGateway(scripted({
+      "/checkout/preferences": () => ({
+        status: 201,
+        body: JSON.stringify({
+          id: "pref-live",
+          init_point: "https://www.mercadopago.com/checkout/v1/redirect?pref_id=pref-live",
+        }),
+      }),
+    }));
+    await assert.rejects(
+      () => gateway.createCheckout(mercadoPagoCredentials, {
+        orderId: "order-1",
+        orderNumber: "M-1",
+        invoiceId: "order-1-a",
+        amount: 10,
+        currency: "MXN",
+        description: "Pedido",
+        returnUrl: "https://mallorca.test/ok",
+        cancelUrl: "https://mallorca.test/cancel",
+      }),
+      (error: unknown) => error instanceof PaymentGatewayError && error.status === 502,
+    );
+  });
+
+  it("refuses checkout without an access token", async () => {
+    const gateway = createMercadoPagoGateway();
+    await assert.rejects(
+      () => gateway.createCheckout({ ...mercadoPagoCredentials, secret: null }, {
+        orderId: "order-1",
+        orderNumber: "M-1",
+        invoiceId: "order-1-a",
+        amount: 10,
+        currency: "MXN",
+        description: "Pedido",
+        returnUrl: "https://mallorca.test/ok",
+        cancelUrl: "https://mallorca.test/cancel",
+      }),
+      (error: unknown) => error instanceof PaymentGatewayError && error.status === 503,
+    );
+  });
+
+  it("fails closed when Mercado Pago is unreachable", async () => {
+    const gateway = createMercadoPagoGateway(async () => {
+      throw new Error("ECONNRESET");
+    });
+    await assert.rejects(
+      () => gateway.fetchPayment(mercadoPagoCredentials, "10"),
+      (error: unknown) => error instanceof Error && error.message === "ECONNRESET",
+    );
   });
 
   it("verifies the webhook manifest and ignores other topics", () => {
@@ -227,6 +361,124 @@ describe("PayPal gateway", () => {
       body: { event_type: "PAYMENT.CAPTURE.COMPLETED" },
     });
     assert.equal(verified, false);
+  });
+
+  it("fails closed when PayPal token exchange is down", async () => {
+    clearPayPalTokenCache();
+    const gateway = createPayPalGateway(async () => ({ status: 500, body: "nope" }));
+    await assert.rejects(
+      () => gateway.createCheckout(payPalCredentials, {
+        orderId: "order-9",
+        orderNumber: "M-9",
+        invoiceId: "order-9-a",
+        amount: 10,
+        currency: "MXN",
+        description: "Pedido",
+        returnUrl: "https://mallorca.test/ok",
+        cancelUrl: "https://mallorca.test/cancel",
+      }),
+      (error: unknown) => error instanceof PaymentGatewayError && error.status === 502,
+    );
+  });
+
+  it("reads pending and refunded PayPal captures without treating them as paid", async () => {
+    clearPayPalTokenCache();
+    const gateway = createPayPalGateway(async (request) => {
+      if (request.url.endsWith("/v1/oauth2/token")) {
+        return { status: 200, body: JSON.stringify({ access_token: "tok", expires_in: 3600 }) };
+      }
+      if (request.url.endsWith("/v2/checkout/orders/ORDER-PENDING")) {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            id: "ORDER-PENDING",
+            status: "APPROVED",
+            purchase_units: [{
+              custom_id: "order-9",
+              amount: { currency_code: "MXN", value: "10.00" },
+              payments: {
+                captures: [{
+                  id: "CAP-P",
+                  status: "PENDING",
+                  custom_id: "order-9",
+                  amount: { currency_code: "MXN", value: "10.00" },
+                }],
+              },
+            }],
+          }),
+        };
+      }
+      if (request.url.endsWith("/v2/checkout/orders/ORDER-REFUND")) {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            id: "ORDER-REFUND",
+            status: "COMPLETED",
+            purchase_units: [{
+              custom_id: "order-9",
+              amount: { currency_code: "MXN", value: "10.00" },
+              payments: {
+                captures: [{
+                  id: "CAP-R",
+                  status: "REFUNDED",
+                  custom_id: "order-9",
+                  amount: { currency_code: "MXN", value: "10.00" },
+                }],
+              },
+            }],
+          }),
+        };
+      }
+      return { status: 404, body: "" };
+    });
+    const pending = await gateway.fetchPayment(payPalCredentials, "ORDER-PENDING");
+    assert.equal(pending.status, "pending");
+    const refunded = await gateway.fetchPayment(payPalCredentials, "ORDER-REFUND");
+    assert.equal(refunded.status, "refunded");
+  });
+
+  it("reads a cancelled PayPal order without capturing", async () => {
+    clearPayPalTokenCache();
+    const gateway = createPayPalGateway(async (request) => {
+      if (request.url.endsWith("/v1/oauth2/token")) {
+        return { status: 200, body: JSON.stringify({ access_token: "tok", expires_in: 3600 }) };
+      }
+      if (request.url.endsWith("/v2/checkout/orders/ORDER-VOID")) {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            id: "ORDER-VOID",
+            status: "VOIDED",
+            purchase_units: [{ custom_id: "order-9", amount: { currency_code: "MXN", value: "10.00" } }],
+          }),
+        };
+      }
+      return { status: 404, body: "" };
+    });
+    const payment = await gateway.fetchPayment(payPalCredentials, "ORDER-VOID");
+    assert.equal(payment.status, "cancelled");
+  });
+
+  it("blocks live PayPal API hosts while Sandbox is active", async () => {
+    clearPayPalTokenCache();
+    const previous = process.env.PAYMENT_ENVIRONMENT;
+    process.env.PAYMENT_ENVIRONMENT = "sandbox";
+    const gateway = createPayPalGateway(async () => ({ status: 200, body: "{}" }));
+    await assert.rejects(
+      () => gateway.createCheckout({ ...payPalCredentials, sandbox: false }, {
+        orderId: "order-9",
+        orderNumber: "M-9",
+        invoiceId: "order-9-a",
+        amount: 10,
+        currency: "MXN",
+        description: "Pedido",
+        returnUrl: "https://mallorca.test/ok",
+        cancelUrl: "https://mallorca.test/cancel",
+      }),
+      (error: unknown) => error instanceof PaymentGatewayError && error.code === "PAYMENT_LIVE_BLOCKED",
+    );
+    if (previous === undefined) delete process.env.PAYMENT_ENVIRONMENT;
+    else process.env.PAYMENT_ENVIRONMENT = previous;
   });
 
   it("refuses checkout without a client id", async () => {

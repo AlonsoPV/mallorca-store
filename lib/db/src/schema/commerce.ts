@@ -137,6 +137,8 @@ export const orderAuditActionEnum = pgEnum("order_audit_action", [
   "MANUAL_DISCOUNT",
   "AVAILABILITY_OVERRIDE",
   "PAYMENT_RECORDED",
+  "PAYMENT_GATEWAY_STARTED",
+  "PAYMENT_WEBHOOK",
   "PAYMENT_LINK_CREATED",
   "CANCELLED",
   "LINES_CHANGED",
@@ -616,6 +618,20 @@ export const paymentProviderSettingsTable = pgTable("payment_provider_settings",
     .$onUpdate(() => new Date()),
 });
 
+export const paymentEventsTable = pgTable(
+  "payment_events",
+  {
+    id: serial("id").primaryKey(),
+    provider: text("provider").notNull(),
+    eventKey: text("event_key").notNull(),
+    orderId: text("order_id").references(() => ordersTable.id, { onDelete: "set null" }),
+    outcome: text("outcome").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("payment_events_provider_event_key").on(table.provider, table.eventKey)],
+);
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({
   createdAt: true,
   updatedAt: true,
@@ -648,3 +664,4 @@ export type OrderPayment = typeof orderPaymentsTable.$inferSelect;
 export type PaymentMethodConfig = typeof paymentMethodConfigsTable.$inferSelect;
 export type BranchPaymentMethod = typeof branchPaymentMethodsTable.$inferSelect;
 export type PaymentProviderSettings = typeof paymentProviderSettingsTable.$inferSelect;
+export type PaymentEvent = typeof paymentEventsTable.$inferSelect;

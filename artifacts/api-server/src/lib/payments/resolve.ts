@@ -11,6 +11,7 @@ import {
   providerAvailabilityMap,
   resolveAvailableMethods as resolveAvailableMethodsPure,
 } from "./catalog.ts";
+import { credentialsFromEnv, overlayGatewayCredentials } from "./credentials-env.ts";
 import { gatewayCredentialsReady, isGatewayCode, type GatewayCredentials } from "./gateways/types.ts";
 import { getPaymentProvider, setOnlineProviderConfigured } from "./providers.ts";
 import { decryptSecret } from "./secrets.ts";
@@ -55,20 +56,24 @@ async function loadBranchOverlay(branchId: number): Promise<Record<string, boole
 
 export async function loadGatewayCredentials(provider: string): Promise<GatewayCredentials | null> {
   if (!isGatewayCode(provider)) return null;
+  const fromEnv = credentialsFromEnv(provider);
   try {
     const [row] = await db
       .select()
       .from(paymentProviderSettingsTable)
       .where(eq(paymentProviderSettingsTable.provider, provider));
-    return {
-      provider,
-      sandbox: row?.sandbox ?? true,
-      publicKey: row?.publicKey ?? null,
-      secret: decryptSecret(row?.accessTokenEncrypted),
-      webhookSecret: decryptSecret(row?.webhookSecretEncrypted),
-    };
+    return overlayGatewayCredentials(
+      {
+        provider,
+        sandbox: row?.sandbox ?? true,
+        publicKey: row?.publicKey ?? null,
+        secret: decryptSecret(row?.accessTokenEncrypted),
+        webhookSecret: decryptSecret(row?.webhookSecretEncrypted),
+      },
+      fromEnv,
+    );
   } catch {
-    return null;
+    return overlayGatewayCredentials(null, fromEnv);
   }
 }
 
@@ -84,7 +89,13 @@ export async function resolveAvailableMethods(input: {
   const configs = await loadPaymentMethodConfigs();
   const overlay = await loadBranchOverlay(input.branchId);
   for (const provider of ["MERCADO_PAGO", "PAYPAL"] as const) {
-    setOnlineProviderConfigured(provider, gatewayCredentialsReady(await loadGatewayCredentials(provider)));
+    const ready = gatewayCredentialsReady(await loadGatewayCredentials(provider));
+    setOnlineProviderConfigured(provider, ready);
+    if (ready) {
+      for (const config of configs) {
+        if (config.provider === provider) config.configurationStatus = "configured";
+      }
+    }
   }
 
   const uniqueProviders = [...new Set(configs.map((row) => row.provider))];

@@ -43,6 +43,7 @@ export const ORDER_AUDIT_ACTION_LABELS: Record<string, string> = {
   STATUS_CHANGED: "Cambio de estado",
   PAYMENT_RECORDED: "Pago registrado",
   PAYMENT_GATEWAY_STARTED: "Pago en línea iniciado",
+  PAYMENT_WEBHOOK: "Webhook de pago",
   PAYMENT_LINK_CREATED: "Link de pago generado",
   CANCELLED: "Pedido cancelado",
   ORDER_CANCELLED: "Pedido cancelado",

@@ -1,12 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
-import { db, orderPaymentsTable, ordersTable } from "@workspace/db";
-import { commitOrderReservations } from "../../inventory-hold.ts";
+import { and, desc, eq } from "drizzle-orm";
+import { db, orderPaymentsTable, ordersTable, paymentEventsTable } from "@workspace/db";
+import { commitOrderReservations, releaseOrderReservations } from "../../inventory-hold.ts";
 import { logger } from "../../logger.ts";
 import { writeOrderAudit } from "../../order-audit.ts";
 import { decideGatewayOutcome } from "./outcome.ts";
 import { createMercadoPagoGateway } from "./mercado-pago.ts";
 import { createPayPalGateway } from "./paypal.ts";
+import { enforceSandboxCredentials } from "../sandbox-lock.ts";
+import { webhookEventInsertResult, webhookEventKey } from "./webhook-event.ts";
 import {
   gatewayCodeForMethod,
   gatewayCredentialsReady,
@@ -60,6 +62,7 @@ export async function startGatewayCheckout(input: {
       503,
     );
   }
+  const credentials = enforceSandboxCredentials(input.credentials);
   return db.transaction(async (tx) => {
     const [order] = await tx
       .select()
@@ -68,7 +71,7 @@ export async function startGatewayCheckout(input: {
       .for("update");
     if (!order) throw new PaymentGatewayError("ORDER_NOT_FOUND", "Order not found", 404);
     const provider = gatewayCodeForMethod(order.paymentMethod);
-    if (!provider || provider !== input.credentials.provider) {
+    if (!provider || provider !== credentials.provider) {
       throw new PaymentGatewayError(
         "PAYMENT_METHOD_NOT_ONLINE",
         "This order does not use an online payment provider",
@@ -98,7 +101,7 @@ export async function startGatewayCheckout(input: {
       };
     }
     const urls = storefrontReturnUrls(input.storefrontBase, order.id, order.guestAccessToken);
-    const session = await getPaymentGateway(provider).createCheckout(input.credentials, {
+    const session = await getPaymentGateway(provider).createCheckout(credentials, {
       orderId: order.id,
       orderNumber: order.orderNumber,
       invoiceId: `${order.id}-${randomBytes(3).toString("hex")}`,
@@ -154,18 +157,41 @@ export async function applyGatewayWebhook(input: {
   credentials: GatewayCredentials;
   request: GatewayWebhookRequest;
 }): Promise<{ applied: boolean; reason: string }> {
+  const credentials = enforceSandboxCredentials(input.credentials);
   const gateway = getPaymentGateway(input.provider);
-  const verified = await gateway.verifyWebhook(input.credentials, input.request);
+  const verified = await gateway.verifyWebhook(credentials, input.request);
   if (!verified) {
     throw new PaymentGatewayError("PAYMENT_WEBHOOK_INVALID", "Invalid payment webhook", 401);
   }
   const event = gateway.parseWebhook(input.request);
   if (event.kind === "ignored") return { applied: false, reason: "ignored" };
-  const payment = await gateway.fetchPayment(input.credentials, event.lookupId);
+  const eventKey = webhookEventKey(input.provider, input.request);
+  const payment = await gateway.fetchPayment(credentials, event.lookupId);
   const orderId = payment.externalReference ?? event.externalReference;
   if (!orderId) return { applied: false, reason: "missing_order" };
 
   return db.transaction(async (tx) => {
+    if (eventKey) {
+      const inserted = await tx
+        .insert(paymentEventsTable)
+        .values({
+          provider: input.provider,
+          eventKey,
+          orderId,
+          outcome: "received",
+          payload: {
+            lookupId: event.lookupId,
+            rawStatus: payment.rawStatus,
+          },
+        })
+        .onConflictDoNothing({
+          target: [paymentEventsTable.provider, paymentEventsTable.eventKey],
+        })
+        .returning({ id: paymentEventsTable.id });
+      if (webhookEventInsertResult(inserted.length) === "duplicate_event") {
+        return { applied: false, reason: "duplicate_event" };
+      }
+    }
     const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).for("update");
     if (!order) return { applied: false, reason: "order_not_found" };
     const methodProvider = gatewayCodeForMethod(order.paymentMethod);
@@ -208,6 +234,7 @@ export async function applyGatewayWebhook(input: {
         })
         .where(eq(ordersTable.id, order.id));
     } else if (outcome.action === "mark_failed") {
+      await releaseOrderReservations(tx, order.id, "payment_failed");
       await tx
         .update(ordersTable)
         .set({ paymentStatus: "failed", paymentLinkUrl: null })
@@ -244,6 +271,25 @@ export async function applyGatewayWebhook(input: {
           amount: outcome.action === "mark_paid" ? outcome.amount : existing.amount,
         })
         .where(eq(orderPaymentsTable.id, existing.id));
+    }
+    if (eventKey) {
+      await tx
+        .update(paymentEventsTable)
+        .set({
+          orderId: order.id,
+          outcome: outcome.action,
+          payload: {
+            lookupId: event.lookupId,
+            rawStatus: payment.rawStatus,
+            providerPaymentId: payment.providerPaymentId,
+          },
+        })
+        .where(
+          and(
+            eq(paymentEventsTable.provider, input.provider),
+            eq(paymentEventsTable.eventKey, eventKey),
+          ),
+        );
     }
     await writeOrderAudit({
       tx,

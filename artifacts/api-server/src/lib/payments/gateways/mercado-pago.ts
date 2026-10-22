@@ -19,6 +19,7 @@ import {
   type GatewayWebhookRequest,
   type PaymentGateway,
 } from "./types.ts";
+import { assertSandboxSafeRedirect, sandboxGuardedHttp } from "../sandbox-lock.ts";
 
 const API_BASE = "https://api.mercadopago.com";
 
@@ -109,6 +110,7 @@ function notificationId(input: GatewayWebhookRequest): string | null {
 }
 
 export function createMercadoPagoGateway(http: GatewayHttp = defaultGatewayHttp): PaymentGateway {
+  const call = sandboxGuardedHttp(http);
   return {
     code: "MERCADO_PAGO",
     async createCheckout(credentials, input: CreateCheckoutInput) {
@@ -139,7 +141,7 @@ export function createMercadoPagoGateway(http: GatewayHttp = defaultGatewayHttp)
       if (input.payerEmail?.includes("@")) preference.payer = { email: input.payerEmail };
       if (input.notificationUrl) preference.notification_url = input.notificationUrl;
       const payload = assertProviderOk(
-        await http({
+        await call({
           method: "POST",
           url: `${API_BASE}/checkout/preferences`,
           headers: authHeaders(credentials),
@@ -149,7 +151,7 @@ export function createMercadoPagoGateway(http: GatewayHttp = defaultGatewayHttp)
       ) as Record<string, unknown>;
       const reference = asString(payload.id);
       const redirect = credentials.sandbox
-        ? asString(payload.sandbox_init_point) ?? asString(payload.init_point)
+        ? asString(payload.sandbox_init_point)
         : asString(payload.init_point);
       if (!reference || !redirect) {
         throw new PaymentGatewayError(
@@ -161,13 +163,13 @@ export function createMercadoPagoGateway(http: GatewayHttp = defaultGatewayHttp)
       return {
         provider: "MERCADO_PAGO",
         providerReference: reference,
-        redirectUrl: assertRedirectUrl(redirect),
+        redirectUrl: assertSandboxSafeRedirect(credentials, assertRedirectUrl(redirect)),
         mode: "redirect",
       };
     },
     async fetchPayment(credentials, lookupId) {
       const payload = assertProviderOk(
-        await http({
+        await call({
           method: "GET",
           url: `${API_BASE}/v1/payments/${encodeURIComponent(lookupId)}`,
           headers: authHeaders(credentials),
