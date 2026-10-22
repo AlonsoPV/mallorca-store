@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cartLeadNotice, formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
-import { isCartNotFoundError } from "@/lib/cart-recovery";
+import { isCartNotFoundError, isLikelyCreatedOrderError } from "@/lib/cart-recovery";
 import { track } from "@/lib/analytics";
 import {
   formatSlotTime,
@@ -129,6 +129,7 @@ export default function CheckoutPage() {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [redirectingTo, setRedirectingTo] = useState<string | null>(null);
+  const [skipPreview, setSkipPreview] = useState(false);
 
   const validateDelivery = useValidateDelivery();
   const [deliveryInfo, setDeliveryInfo] = useState<{ eligible: boolean; fee: number; reason: string | null } | null>(null);
@@ -229,7 +230,7 @@ export default function CheckoutPage() {
   } : null;
 
   useEffect(() => {
-    if (!previewBody || isSubmitting || redirectingTo) return;
+    if (!previewBody || isSubmitting || redirectingTo || skipPreview) return;
     if (fulfillmentMethod === "delivery" && (!lat || !lng || !deliveryInfo?.eligible)) {
       setPreview(null);
       return;
@@ -239,8 +240,11 @@ export default function CheckoutPage() {
       try {
         const result = await previewOrder.mutateAsync({ data: previewBody });
         if (!cancelled) setPreview(result);
-      } catch {
+      } catch (error) {
         if (!cancelled) setPreview(null);
+        if (isCartNotFoundError(error) || isLikelyCreatedOrderError(error)) {
+          setSkipPreview(true);
+        }
       }
     }, 350);
     return () => {
@@ -260,6 +264,7 @@ export default function CheckoutPage() {
     deliveryInfo?.eligible,
     isSubmitting,
     redirectingTo,
+    skipPreview,
   ]);
 
   const handleGetLocation = () => {
@@ -380,18 +385,27 @@ export default function CheckoutPage() {
       setLocation(orderUrl);
     } catch (err: any) {
       setIsSubmitting(false);
-      if (isCartNotFoundError(err)) {
+      if (isCartNotFoundError(err) || isLikelyCreatedOrderError(err)) {
+        setSkipPreview(true);
         try {
           const last = localStorage.getItem("mallorca_last_guest_order");
           if (last) {
             setLocation(last);
             return;
           }
-        } catch { /* Fall through to a fresh cart. */ }
-        try { clearCartSession(); } catch { /* */ }
+        } catch { /* Fall through if storage is unavailable. */ }
+        if (isCartNotFoundError(err)) {
+          try { clearCartSession(); } catch { /* */ }
+          toast({
+            title: "Este carrito ya se convirtió en pedido",
+            description: "Si ya confirmaste, entra desde el recibo o reintenta el pago ahí. Si no, arma un carrito nuevo.",
+            variant: "destructive",
+          });
+          return;
+        }
         toast({
-          title: "Este carrito ya se convirtió en pedido",
-          description: "Si ya confirmaste, entra desde el recibo. Si no, arma un carrito nuevo.",
+          title: "No se confirmó el pedido en pantalla",
+          description: "Si el pedido aparece en tu correo o en Pedidos, no vuelvas a confirmar. Reintenta el pago desde el recibo.",
           variant: "destructive",
         });
         return;

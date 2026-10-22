@@ -26,6 +26,7 @@ import {
   reserveBranchProduct,
 } from "./inventory-hold";
 import { logger } from "./logger";
+import { pgCode } from "./pg-code";
 import {
   cartLeadMinutes,
   fulfillmentSchedule,
@@ -654,10 +655,16 @@ export async function createOrder(
     if (error instanceof Error && error.message === "OUT_OF_STOCK") {
       throw new OrderCreateError("Item unavailable");
     }
-    if ((error as { code?: string })?.code === "23505") {
+    if (pgCode(error) === "23505") {
       throw new OrderCreateError("Cart already converted", 409, "CART_ALREADY_CONVERTED");
     }
-    throw error;
+    logger.error({
+      event: "order_create_failed",
+      pgCode: pgCode(error),
+      name: error instanceof Error ? error.name : undefined,
+      message: error instanceof Error ? error.message.slice(0, 200) : undefined,
+    }, "Order create failed");
+    throw new OrderCreateError("No se pudo crear el pedido", 500, "ORDER_CREATE_FAILED");
   }
 }
 

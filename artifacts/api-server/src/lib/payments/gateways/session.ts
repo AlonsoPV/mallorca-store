@@ -20,6 +20,7 @@ import {
   type PaymentGateway,
 } from "./types.ts";
 import { PaymentGatewayError } from "./types.ts";
+import { pgCode } from "../../pg-code.ts";
 
 const gateways: Record<GatewayCode, PaymentGateway> = {
   MERCADO_PAGO: createMercadoPagoGateway(),
@@ -48,11 +49,6 @@ function notificationUrl(apiBase: string, provider: GatewayCode): string | null 
   } catch {
     return null;
   }
-}
-
-function pgCode(error: unknown): string | null {
-  if (!error || typeof error !== "object" || !("code" in error)) return null;
-  return typeof error.code === "string" ? error.code : null;
 }
 
 async function safeAudit(

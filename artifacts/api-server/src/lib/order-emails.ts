@@ -21,6 +21,7 @@ import {
 } from "../../../../lib/purchase-result.mjs";
 import { buildOrderEmail } from "../../order-receipt.mjs";
 import { logger } from "./logger";
+import { pgCode } from "./pg-code";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export const ORDER_EMAIL_WORKER_INTERVAL_MS = 2 * 60_000;
@@ -60,35 +61,47 @@ async function branchRecipient(connection: Tx | typeof db, branchId: number) {
   return selectBranchEmail(assignments);
 }
 export async function enqueueOrderEmails(tx: Tx, order: any, branch: any) {
-  const items = await tx
-    .select()
-    .from(orderItemsTable)
-    .where(eq(orderItemsTable.orderId, order.id));
-  const receipt = receiptSnapshot({ ...order, items }, branch);
-  const recipient = await branchRecipient(tx, order.branchId);
-  await tx
-    .insert(orderEmailJobsTable)
-    .values([
-      {
-        id: crypto.randomUUID(),
-        orderId: order.id,
-        audience: "customer",
-        recipient: order.customerEmail.trim().toLowerCase(),
-        payload: {
-          receipt,
-          guestAccessToken: order.guestAccessToken,
-          branchId: order.branchId,
+  try {
+    const items = await tx
+      .select()
+      .from(orderItemsTable)
+      .where(eq(orderItemsTable.orderId, order.id));
+    const receipt = receiptSnapshot({ ...order, items }, branch);
+    const recipient = await branchRecipient(tx, order.branchId);
+    await tx
+      .insert(orderEmailJobsTable)
+      .values([
+        {
+          id: crypto.randomUUID(),
+          orderId: order.id,
+          audience: "customer",
+          recipient: order.customerEmail.trim().toLowerCase(),
+          payload: {
+            receipt,
+            guestAccessToken: order.guestAccessToken,
+            branchId: order.branchId,
+          },
         },
-      },
+        {
+          id: crypto.randomUUID(),
+          orderId: order.id,
+          audience: "branch",
+          recipient,
+          payload: { receipt, branchId: order.branchId },
+        },
+      ])
+      .onConflictDoNothing();
+  } catch (error) {
+    logger.warn(
       {
-        id: crypto.randomUUID(),
-        orderId: order.id,
-        audience: "branch",
-        recipient,
-        payload: { receipt, branchId: order.branchId },
+        event: "order_email_enqueue_failed",
+        orderId: order?.id,
+        pgCode: pgCode(error),
+        message: error instanceof Error ? error.message.slice(0, 200) : undefined,
       },
-    ])
-    .onConflictDoNothing();
+      "order email enqueue failed",
+    );
+  }
 }
 export async function orderEmailStatus(orderId: string) {
   const jobs = await db

@@ -53,7 +53,10 @@ import {
   findOrderWithItems,
   OrderCreateError,
   releaseExpiredReservations,
+  type CreateOrderResult,
 } from "../lib/order-create";
+import { logger } from "../lib/logger";
+import { pgCode } from "../lib/pg-code";
 import { loadReservedByBranchProductIds, sellableUnits } from "../lib/reserved-stock";
 import {
   applyGatewayWebhook,
@@ -386,6 +389,56 @@ function orderShape(order: NonNullable<Awaited<ReturnType<typeof findOrderWithIt
   return order;
 }
 
+function sendOrderCreateError(res: { status(code: number): { json(body: unknown): unknown } }, error: unknown): void {
+  if (error instanceof OrderCreateError) {
+    res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+    return;
+  }
+  logger.error({
+    event: "order_route_failed",
+    pgCode: pgCode(error),
+    name: error instanceof Error ? error.name : undefined,
+    message: error instanceof Error ? error.message.slice(0, 200) : undefined,
+  }, "order route failed");
+  res.status(500).json({ error: "No se pudo crear el pedido", code: "ORDER_CREATE_FAILED" });
+}
+
+function createdOrderFallback(result: CreateOrderResult) {
+  const order = result.order!;
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    guestAccessToken: order.guestAccessToken,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod ?? null,
+    fulfillmentMethod: order.fulfillmentMethod,
+    scheduledStart: order.scheduledStart,
+    scheduledEnd: order.scheduledEnd,
+    customerEmail: order.customerEmail,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    deliveryAddress: order.deliveryAddress ?? null,
+    subtotal: order.subtotal,
+    deliveryFee: order.deliveryFee,
+    total: order.total,
+    items: (result.items ?? []).map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      variantId: item.variantId,
+      sku: item.sku,
+      name: item.name,
+      variantLabel: item.variantLabel ?? null,
+      quantity: item.quantity,
+      listUnitPrice: item.listUnitPrice,
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
+      promotionId: item.promotionId,
+      manualLineItem: item.manualLineItem,
+    })),
+  };
+}
+
 function storefrontOrderInput(
   cart: { branchId: number; id: string },
   body: {
@@ -468,11 +521,7 @@ router.post("/orders/preview", async (req, res): Promise<void> => {
       errors: result.errors,
     });
   } catch (error) {
-    if (error instanceof OrderCreateError) {
-      res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
-      return;
-    }
-    throw error;
+    sendOrderCreateError(res, error);
   }
 });
 
@@ -484,16 +533,32 @@ router.post("/orders", async (req, res): Promise<void> => {
   if (!cart) { res.status(409).json({ error: "Cart is empty" }); return; }
   try {
     const result = await createOrder(storefrontOrderInput(cart, b.data, requestUser?.id));
-    if (!result.order) { res.status(500).json({ error: "Order create failed" }); return; }
-    const full = await findOrderWithItems(result.order.id);
-    res.status(201).json(CreateOrderResponse.parse(orderShape(full!)));
+    if (!result.order) { res.status(500).json({ error: "No se pudo crear el pedido", code: "ORDER_CREATE_FAILED" }); return; }
+    try {
+      const full = await findOrderWithItems(result.order.id);
+      const parsed = full ? CreateOrderResponse.safeParse(orderShape(full)) : { success: false as const };
+      if (parsed.success) {
+        res.status(201).json(parsed.data);
+      } else {
+        logger.warn({
+          event: "order_response_parse_failed",
+          orderId: result.order.id,
+        }, "order response parse failed; returning created order");
+        const fallback = CreateOrderResponse.safeParse(createdOrderFallback(result));
+        res.status(201).json(fallback.success ? fallback.data : createdOrderFallback(result));
+      }
+    } catch (error) {
+      logger.warn({
+        event: "order_response_serialize_failed",
+        orderId: result.order.id,
+        pgCode: pgCode(error),
+        message: error instanceof Error ? error.message.slice(0, 200) : undefined,
+      }, "order response serialize failed; returning created order");
+      res.status(201).json(createdOrderFallback(result));
+    }
     void processOrderEmails();
   } catch (error) {
-    if (error instanceof OrderCreateError) {
-      res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
-      return;
-    }
-    throw error;
+    sendOrderCreateError(res, error);
   }
 });
 

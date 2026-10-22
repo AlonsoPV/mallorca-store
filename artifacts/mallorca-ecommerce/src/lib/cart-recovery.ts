@@ -30,3 +30,11 @@ export function isStaleCartMutationError(error: unknown): boolean {
   const { status, text } = errorDetail(error);
   return status === 409 && /product unavailable/i.test(text);
 }
+
+/** Create may have committed even when the client saw 500 HTML/JSON. */
+export function isLikelyCreatedOrderError(error: unknown): boolean {
+  if (isCartNotFoundError(error)) return true;
+  const { status, code, text } = errorDetail(error);
+  if (status === 500 || code === "ORDER_CREATE_FAILED") return true;
+  return /internal server error|no se pudo crear el pedido/i.test(text);
+}
