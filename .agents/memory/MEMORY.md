@@ -13,3 +13,4 @@
 - [Clerk staff username bridge](clerk-staff-login-identifier.md) — Clerk accepts email, not app usernames; verify the local password before resolving a staff email for Clerk.
 - [Staff identity consistency](staff-identity-consistency.md) — Never confirm a staff password change on only one store; database rollback cannot undo a successful Clerk update.
 - [Payment session locking](payment-session-locking.md) — Do not move gateway calls outside the order lock without durable retry ownership and provider idempotency.
+- [Publish schema prerequisite](publish-schema-prerequisite.md) — Verify the actual dev database has new tables before Publish; source declarations and successful builds are insufficient.
