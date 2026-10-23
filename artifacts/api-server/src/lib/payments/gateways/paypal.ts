@@ -237,6 +237,7 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
     },
     async fetchPayment(credentials, lookupId) {
       const current = await readOrder(call, credentials, lookupId);
+      if (current.status === "approved") return current;
       if (current.rawStatus !== "APPROVED") return current;
       const { token, base } = await accessToken(call, credentials);
       const response = await call({

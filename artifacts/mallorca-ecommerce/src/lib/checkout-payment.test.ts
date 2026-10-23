@@ -5,6 +5,7 @@ import {
   checkoutCtaLabel,
   checkoutPayCopy,
   isSettledPaymentError,
+  paypalReturnCheckoutId,
   selectCheckoutPaymentMethod,
 } from "./checkout-payment.ts";
 
@@ -41,6 +42,17 @@ describe("delivery payment copy", () => {
     assert.equal(assertDeliveryPaymentAllowed("delivery", "PENDING"), false);
     assert.equal(assertDeliveryPaymentAllowed("delivery", "CASH_ON_PICKUP"), false);
     assert.equal(assertDeliveryPaymentAllowed("delivery", "PAYPAL"), true);
+  });
+
+  it("reads the PayPal order id from the return URL without confusing it with the guest token", () => {
+    assert.equal(
+      paypalReturnCheckoutId("pago=ok&token=1R758157Y4884364X&PayerID=ABC"),
+      "1R758157Y4884364X",
+    );
+    assert.equal(
+      paypalReturnCheckoutId(`pago=ok&token=${"a".repeat(48)}`),
+      null,
+    );
   });
 
   it("treats a 409 already-recorded payment as settled, not as a new checkout", () => {

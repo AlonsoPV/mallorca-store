@@ -342,8 +342,20 @@ async function settleFetchedPayment(input: {
       .limit(1);
 
     if (outcome.action === "mark_paid") {
+      let inventoryCommittedAt = order.inventoryCommittedAt ?? now;
       if (!order.inventoryCommittedAt) {
-        await commitOrderReservations(tx, order.id, null);
+        try {
+          await commitOrderReservations(tx, order.id, null);
+        } catch (error) {
+          inventoryCommittedAt = order.inventoryCommittedAt ?? null;
+          logger.error(
+            {
+              orderId: order.id,
+              message: error instanceof Error ? error.message.slice(0, 200) : undefined,
+            },
+            "inventory commit failed after captured payment; marking paid anyway",
+          );
+        }
       }
       await tx
         .update(ordersTable)
@@ -353,7 +365,7 @@ async function settleFetchedPayment(input: {
           amountPaid: outcome.amount,
           paidAt: now,
           paymentReference: input.payment.providerPaymentId,
-          inventoryCommittedAt: order.inventoryCommittedAt ?? now,
+          inventoryCommittedAt,
         })
         .where(eq(ordersTable.id, order.id));
     } else if (outcome.action === "mark_failed") {
@@ -487,6 +499,7 @@ export async function applyGatewayWebhook(input: {
 export async function reconcileGatewayPayment(input: {
   orderId: string;
   credentials: GatewayCredentials;
+  checkoutId?: string | null;
 }): Promise<{ applied: boolean; reason: string; paymentStatus: string }> {
   const credentials = enforceSandboxCredentials(input.credentials);
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, input.orderId));
@@ -508,7 +521,7 @@ export async function reconcileGatewayPayment(input: {
     .where(eq(orderPaymentsTable.orderId, order.id))
     .orderBy(desc(orderPaymentsTable.id))
     .limit(1);
-  const lookupId = row?.providerCheckoutId?.trim();
+  const lookupId = row?.providerCheckoutId?.trim() || input.checkoutId?.trim() || "";
   if (!lookupId) {
     return { applied: false, reason: "missing_checkout", paymentStatus: order.paymentStatus };
   }

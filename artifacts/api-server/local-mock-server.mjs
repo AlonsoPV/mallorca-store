@@ -780,6 +780,23 @@ function makeOrder({
 
 const orders = [
   makeOrder({
+    id: "ord_paypal_unpaid",
+    orderNumber: "M-474B00114CB0932B",
+    status: "pending_payment",
+    paymentMethod: "PAYPAL",
+    paymentStatus: "unpaid",
+    amountPaid: 0,
+    branchId: 1,
+    customerName: "Cliente PayPal",
+    customerPhone: "5544444444",
+    fulfillmentMethod: "delivery",
+    scheduledStart: atToday(16, 0),
+    total: 600,
+    items: [
+      { id: 91, productId: 1, variantId: null, sku: "PSK-001", name: "Pastel de Chocolate", variantLabel: null, quantity: 1, unitPrice: 600, lineTotal: 600 },
+    ],
+  }),
+  makeOrder({
     id: "ord_cash_1",
     orderNumber: "CASH1",
     status: "confirmed",
@@ -1635,10 +1652,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const syncPaymentMatch = path.match(/^\/api\/orders\/([^/]+)\/payment\/sync$/);
+  const syncPaymentMatch = path.match(/^\/api\/(?:guest\/orders\/([^/]+)\/([^/]+)|orders\/([^/]+))\/payment\/sync$/);
   if (syncPaymentMatch && req.method === "POST") {
-    const order = orders.find((item) => item.id === syncPaymentMatch[1]);
-    if (!order) {
+    const order = orders.find((item) => item.id === (syncPaymentMatch[1] || syncPaymentMatch[3]));
+    const guestToken = syncPaymentMatch[2];
+    if (!order || (guestToken && order.guestAccessToken !== guestToken)) {
       send(res, 404, { error: "Order not found" });
       return;
     }
@@ -2617,8 +2635,14 @@ const server = http.createServer(async (req, res) => {
             return;
           }
           if (next === "completed" && order.paymentStatus !== "paid" && !body?.confirmUnpaidComplete) {
-            send(res, 409, { error: "Order is still unpaid", code: "UNPAID_ON_COMPLETE" });
-            return;
+            const collectCash = ["CASH", "CASH_ON_PICKUP", "TERMINAL"].includes(order.paymentMethod);
+            if (!collectCash) {
+              send(res, 409, { error: "Order is still unpaid", code: "UNPAID_ON_COMPLETE" });
+              return;
+            }
+            order.paymentStatus = "paid";
+            order.amountPaid = order.total;
+            order.paidAt = new Date().toISOString();
           }
           order.status = next;
           if (next === "paid") order.paymentStatus = "paid";

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { StoreLayout } from "@/components/layout/store-layout";
 import { useCart } from "@/lib/cart-context";
@@ -25,7 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAppAuth } from "@/lib/app-auth";
 import { useToast } from "@/hooks/use-toast";
-import { isSettledPaymentError } from "@/lib/checkout-payment";
+import { isSettledPaymentError, paypalReturnCheckoutId } from "@/lib/checkout-payment";
 import {
   money,
   purchaseResult,
@@ -70,22 +70,29 @@ export default function OrderDetailsPage() {
   const [downloading, setDownloading] = useState(false);
   const [startingPayment, setStartingPayment] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const paymentReturn = new URLSearchParams(useSearch()).get("pago") ?? "";
-  const refetchInterval = paymentReturn === "ok" || paymentReturn === "pendiente" ? 2500 : 30000;
+  const search = useSearch();
+  const paymentReturn = new URLSearchParams(search).get("pago") ?? "";
+  const paypalCheckoutId = paypalReturnCheckoutId(search);
+  const returningFromPayment = paymentReturn === "ok" || paymentReturn === "pendiente";
+  const paymentRefetchInterval = (current: { state: { data?: { paymentStatus?: string } } }) => {
+    const status = current.state.data?.paymentStatus;
+    if (status === "paid" || status === "failed") return false;
+    return returningFromPayment ? 2500 : false;
+  };
   // A valid guest link remains usable even when the customer has signed in meanwhile.
   const isGuest = !!token && token !== "user";
   const guest = useGetGuestOrderDetails(id!, token!, {
     query: {
       enabled: !!id && isGuest,
       queryKey: getGetGuestOrderDetailsQueryKey(id!, token!),
-      refetchInterval,
+      refetchInterval: paymentRefetchInterval,
     },
   });
   const account = useGetOrderDetails(id!, {
     query: {
       enabled: !!id && !isGuest && !!isSignedIn,
       queryKey: getGetOrderDetailsQueryKey(id!),
-      refetchInterval,
+      refetchInterval: paymentRefetchInterval,
     },
   });
   const query = isGuest ? guest : account;
@@ -97,24 +104,33 @@ export default function OrderDetailsPage() {
     }
   }, [order?.paymentStatus, clearCartSession]);
 
+  const refetchOrderRef = useRef(query.refetch);
+  refetchOrderRef.current = query.refetch;
   useEffect(() => {
     if (!id) return;
     if (paymentReturn !== "ok" && paymentReturn !== "pendiente") return;
+    if (order?.paymentStatus === "paid" || order?.paymentStatus === "failed") {
+      setSyncing(false);
+      return;
+    }
     let cancelled = false;
     setSyncing(true);
+    const syncPath = isGuest
+      ? `/api/guest/orders/${encodeURIComponent(id)}/${encodeURIComponent(token || "")}/payment/sync`
+      : `/api/orders/${encodeURIComponent(id)}/payment/sync`;
     void (async () => {
       for (let attempt = 0; attempt < 8 && !cancelled; attempt++) {
         try {
-          const result = await customFetch<{ paymentStatus?: string }>(
-            `/api/orders/${encodeURIComponent(id)}/payment/sync`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ guestAccessToken: isGuest ? token : undefined }),
-            },
-          );
+          const result = await customFetch<{ paymentStatus?: string }>(syncPath, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              guestAccessToken: isGuest ? token : undefined,
+              providerCheckoutId: paypalCheckoutId ?? undefined,
+            }),
+          });
           if (cancelled) return;
-          await query.refetch();
+          await refetchOrderRef.current();
           if (result.paymentStatus === "paid" || result.paymentStatus === "failed") break;
         } catch {
           /* Keep polling the gateway; a single 404/500 must not send the buyer back to PayPal. */
@@ -127,7 +143,7 @@ export default function OrderDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, isGuest, paymentReturn, query, token]);
+  }, [id, isGuest, order?.paymentStatus, paymentReturn, paypalCheckoutId, token]);
   const base = isGuest
     ? `/api/guest/orders/${encodeURIComponent(id || "")}/${encodeURIComponent(token || "")}`
     : `/api/orders/${encodeURIComponent(id || "")}`;
@@ -175,11 +191,16 @@ export default function OrderDetailsPage() {
     setStartingPayment(true);
     try {
       const synced = await customFetch<{ paymentStatus?: string }>(
-        `/api/orders/${encodeURIComponent(order.id)}/payment/sync`,
+        isGuest
+          ? `/api/guest/orders/${encodeURIComponent(order.id)}/${encodeURIComponent(token || "")}/payment/sync`
+          : `/api/orders/${encodeURIComponent(order.id)}/payment/sync`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ guestAccessToken: isGuest ? token : undefined }),
+          body: JSON.stringify({
+            guestAccessToken: isGuest ? token : undefined,
+            providerCheckoutId: paypalCheckoutId ?? undefined,
+          }),
         },
       );
       if (synced.paymentStatus === "paid") {

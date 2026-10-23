@@ -1,7 +1,7 @@
 import { buildReceiptPdf, receiptFilename } from "../../order-receipt.mjs";
 import { receiptSnapshot } from "../../../../lib/purchase-result.mjs";
 import { orderEmailStatus, processOrderEmails } from "../lib/order-emails";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { and, eq, sql, desc } from "drizzle-orm";
 import {
   db, branchesTable, cartsTable, cartItemsTable, productsTable,
@@ -631,16 +631,31 @@ router.post("/orders/:id/payment", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/orders/:id/payment/sync", async (req, res): Promise<void> => {
+function extraCheckoutId(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const record = body as Record<string, unknown>;
+  for (const key of ["providerCheckoutId", "checkoutId", "token"]) {
+    const value = record[key];
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length < 8 || trimmed.length > 30) continue;
+    if (/^[a-f0-9]{32,}$/i.test(trimmed)) continue;
+    return trimmed;
+  }
+  return undefined;
+}
+
+async function sendPaymentSync(req: Request, res: Response, guestToken?: string): Promise<void> {
   const body = StartOrderPaymentBody.safeParse(req.body ?? {});
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
   const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const order = await findOrderWithItems(orderId);
+  const order = await findOrderWithItems(orderId ?? "");
   const user = await getRequestUser(req);
+  const accessToken = guestToken ?? body.data.guestAccessToken;
   const canAccess =
     order &&
     ((order.userId != null && order.userId === user?.id) ||
-      order.guestAccessToken === body.data.guestAccessToken);
+      (accessToken != null && order.guestAccessToken === accessToken));
   if (!canAccess || !order) { res.status(404).json({ error: "Order not found" }); return; }
   const provider = order.paymentMethod === "PAYPAL"
     ? "PAYPAL"
@@ -657,7 +672,11 @@ router.post("/orders/:id/payment/sync", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const result = await reconcileGatewayPayment({ orderId: order.id, credentials });
+    const result = await reconcileGatewayPayment({
+      orderId: order.id,
+      credentials,
+      checkoutId: extraCheckoutId(req.body),
+    });
     res.json({
       applied: result.applied,
       reason: result.reason,
@@ -668,8 +687,20 @@ router.post("/orders/:id/payment/sync", async (req, res): Promise<void> => {
       res.status(error.status).json({ error: error.message, code: error.code });
       return;
     }
-    throw error;
+    logger.error({
+      event: "payment_sync_failed",
+      orderId: order.id,
+      pgCode: pgCode(error),
+      message: error instanceof Error ? error.message.slice(0, 200) : undefined,
+    }, "payment sync failed");
+    res.status(500).json({ error: "No se pudo confirmar el pago", code: "PAYMENT_SYNC_FAILED" });
   }
+}
+
+router.post("/orders/:id/payment/sync", (req, res) => sendPaymentSync(req, res));
+router.post("/guest/orders/:id/:token/payment/sync", (req, res) => {
+  const token = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
+  return sendPaymentSync(req, res, token);
 });
 
 function headerValue(value: string | string[] | undefined): string | undefined {

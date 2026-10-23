@@ -55,6 +55,13 @@ export function checkoutCtaLabel(
   return "Confirmar pedido";
 }
 
+export function paypalReturnCheckoutId(search: string): string | null {
+  const token = new URLSearchParams(search.replace(/^\?/, "")).get("token")?.trim();
+  if (!token || token.length < 8 || token.length > 30) return null;
+  if (/^[a-f0-9]{32,}$/i.test(token)) return null;
+  return token;
+}
+
 export function isSettledPaymentError(error: unknown): boolean {
   const e = error as { status?: number; data?: { code?: string } | null };
   const code = e?.data?.code ?? "";
