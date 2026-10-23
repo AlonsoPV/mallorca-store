@@ -211,6 +211,22 @@ describe("record and cancel payment", () => {
     });
     assert.equal(allowed.ok, true);
   });
+
+  it("collects cash when completing an unpaid pickup or terminal order", () => {
+    const cash = decideCompleteUnpaid({
+      paymentStatus: "unpaid",
+      paymentMethod: "CASH_ON_PICKUP",
+      canOverride: false,
+    });
+    assert.equal(cash.ok, true);
+    assert.equal(cash.ok && cash.collectPayment, true);
+    const online = decideCompleteUnpaid({
+      paymentStatus: "unpaid",
+      paymentMethod: "MERCADO_PAGO",
+      canOverride: false,
+    });
+    assert.equal(online.ok, false);
+  });
 });
 
 describe("inventory hold with cash reservation", () => {

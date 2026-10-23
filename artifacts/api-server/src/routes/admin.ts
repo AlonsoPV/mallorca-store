@@ -1734,12 +1734,30 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
       if (b.data.status === "completed") {
         const complete = decideCompleteUnpaid({
           paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
           confirmUnpaidComplete: b.data.confirmUnpaidComplete,
           canOverride: canOverrideAvailability(user?.role ?? "staff"),
           reason: b.data.cancelReason,
         });
         if (!complete.ok) {
           throw Object.assign(new Error(complete.code), { httpStatus: complete.status, publicMessage: complete.error, code: complete.code });
+        }
+        if (complete.collectPayment) {
+          const now = new Date();
+          await commitOrderReservations(tx, order.id, user?.id);
+          patch.paymentStatus = "paid";
+          patch.amountPaid = order.total;
+          patch.paidAt = now;
+          patch.paidByUserId = user?.id ?? null;
+          patch.inventoryCommittedAt = now;
+          await writeOrderAudit({
+            tx,
+            orderId: order.id,
+            actorUserId: user?.id,
+            action: "PAYMENT_RECORDED",
+            reason: "Cobrado al entregar",
+            payload: { paymentMethod: order.paymentMethod, amountPaid: order.total },
+          });
         }
       }
       if (b.data.status === "cancelled" && order.status !== "cancelled") {

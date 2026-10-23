@@ -18,6 +18,7 @@ import {
   PAYMENT_STATUS_LABELS,
   pendingPaymentAmount,
 } from "@/lib/order-source";
+import { addMexicoCalendarDays, mexicoDateKey, mexicoToday } from "@/lib/slot-time";
 import { cn } from "@/lib/utils";
 
 const AGENDA_ACTION_LABELS: Partial<Record<OrderStatus, string>> = {
@@ -76,28 +77,16 @@ function statusBadgeClass(status: string) {
   }
 }
 
-function localDateKey(value?: string | Date | null) {
-  if (!value) return "";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function agendaDayLabel(dateKey: string) {
-  const now = new Date();
-  const today = localDateKey(now);
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const today = mexicoToday();
   if (dateKey === today) return "Hoy";
-  if (dateKey === localDateKey(tomorrow)) return "Mañana";
-  const d = new Date(`${dateKey}T12:00:00`);
+  if (dateKey === addMexicoCalendarDays(today, 1)) return "Mañana";
+  const d = new Date(`${dateKey}T12:00:00-06:00`);
   const label = d.toLocaleDateString("es-MX", {
     weekday: "long",
     day: "numeric",
     month: "long",
+    timeZone: "America/Mexico_City",
   });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
@@ -115,7 +104,7 @@ export function groupOrdersBySlot(
   const newestFirst = options?.newestFirst === true;
   const days = new Map<string, Map<string, OrderSummary[]>>();
   for (const order of orders) {
-    const dateKey = localDateKey(order.scheduledStart);
+    const dateKey = mexicoDateKey(order.scheduledStart);
     const timeKey = formatOrderTime(order.scheduledStart);
     const daySlots = days.get(dateKey) ?? new Map<string, OrderSummary[]>();
     const list = daySlots.get(timeKey) ?? [];

@@ -148,14 +148,26 @@ export function decideCancelPayment(input: {
   };
 }
 
+const COLLECT_ON_COMPLETE = new Set(["CASH", "CASH_ON_PICKUP", "TERMINAL"]);
+
+export function collectsPaymentOnComplete(paymentMethod?: string | null) {
+  return Boolean(paymentMethod && COLLECT_ON_COMPLETE.has(paymentMethod));
+}
+
 export function decideCompleteUnpaid(input: {
   paymentStatus: string;
+  paymentMethod?: string | null;
   confirmUnpaidComplete?: boolean;
   canOverride: boolean;
   reason?: string | null;
-}): { ok: true } | { ok: false; status: number; code: string; error: string } {
+}):
+  | { ok: true; collectPayment?: boolean }
+  | { ok: false; status: number; code: string; error: string } {
   const unpaid = input.paymentStatus !== "paid" && input.paymentStatus !== "cancelled";
   if (!unpaid) return { ok: true };
+  if (collectsPaymentOnComplete(input.paymentMethod)) {
+    return { ok: true, collectPayment: true };
+  }
   if (!input.confirmUnpaidComplete) {
     return {
       ok: false,

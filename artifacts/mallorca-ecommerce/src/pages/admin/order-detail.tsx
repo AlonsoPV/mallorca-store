@@ -70,6 +70,7 @@ import {
   formatAuditAction,
   fulfillmentLabel,
   pendingPaymentAmount,
+  shouldCollectOnComplete,
   whatsappComposeUrl,
 } from "@/lib/order-source";
 import { cn } from "@/lib/utils";
@@ -164,11 +165,26 @@ export default function AdminOrderDetail() {
     status: OrderStatusUpdateStatus,
     extra?: { confirmUnpaidComplete?: boolean; cancelReason?: string },
   ) => {
-    if (status === "completed" && unpaid && !extra?.confirmUnpaidComplete) {
+    if (status === "completed" && unpaid && !extra?.confirmUnpaidComplete && !shouldCollectOnComplete(order ?? {})) {
       setUnpaidOpen(true);
       return;
     }
     try {
+      if (status === "completed" && order && shouldCollectOnComplete(order) && order.paymentMethod) {
+        try {
+          await recordPayment.mutateAsync({
+            id: order.id,
+            data: {
+              paymentMethod: order.paymentMethod as PaymentMethod,
+              markPaid: true,
+              paymentNote: "Cobrado al entregar",
+            },
+          });
+        } catch (error) {
+          const coded = error as { code?: string; data?: { code?: string } };
+          if ((coded.code || coded.data?.code) !== "PAYMENT_ALREADY_RECORDED") throw error;
+        }
+      }
       await updateOrder.mutateAsync({
         id,
         data: {

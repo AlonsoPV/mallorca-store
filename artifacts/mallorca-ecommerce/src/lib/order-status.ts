@@ -1,4 +1,5 @@
 import type { OrderStatusUpdateStatus } from "@workspace/api-client-react";
+import { mexicoDayRange } from "@/lib/slot-time";
 
 export type OrderStatus = OrderStatusUpdateStatus;
 
@@ -90,28 +91,31 @@ export function addDays(date: Date, days: number) {
 }
 
 export function dayRange(day: "today" | "tomorrow" | "week") {
-  const today = startOfDay();
-  if (day === "today") {
-    return { from: today.toISOString(), to: addDays(today, 1).toISOString() };
-  }
-  if (day === "tomorrow") {
-    return { from: addDays(today, 1).toISOString(), to: addDays(today, 2).toISOString() };
-  }
-  return { from: today.toISOString(), to: addDays(today, 7).toISOString() };
+  return mexicoDayRange(day);
 }
+
+const MEXICO_TZ = "America/Mexico_City";
 
 export function formatOrderTime(value?: string | Date | null) {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: MEXICO_TZ,
+  });
 }
 
 export function formatOrderDate(value?: string | Date | null) {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("es-MX", { day: "numeric", month: "long" });
+  return d.toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "long",
+    timeZone: MEXICO_TZ,
+  });
 }
 
 export function formatPriceMx(price: number) {

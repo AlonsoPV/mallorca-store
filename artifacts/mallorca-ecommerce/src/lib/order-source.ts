@@ -79,6 +79,20 @@ export function isUnpaidCashOrder(order: {
   );
 }
 
+const COLLECT_ON_COMPLETE = new Set(["CASH", "CASH_ON_PICKUP", "TERMINAL"]);
+
+export function isUnpaidPaymentStatus(status?: string | null) {
+  return Boolean(status && status !== "paid" && status !== "cancelled" && status !== "refunded");
+}
+
+/** Efectivo/terminal: entregar implica cobrar el saldo en sucursal. */
+export function shouldCollectOnComplete(order: {
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+}) {
+  return isUnpaidPaymentStatus(order.paymentStatus) && COLLECT_ON_COMPLETE.has(order.paymentMethod ?? "");
+}
+
 export function buildWhatsAppOrderMessage(params: {
   customerName: string;
   orderNumber: string;

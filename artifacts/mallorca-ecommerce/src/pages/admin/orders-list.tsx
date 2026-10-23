@@ -11,9 +11,11 @@ import {
 import {
   useListAdminOrders,
   useUpdateAdminOrder,
+  useRecordAdminOrderPayment,
   getListAdminOrdersQueryKey,
   useListAdminBranches,
   type OrderStatusUpdateStatus,
+  type PaymentMethod,
 } from "@workspace/api-client-react";
 import {
   AdminEmptyState,
@@ -37,13 +39,17 @@ import {
 import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS,
+  shouldCollectOnComplete,
 } from "@/lib/order-source";
 import {
-  addDays,
   dayRange,
   ORDER_STATUS_LABELS,
-  startOfDay,
 } from "@/lib/order-status";
+import {
+  addMexicoCalendarDays,
+  mexicoDayBounds,
+  mexicoToday,
+} from "@/lib/slot-time";
 import { cn } from "@/lib/utils";
 import {
   groupOrdersBySlot,
@@ -68,16 +74,11 @@ type OrdersFilters = {
   showDone: boolean;
 };
 
-function toDateInputValue(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-}
-
 function isValidDateParam(value: string | null): value is string {
   return (
     !!value &&
     /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    !Number.isNaN(new Date(`${value}T12:00:00`).getTime())
+    !Number.isNaN(new Date(`${value}T12:00:00-06:00`).getTime())
   );
 }
 
@@ -94,14 +95,13 @@ function parseDay(value: string | null): DayChip {
 }
 
 function dateFromDayChip(day: DayChip): string {
-  if (day === "tomorrow")
-    return toDateInputValue(addDays(startOfDay(new Date()), 1));
-  return toDateInputValue(new Date());
+  if (day === "tomorrow") return addMexicoCalendarDays(mexicoToday(), 1);
+  return mexicoToday();
 }
 
 function dayFromDate(date: string): DayChip {
-  const today = toDateInputValue(new Date());
-  const tomorrow = toDateInputValue(addDays(startOfDay(new Date()), 1));
+  const today = mexicoToday();
+  const tomorrow = addMexicoCalendarDays(today, 1);
   if (date === today) return "today";
   if (date === tomorrow) return "tomorrow";
   return "all";
@@ -133,8 +133,8 @@ export default function AdminOrdersList() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const todayValue = toDateInputValue(new Date());
-  const tomorrowValue = toDateInputValue(addDays(startOfDay(new Date()), 1));
+  const todayValue = mexicoToday();
+  const tomorrowValue = addMexicoCalendarDays(todayValue, 1);
   const isToday = filters.date === todayValue;
   const dateParam = readSearchParam(search, "date");
   const selectedChip: DayChip | null = isValidDateParam(dateParam)
@@ -191,8 +191,7 @@ export default function AdminOrdersList() {
 
   const range = useMemo(() => {
     if (isValidDateParam(readSearchParam(search, "date"))) {
-      const day = startOfDay(new Date(`${filters.date}T12:00:00`));
-      return { from: day.toISOString(), to: addDays(day, 1).toISOString() };
+      return mexicoDayBounds(filters.date);
     }
     return filters.day === "all" ? undefined : dayRange(filters.day);
   }, [filters.date, filters.day, search]);
@@ -214,6 +213,7 @@ export default function AdminOrdersList() {
   });
   const branches = useListAdminBranches();
   const updateOrder = useUpdateAdminOrder();
+  const recordPayment = useRecordAdminOrderPayment();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -280,19 +280,48 @@ export default function AdminOrdersList() {
   ) => {
     setPendingId(orderId);
     try {
+      const current = (orders ?? []).find((order) => order.id === orderId);
+      if (status === "completed" && current && shouldCollectOnComplete(current) && current.paymentMethod) {
+        try {
+          await recordPayment.mutateAsync({
+            id: orderId,
+            data: {
+              paymentMethod: current.paymentMethod as PaymentMethod,
+              markPaid: true,
+              paymentNote: "Cobrado al entregar",
+            },
+          });
+        } catch (error) {
+          const coded = error as { code?: string; data?: { code?: string } };
+          if ((coded.code || coded.data?.code) !== "PAYMENT_ALREADY_RECORDED") throw error;
+        }
+      }
       await updateOrder.mutateAsync({ id: orderId, data: { status } });
       toast({ title: "Estado actualizado" });
       queryClient.invalidateQueries({ queryKey: getListAdminOrdersQueryKey() });
-    } catch {
-      toast({ title: "Transición no válida", variant: "destructive" });
+    } catch (error) {
+      const coded = error as {
+        code?: string;
+        error?: string;
+        message?: string;
+        data?: { code?: string; error?: string };
+      };
+      const code = coded.code || coded.data?.code;
+      toast({
+        title: code === "UNPAID_ON_COMPLETE" ? "Pago pendiente" : "No se pudo actualizar el estado",
+        description:
+          code === "UNPAID_ON_COMPLETE"
+            ? "Registra el cobro antes de entregar, o ábrelo y entrega con override."
+            : coded.error || coded.data?.error || coded.message,
+        variant: "destructive",
+      });
     } finally {
       setPendingId(null);
     }
   };
 
   const shiftDay = (days: number) => {
-    const day = startOfDay(new Date(`${filters.date}T12:00:00`));
-    patchFilters({ date: toDateInputValue(addDays(day, days)) });
+    patchFilters({ date: addMexicoCalendarDays(filters.date, days) });
   };
 
   const chips: { id: DayChip; label: string }[] = useMemo(
