@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { serializeStorefrontOrderDetails } from "./order-serialize.ts";
+import { serializeAdminOrder, serializeStorefrontOrderDetails } from "./order-serialize.ts";
 
 describe("serializeStorefrontOrderDetails", () => {
   it("omits a null delivery snapshot so guest order Zod does not 500", () => {
@@ -49,5 +49,32 @@ describe("serializeStorefrontOrderDetails", () => {
     assert.equal(payload.total, 250);
     assert.equal(payload.items[0].unitPrice, 250);
     assert.equal(payload.items[0].variantLabel, null);
+  });
+
+  it("serializes the same pickup payload for admin order details", () => {
+    const payload = serializeAdminOrder(
+      {
+        id: "ord_1",
+        orderNumber: "M-TEST",
+        guestAccessToken: "tok",
+        status: "pending_payment",
+        paymentStatus: "unpaid",
+        fulfillmentMethod: "pickup",
+        scheduledStart: new Date("2026-10-23T18:00:00.000Z"),
+        scheduledEnd: new Date("2026-10-23T18:30:00.000Z"),
+        customerEmail: "a@b.c",
+        customerName: "Ana",
+        customerPhone: "555",
+        deliveryAddress: null,
+        deliveryAddressSnapshot: null,
+        subtotal: "250" as unknown as number,
+        deliveryFee: 0,
+        total: "250" as unknown as number,
+        branchId: 1,
+      },
+      [],
+    );
+    assert.equal(payload.deliveryAddressSnapshot, undefined);
+    assert.equal(payload.total, 250);
   });
 });

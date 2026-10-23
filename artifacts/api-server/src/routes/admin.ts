@@ -83,6 +83,7 @@ import {
 import { createOrder, OrderCreateError } from "../lib/order-create";
 import { writeOrderAudit } from "../lib/order-audit";
 import { loadAdminOrder } from "../lib/admin-order-serialize";
+import { logger } from "../lib/logger";
 import { canOverrideAvailability } from "../lib/order-permissions";
 import {
   decideCancelPayment,
@@ -184,6 +185,28 @@ import {
 } from "../lib/branch-ops";
 
 const router: IRouter = Router();
+
+function sendAdminOrderJson(
+  res: express.Response,
+  schema: { safeParse: (data: unknown) => { success: true; data: unknown } | { success: false; error: { issues: Array<{ path: PropertyKey[] }> } } },
+  full: unknown,
+  status = 200,
+) {
+  if (!full) {
+    res.status(404).json({ error: "Order not found" });
+    return;
+  }
+  const parsed = schema.safeParse(full);
+  if (!parsed.success) {
+    logger.warn({
+      event: "admin_order_parse_failed",
+      issues: parsed.error.issues.map((issue) => issue.path.join(".")).slice(0, 12),
+    }, "admin order parse failed; returning serialized order");
+    res.status(status).json(full);
+    return;
+  }
+  res.status(status).json(parsed.data);
+}
 
 const productImportProductFields = [
   "name",
@@ -1048,7 +1071,7 @@ router.post("/admin/orders", async (req, res): Promise<void> => {
     });
     if (!result.order) { res.status(500).json({ error: "Order create failed" }); return; }
     const full = await loadAdminOrder(result.order.id);
-    res.status(201).json(CreateAdminOrderResponse.parse(full));
+    sendAdminOrderJson(res, CreateAdminOrderResponse, full, 201);
   } catch (error) {
     if (error instanceof OrderCreateError) {
       res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
@@ -1434,7 +1457,7 @@ router.get("/admin/orders/:id", async (req, res): Promise<void> => {
   if (!order) { res.status(404).json({ error: "Order not found" }); return; }
   if (!(await canAccessBranch(req, order.branchId))) { res.status(403).json({ error: "Branch access denied" }); return; }
   const full = await loadAdminOrder(order.id);
-  res.json(GetAdminOrderResponse.parse(full));
+  sendAdminOrderJson(res, GetAdminOrderResponse, full);
 });
 
 router.post("/admin/orders/:id/payment", async (req, res): Promise<void> => {
@@ -1503,7 +1526,7 @@ router.post("/admin/orders/:id/payment", async (req, res): Promise<void> => {
     }
     throw error;
   }
-  res.json(RecordAdminOrderPaymentResponse.parse(await loadAdminOrder(updated.id)));
+  sendAdminOrderJson(res, RecordAdminOrderPaymentResponse, await loadAdminOrder(updated.id));
 });
 
 router.post("/admin/orders/:id/payment-link", async (req, res): Promise<void> => {
@@ -1781,7 +1804,7 @@ router.patch("/admin/orders/:id", async (req, res): Promise<void> => {
     }
     throw error;
   }
-  res.json(UpdateAdminOrderResponse.parse(await loadAdminOrder(updated.id)));
+  sendAdminOrderJson(res, UpdateAdminOrderResponse, await loadAdminOrder(updated.id));
 });
 
 const emailOrNull = z.union([z.string().email(), z.literal(""), z.null()]).optional().transform((v) => (v === "" ? null : v));
