@@ -406,6 +406,18 @@ async function settleFetchedPayment(input: {
           amount: outcome.action === "mark_paid" ? outcome.amount : existing.amount,
         })
         .where(eq(orderPaymentsTable.id, existing.id));
+    } else {
+      await tx.insert(orderPaymentsTable).values({
+        orderId: order.id,
+        method: order.paymentMethod ?? input.provider,
+        provider: input.provider,
+        amount: outcome.action === "mark_paid" ? outcome.amount : Number(order.total),
+        currency: "MXN",
+        status: nextStatus,
+        providerPaymentId: input.payment.providerPaymentId,
+        providerCheckoutId: input.payment.checkoutId || input.lookupId,
+        paidAt: outcome.action === "mark_paid" ? now : null,
+      });
     }
     if (input.eventKey) {
       try {

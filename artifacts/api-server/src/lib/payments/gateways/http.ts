@@ -2,16 +2,24 @@ import type { GatewayHttp, GatewayHttpResponse } from "./types.ts";
 import { PaymentGatewayError } from "./types.ts";
 
 export const defaultGatewayHttp: GatewayHttp = async (request) => {
-  const response = await fetch(request.url, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-    signal: AbortSignal.timeout(15_000),
-  });
-  return {
-    status: response.status,
-    body: await response.text(),
-  };
+  try {
+    const response = await fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      signal: AbortSignal.timeout(15_000),
+    });
+    return {
+      status: response.status,
+      body: await response.text(),
+    };
+  } catch {
+    throw new PaymentGatewayError(
+      "PAYMENT_PROVIDER_UNAVAILABLE",
+      "Payment provider is unavailable",
+      502,
+    );
+  }
 };
 
 export function readJson(body: string): unknown {

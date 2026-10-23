@@ -25,7 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAppAuth } from "@/lib/app-auth";
 import { useToast } from "@/hooks/use-toast";
-import { isSettledPaymentError, paypalReturnCheckoutId } from "@/lib/checkout-payment";
+import { isSettledPaymentError, paymentSyncShouldStop, paypalReturnCheckoutId } from "@/lib/checkout-payment";
 import {
   money,
   purchaseResult,
@@ -70,13 +70,14 @@ export default function OrderDetailsPage() {
   const [downloading, setDownloading] = useState(false);
   const [startingPayment, setStartingPayment] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncExhausted, setSyncExhausted] = useState(false);
   const search = useSearch();
   const paymentReturn = new URLSearchParams(search).get("pago") ?? "";
   const paypalCheckoutId = paypalReturnCheckoutId(search);
   const returningFromPayment = paymentReturn === "ok" || paymentReturn === "pendiente";
   const paymentRefetchInterval = (current: { state: { data?: { paymentStatus?: string } } }) => {
     const status = current.state.data?.paymentStatus;
-    if (status === "paid" || status === "failed") return false;
+    if (syncExhausted || status === "paid" || status === "failed") return false;
     return returningFromPayment ? 2500 : false;
   };
   // A valid guest link remains usable even when the customer has signed in meanwhile.
@@ -106,44 +107,57 @@ export default function OrderDetailsPage() {
 
   const refetchOrderRef = useRef(query.refetch);
   refetchOrderRef.current = query.refetch;
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const syncKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!id) return;
     if (paymentReturn !== "ok" && paymentReturn !== "pendiente") return;
-    if (order?.paymentStatus === "paid" || order?.paymentStatus === "failed") {
-      setSyncing(false);
-      return;
-    }
+    const syncKey = `${id}:${paymentReturn}:${paypalCheckoutId ?? ""}`;
+    if (syncKeyRef.current === syncKey) return;
+    syncKeyRef.current = syncKey;
     let cancelled = false;
     setSyncing(true);
+    setSyncExhausted(false);
     const syncPath = isGuest
       ? `/api/guest/orders/${encodeURIComponent(id)}/${encodeURIComponent(token || "")}/payment/sync`
       : `/api/orders/${encodeURIComponent(id)}/payment/sync`;
     void (async () => {
       for (let attempt = 0; attempt < 8 && !cancelled; attempt++) {
+        const current = orderRef.current;
+        if (current?.paymentStatus === "paid" || current?.paymentStatus === "failed") break;
         try {
-          const result = await customFetch<{ paymentStatus?: string }>(syncPath, {
+          const result = await customFetch<{ paymentStatus?: string; reason?: string }>(syncPath, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               guestAccessToken: isGuest ? token : undefined,
-              providerCheckoutId: paypalCheckoutId ?? undefined,
+              providerCheckoutId: paypalCheckoutId ?? current?.providerCheckoutId ?? undefined,
             }),
           });
           if (cancelled) return;
           await refetchOrderRef.current();
-          if (result.paymentStatus === "paid" || result.paymentStatus === "failed") break;
-        } catch {
-          /* Keep polling the gateway; a single 404/500 must not send the buyer back to PayPal. */
+          if (paymentSyncShouldStop(result, null)) break;
+        } catch (error) {
+          if (cancelled) return;
+          if (isSettledPaymentError(error)) {
+            await refetchOrderRef.current();
+            break;
+          }
+          if (paymentSyncShouldStop(null, error)) break;
         }
         if (attempt < 7) await new Promise((resolve) => window.setTimeout(resolve, 1500));
       }
     })().finally(() => {
-      if (!cancelled) setSyncing(false);
+      if (!cancelled) {
+        setSyncing(false);
+        setSyncExhausted(true);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [id, isGuest, order?.paymentStatus, paymentReturn, paypalCheckoutId, token]);
+  }, [id, isGuest, paymentReturn, paypalCheckoutId, token]);
   const base = isGuest
     ? `/api/guest/orders/${encodeURIComponent(id || "")}/${encodeURIComponent(token || "")}`
     : `/api/orders/${encodeURIComponent(id || "")}`;
@@ -190,22 +204,29 @@ export default function OrderDetailsPage() {
     if (!order || startingPayment || syncing) return;
     setStartingPayment(true);
     try {
-      const synced = await customFetch<{ paymentStatus?: string }>(
-        isGuest
-          ? `/api/guest/orders/${encodeURIComponent(order.id)}/${encodeURIComponent(token || "")}/payment/sync`
-          : `/api/orders/${encodeURIComponent(order.id)}/payment/sync`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            guestAccessToken: isGuest ? token : undefined,
-            providerCheckoutId: paypalCheckoutId ?? undefined,
-          }),
-        },
-      );
-      if (synced.paymentStatus === "paid") {
-        await query.refetch();
-        return;
+      try {
+        const synced = await customFetch<{ paymentStatus?: string }>(
+          isGuest
+            ? `/api/guest/orders/${encodeURIComponent(order.id)}/${encodeURIComponent(token || "")}/payment/sync`
+            : `/api/orders/${encodeURIComponent(order.id)}/payment/sync`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              guestAccessToken: isGuest ? token : undefined,
+              providerCheckoutId: paypalCheckoutId ?? order.providerCheckoutId ?? undefined,
+            }),
+          },
+        );
+        if (synced.paymentStatus === "paid") {
+          await query.refetch();
+          return;
+        }
+      } catch (error) {
+        if (isSettledPaymentError(error)) {
+          await query.refetch();
+          return;
+        }
       }
       const session = await startOrderPayment(order.id, {
         guestAccessToken: isGuest ? token : undefined,

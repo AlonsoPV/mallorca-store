@@ -71,6 +71,20 @@ export function isSettledPaymentError(error: unknown): boolean {
   );
 }
 
+export function paymentSyncShouldStop(
+  result: { paymentStatus?: string; reason?: string } | null,
+  error: unknown,
+): boolean {
+  if (result) {
+    if (result.paymentStatus === "paid" || result.paymentStatus === "failed") return true;
+    return result.reason === "missing_checkout";
+  }
+  if (isSettledPaymentError(error)) return true;
+  const status = (error as { status?: number } | null)?.status ?? 0;
+  if (status === 404 || status === 400 || status === 401 || status === 403) return true;
+  return status >= 500 && status !== 502 && status !== 503;
+}
+
 export function assertDeliveryPaymentAllowed(
   fulfillmentMethod: CheckoutFulfillment,
   requested: string | null | undefined,

@@ -5,7 +5,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { and, eq, sql, desc } from "drizzle-orm";
 import {
   db, branchesTable, cartsTable, cartItemsTable, productsTable,
-  productVariantsTable, branchProductsTable, ordersTable, usersTable,
+  productVariantsTable, branchProductsTable, ordersTable, orderPaymentsTable, usersTable,
 } from "@workspace/db";
 import {
   CreateCartSessionBody, CreateCartSessionResponse, GetCartParams, GetCartResponse,
@@ -646,32 +646,34 @@ function extraCheckoutId(body: unknown): string | undefined {
 }
 
 async function sendPaymentSync(req: Request, res: Response, guestToken?: string): Promise<void> {
-  const body = StartOrderPaymentBody.safeParse(req.body ?? {});
-  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-  const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const order = await findOrderWithItems(orderId ?? "");
-  const user = await getRequestUser(req);
-  const accessToken = guestToken ?? body.data.guestAccessToken;
-  const canAccess =
-    order &&
-    ((order.userId != null && order.userId === user?.id) ||
-      (accessToken != null && order.guestAccessToken === accessToken));
-  if (!canAccess || !order) { res.status(404).json({ error: "Order not found" }); return; }
-  const provider = order.paymentMethod === "PAYPAL"
-    ? "PAYPAL"
-    : order.paymentMethod === "MERCADO_PAGO" || order.paymentMethod === "ONLINE"
-      ? "MERCADO_PAGO"
-      : null;
-  if (!provider) {
-    res.status(400).json({ error: "This order does not use an online payment provider", code: "PAYMENT_METHOD_NOT_ONLINE" });
-    return;
-  }
-  const credentials = await loadGatewayCredentials(provider);
-  if (!credentials || !gatewayCredentialsReady(credentials)) {
-    res.status(503).json({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" });
-    return;
-  }
   try {
+    const body = StartOrderPaymentBody.safeParse(req.body ?? {});
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const order = await findOrderWithItems(orderId ?? "");
+    const user = guestToken
+      ? undefined
+      : await getRequestUser(req).catch(() => undefined);
+    const accessToken = guestToken ?? body.data.guestAccessToken;
+    const canAccess =
+      order &&
+      ((order.userId != null && order.userId === user?.id) ||
+        (accessToken != null && order.guestAccessToken === accessToken));
+    if (!canAccess || !order) { res.status(404).json({ error: "Order not found" }); return; }
+    const provider = order.paymentMethod === "PAYPAL"
+      ? "PAYPAL"
+      : order.paymentMethod === "MERCADO_PAGO" || order.paymentMethod === "ONLINE"
+        ? "MERCADO_PAGO"
+        : null;
+    if (!provider) {
+      res.status(400).json({ error: "This order does not use an online payment provider", code: "PAYMENT_METHOD_NOT_ONLINE" });
+      return;
+    }
+    const credentials = await loadGatewayCredentials(provider);
+    if (!credentials || !gatewayCredentialsReady(credentials)) {
+      res.status(503).json({ error: "Payment provider is not configured", code: "PAYMENT_PROVIDER_NOT_CONFIGURED" });
+      return;
+    }
     const result = await reconcileGatewayPayment({
       orderId: order.id,
       credentials,
@@ -683,13 +685,14 @@ async function sendPaymentSync(req: Request, res: Response, guestToken?: string)
       paymentStatus: result.paymentStatus,
     });
   } catch (error) {
+    if (res.headersSent) return;
     if (error instanceof PaymentGatewayError) {
       res.status(error.status).json({ error: error.message, code: error.code });
       return;
     }
     logger.error({
       event: "payment_sync_failed",
-      orderId: order.id,
+      orderId: Array.isArray(req.params.id) ? req.params.id[0] : req.params.id,
       pgCode: pgCode(error),
       message: error instanceof Error ? error.message.slice(0, 200) : undefined,
     }, "payment sync failed");
@@ -771,7 +774,16 @@ async function sendOrder(req: any, res: any, guest = false, mode: "details" | "r
       res.setHeader("Content-Disposition", `attachment; filename="${receiptFilename(order)}"`);
       res.send(pdf); return;
     }
-    const payload = serializeStorefrontOrderDetails(order, order.items, order.branchName);
+    const [payment] = await db
+      .select({
+        providerCheckoutId: orderPaymentsTable.providerCheckoutId,
+        providerPaymentId: orderPaymentsTable.providerPaymentId,
+      })
+      .from(orderPaymentsTable)
+      .where(eq(orderPaymentsTable.orderId, order.id))
+      .orderBy(desc(orderPaymentsTable.id))
+      .limit(1);
+    const payload = serializeStorefrontOrderDetails(order, order.items, order.branchName, payment);
     const schema = guest ? GetGuestOrderDetailsResponse : GetOrderDetailsResponse;
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {

@@ -5,6 +5,7 @@ import {
   checkoutCtaLabel,
   checkoutPayCopy,
   isSettledPaymentError,
+  paymentSyncShouldStop,
   paypalReturnCheckoutId,
   selectCheckoutPaymentMethod,
 } from "./checkout-payment.ts";
@@ -65,5 +66,15 @@ describe("delivery payment copy", () => {
       true,
     );
     assert.equal(isSettledPaymentError({ status: 400, data: { code: "PAYMENT_ALREADY_RECORDED" } }), false);
+  });
+});
+
+describe("paymentSyncShouldStop", () => {
+  it("stops polling after a confirmed result, a missing checkout, or a 500", () => {
+    assert.equal(paymentSyncShouldStop({ paymentStatus: "paid" }, null), true);
+    assert.equal(paymentSyncShouldStop({ paymentStatus: "unpaid", reason: "missing_checkout" }, null), true);
+    assert.equal(paymentSyncShouldStop({ paymentStatus: "unpaid", reason: "in_progress" }, null), false);
+    assert.equal(paymentSyncShouldStop(null, { status: 500, data: { code: "PAYMENT_SYNC_FAILED" } }), true);
+    assert.equal(paymentSyncShouldStop(null, { status: 502, data: { code: "PAYMENT_PROVIDER_REJECTED" } }), false);
   });
 });

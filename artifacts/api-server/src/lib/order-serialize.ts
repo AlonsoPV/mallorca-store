@@ -169,6 +169,7 @@ export function serializeStorefrontOrderDetails(
   order: OrderRow,
   items: Array<OrderItemRow & { imageUrl?: string | null }>,
   branchName?: string | null,
+  payment?: { providerCheckoutId?: string | null; providerPaymentId?: string | null } | null,
 ) {
-  return serializeAdminOrder(order, items, branchName);
+  return serializeAdminOrder(order, items, branchName, [], payment);
 }

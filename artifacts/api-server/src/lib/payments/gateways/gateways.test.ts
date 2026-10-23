@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { describe, it } from "node:test";
-import { amountsMatch, providerErrorSummary } from "./http.ts";
+import { amountsMatch, defaultGatewayHttp, providerErrorSummary } from "./http.ts";
 import { createMercadoPagoGateway, verifyMercadoPagoSignature } from "./mercado-pago.ts";
 import { decideGatewayOutcome, shouldReuseCheckoutSession } from "./outcome.ts";
 import { clearPayPalTokenCache, createPayPalGateway } from "./paypal.ts";
@@ -33,6 +33,24 @@ function scripted(handlers: Record<string, (url: string, body?: string) => { sta
 }
 
 describe("provider error summary", () => {
+  it("maps a dropped provider connection to 502 instead of an unhandled 500", async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error("fetch failed");
+    }) as typeof fetch;
+    try {
+      await assert.rejects(
+        () => defaultGatewayHttp({ method: "GET", url: "https://api-m.sandbox.paypal.com/v2/checkout/orders/x" }),
+        (error: unknown) =>
+          error instanceof PaymentGatewayError &&
+          error.status === 502 &&
+          error.code === "PAYMENT_PROVIDER_UNAVAILABLE",
+      );
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it("exposes PayPal issue names and debug id without the raw body", () => {
     const summary = providerErrorSummary({
       name: "UNPROCESSABLE_ENTITY",
