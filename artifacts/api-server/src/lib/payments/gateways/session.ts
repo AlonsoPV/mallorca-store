@@ -287,7 +287,7 @@ async function rememberPaymentEvent(
       { provider: input.provider, eventKey: input.eventKey, pgCode: pgCode(error) },
       "payment_events persist failed",
     );
-    return "applied";
+    throw error;
   }
 }
 

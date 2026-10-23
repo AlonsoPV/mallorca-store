@@ -72,6 +72,14 @@ Retorno del comprador (lo arma el backend, no hay que pegarlo en el panel salvo 
 
 Esa pantalla **no trata `?pago=ok` como cobro**. Al volver, el backend consulta PayPal, captura si la orden está `APPROVED` y recién entonces marca el pedido pagado. El webhook sigue siendo la conciliación asíncrona (si el comprador cierra el navegador).
 
+## Base de datos (idempotencia de pagos)
+
+La confirmación al volver de PayPal y los webhooks registran cada evento en la tabla `payment_events`. Si esa tabla no existe en Postgres, el insert falla y el resto de la transacción termina en **25P02** (transacción abortada); el cobro en PayPal puede haber ocurrido igual — no reintentes el pago hasta corregir la base.
+
+**Producción (Replit):** ejecuta el SQL de `lib/db/migrations/010_payment_events.sql` en la consola SQL de la base administrada (o con `psql` y `DATABASE_URL`). Publicar la app no sustituye este paso si el esquema no se ha aplicado antes.
+
+**Desarrollo:** `pnpm --filter @workspace/db run push` (el filtro `db` también resuelve a `@workspace/db`) o el mismo archivo SQL.
+
 ## Pruebas Sandbox
 
 1. Deja `PAYMENT_ENVIRONMENT=sandbox` y el switch Sandbox activo en admin.
