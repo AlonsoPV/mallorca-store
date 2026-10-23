@@ -164,7 +164,7 @@ router.get("/menus", async (_req, res): Promise<void> => {
   try {
     res.json({ menus: await listStoreMenus() });
   } catch {
-    res.status(503).json({ error: "Aplica la migración de menús (009_store_menus.sql)." });
+    res.json({ menus: [] });
   }
 });
 

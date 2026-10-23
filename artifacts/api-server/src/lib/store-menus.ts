@@ -1,11 +1,49 @@
 import { eq } from "drizzle-orm";
-import { branchesTable, db, storeMenusTable } from "@workspace/db";
+import { branchesTable, db, pool, storeMenusTable } from "@workspace/db";
 import {
   isPdfBuffer,
   parseMenuKey,
   pdfContentDisposition,
   safePdfName,
 } from "../../store-menu.mjs";
+import { pgCode } from "./pg-code";
+
+const STORE_MENUS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS store_menus (
+  menu_key text PRIMARY KEY,
+  scope text NOT NULL,
+  branch_id integer REFERENCES branches(id) ON DELETE CASCADE,
+  file_name text NOT NULL,
+  content_type text NOT NULL DEFAULT 'application/pdf',
+  file_data bytea NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT store_menus_scope_check CHECK (
+    (scope = 'global' AND branch_id IS NULL AND menu_key = 'global')
+    OR (scope = 'branch' AND branch_id IS NOT NULL AND menu_key = 'branch-' || branch_id::text)
+  )
+);
+`;
+
+function isMissingStoreMenusTable(error: unknown) {
+  return pgCode(error) === "42P01" || (error instanceof Error && /store_menus/i.test(error.message));
+}
+
+async function ensureStoreMenusTable() {
+  await pool.query(STORE_MENUS_TABLE_SQL);
+}
+
+async function queryStoreMenus(): Promise<StoreMenuMeta[]> {
+  const rows = await db
+    .select({
+      menuKey: storeMenusTable.menuKey,
+      scope: storeMenusTable.scope,
+      branchId: storeMenusTable.branchId,
+      fileName: storeMenusTable.fileName,
+      updatedAt: storeMenusTable.updatedAt,
+    })
+    .from(storeMenusTable);
+  return rows.map(metaFrom);
+}
 
 export type StoreMenuMeta = {
   key: string;
@@ -32,16 +70,13 @@ function metaFrom(row: {
 }
 
 export async function listStoreMenus(): Promise<StoreMenuMeta[]> {
-  const rows = await db
-    .select({
-      menuKey: storeMenusTable.menuKey,
-      scope: storeMenusTable.scope,
-      branchId: storeMenusTable.branchId,
-      fileName: storeMenusTable.fileName,
-      updatedAt: storeMenusTable.updatedAt,
-    })
-    .from(storeMenusTable);
-  return rows.map(metaFrom);
+  try {
+    return await queryStoreMenus();
+  } catch (error) {
+    if (!isMissingStoreMenusTable(error)) throw error;
+    await ensureStoreMenusTable();
+    return queryStoreMenus();
+  }
 }
 
 export async function readStoreMenuFile(rawKey: string) {

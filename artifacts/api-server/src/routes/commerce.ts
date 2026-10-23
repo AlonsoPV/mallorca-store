@@ -55,6 +55,7 @@ import {
   releaseExpiredReservations,
   type CreateOrderResult,
 } from "../lib/order-create";
+import { serializeStorefrontOrderDetails } from "../lib/order-serialize";
 import { logger } from "../lib/logger";
 import { pgCode } from "../lib/pg-code";
 import { loadReservedByBranchProductIds, sellableUnits } from "../lib/reserved-stock";
@@ -722,23 +723,45 @@ router.post("/webhooks/payments/:provider", async (req, res): Promise<void> => {
 async function sendOrder(req: any, res: any, guest = false, mode: "details" | "receipt" | "confirmation" = "details"): Promise<void> {
   const p = (guest ? GetGuestOrderDetailsParams : GetOrderDetailsParams).safeParse(req.params); if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
   const token = guest ? (p.data as { id: string; token: string }).token : undefined;
-  const order = await findOrderWithItems(p.data.id); if (!order || (guest ? order.guestAccessToken !== token : (await getRequestUser(req))?.id !== order.userId)) { res.status(404).json({ error: "Order not found" }); return; }
-  res.setHeader("Cache-Control", "private, no-store");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  if (mode !== "details") {
-    const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, order.branchId));
-    if (mode === "confirmation") {
-      let notifications;
-      try { notifications = await orderEmailStatus(order.id); }
-      catch { notifications = { customer: { status: "unavailable" }, branch: { status: "unavailable" } }; }
-      res.json({ branchName: branch?.name, branchAddress: branch?.address, branchPhone: branch?.phone, notifications }); return;
+  try {
+    const order = await findOrderWithItems(p.data.id); if (!order || (guest ? order.guestAccessToken !== token : (await getRequestUser(req))?.id !== order.userId)) { res.status(404).json({ error: "Order not found" }); return; }
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    if (mode !== "details") {
+      const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, order.branchId));
+      if (mode === "confirmation") {
+        let notifications;
+        try { notifications = await orderEmailStatus(order.id); }
+        catch { notifications = { customer: { status: "unavailable" }, branch: { status: "unavailable" } }; }
+        res.json({ branchName: branch?.name, branchAddress: branch?.address, branchPhone: branch?.phone, notifications }); return;
+      }
+      const pdf = await buildReceiptPdf(receiptSnapshot(order, branch));
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${receiptFilename(order)}"`);
+      res.send(pdf); return;
     }
-    const pdf = await buildReceiptPdf(receiptSnapshot(order, branch));
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${receiptFilename(order)}"`);
-    res.send(pdf); return;
+    const payload = serializeStorefrontOrderDetails(order, order.items, order.branchName);
+    const schema = guest ? GetGuestOrderDetailsResponse : GetOrderDetailsResponse;
+    const parsed = schema.safeParse(payload);
+    if (!parsed.success) {
+      logger.warn({
+        event: "order_details_parse_failed",
+        orderId: order.id,
+        issues: parsed.error.issues.map((issue) => issue.path.join(".")).slice(0, 12),
+      }, "order details parse failed; returning serialized order");
+      res.json(payload);
+      return;
+    }
+    res.json(parsed.data);
+  } catch (error) {
+    logger.error({
+      event: "order_details_failed",
+      orderId: p.data.id,
+      pgCode: pgCode(error),
+      message: error instanceof Error ? error.message.slice(0, 200) : undefined,
+    }, "order details failed");
+    res.status(500).json({ error: "No se pudo cargar el pedido" });
   }
-  res.json((guest ? GetGuestOrderDetailsResponse : GetOrderDetailsResponse).parse(order));
 }
 router.get("/orders/:id/receipt.pdf", requireAuth, (req, res) => sendOrder(req, res, false, "receipt"));
 router.get("/guest/orders/:id/:token/receipt.pdf", (req, res) => sendOrder(req, res, true, "receipt"));

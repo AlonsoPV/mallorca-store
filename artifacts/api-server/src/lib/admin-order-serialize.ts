@@ -9,112 +9,14 @@ import {
   productsTable,
   usersTable,
 } from "@workspace/db";
+import { serializeAdminOrder, serializeAuditEvents } from "./order-serialize";
 
-export function serializeOrderItems(
-  items: Array<typeof orderItemsTable.$inferSelect & { imageUrl?: string | null }>,
-) {
-  return items.map((item) => ({
-    id: item.id,
-    productId: item.productId,
-    variantId: item.variantId,
-    sku: item.sku,
-    name: item.name,
-    variantLabel: item.variantLabel,
-    quantity: item.quantity,
-    listUnitPrice: item.listUnitPrice ?? null,
-    unitPrice: item.unitPrice,
-    lineTotal: item.lineTotal,
-    promotionId: item.promotionId ?? null,
-    manualLineItem: item.manualLineItem ?? false,
-    imageUrl: item.imageUrl ?? null,
-  }));
-}
-
-export function serializeAuditEvents(
-  rows: Array<{
-    id: number;
-    action: string;
-    reason: string | null;
-    actorUserId: string | null;
-    createdAt: Date;
-    payload: string | null;
-    actorName?: string | null;
-  }>,
-) {
-  return rows.map((row) => {
-    let payload: Record<string, unknown> | null = null;
-    if (row.payload) {
-      try {
-        payload = JSON.parse(row.payload) as Record<string, unknown>;
-      } catch {
-        payload = null;
-      }
-    }
-    return {
-      id: row.id,
-      action: row.action,
-      reason: row.reason,
-      actorUserId: row.actorUserId,
-      actorName: row.actorName ?? null,
-      createdAt: row.createdAt,
-      payload,
-    };
-  });
-}
-
-export function serializeAdminOrder(
-  order: typeof ordersTable.$inferSelect,
-  items: Array<typeof orderItemsTable.$inferSelect & { imageUrl?: string | null }>,
-  branchName?: string | null,
-  audit: ReturnType<typeof serializeAuditEvents> = [],
-  payment?: { providerCheckoutId?: string | null; providerPaymentId?: string | null } | null,
-) {
-  return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    guestAccessToken: order.guestAccessToken,
-    orderSource: order.orderSource ?? "STOREFRONT",
-    status: order.status,
-    paymentStatus: order.paymentStatus,
-    paymentMethod: order.paymentMethod ?? null,
-    paymentReference: order.paymentReference ?? payment?.providerPaymentId ?? null,
-    providerCheckoutId: payment?.providerCheckoutId ?? null,
-    providerPaymentId: payment?.providerPaymentId ?? order.paymentReference ?? null,
-    paymentNote: order.paymentNote ?? null,
-    paymentLinkUrl: order.paymentLinkUrl ?? null,
-    amountPaid: order.amountPaid ?? 0,
-    paidAt: order.paidAt ?? null,
-    paidByUserId: order.paidByUserId ?? null,
-    fulfillmentMethod: order.fulfillmentMethod,
-    scheduledStart: order.scheduledStart,
-    scheduledEnd: order.scheduledEnd,
-    customerEmail: order.customerEmail,
-    customerName: order.customerName,
-    customerPhone: order.customerPhone,
-    deliveryAddress: order.deliveryAddress,
-    deliveryAddressSnapshot: order.deliveryAddressSnapshot ?? null,
-    customerNotes: order.customerNotes ?? null,
-    productionNotes: order.productionNotes ?? null,
-    internalNotes: order.internalNotes ?? null,
-    subtotal: order.subtotal,
-    promotionDiscountTotal: order.promotionDiscountTotal ?? 0,
-    discountAmount: order.discountAmount ?? 0,
-    discountPercent: order.discountPercent ?? null,
-    discountReason: order.discountReason ?? null,
-    couponCode: order.couponCode ?? null,
-    couponDiscount: order.couponDiscount ?? 0,
-    deliveryFee: order.deliveryFee,
-    total: order.total,
-    availabilityOverride: order.availabilityOverride ?? false,
-    overrideReason: order.overrideReason ?? null,
-    branchId: order.branchId,
-    branchName: branchName ?? undefined,
-    createdByUserId: order.createdByUserId ?? null,
-    createdAt: order.createdAt,
-    items: serializeOrderItems(items),
-    audit,
-  };
-}
+export {
+  serializeAdminOrder,
+  serializeAuditEvents,
+  serializeOrderItems,
+  serializeStorefrontOrderDetails,
+} from "./order-serialize";
 
 export async function loadAdminOrder(orderId: string) {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
