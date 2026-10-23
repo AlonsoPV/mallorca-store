@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  assertDeliveryPaymentAllowed,
+  checkoutCtaLabel,
+  checkoutPayCopy,
+  isSettledPaymentError,
+  selectCheckoutPaymentMethod,
+} from "./checkout-payment.ts";
+
+describe("selectCheckoutPaymentMethod", () => {
+  it("keeps PayPal when switching to delivery instead of PENDING", () => {
+    const next = selectCheckoutPaymentMethod(
+      "delivery",
+      [{ code: "PAYPAL" }],
+      "CASH_ON_PICKUP",
+    );
+    assert.equal(next, "PAYPAL");
+  });
+
+  it("does not reset a selected online method on delivery", () => {
+    const next = selectCheckoutPaymentMethod(
+      "delivery",
+      [{ code: "PAYPAL" }, { code: "MERCADO_PAGO" }],
+      "PAYPAL",
+    );
+    assert.equal(next, "PAYPAL");
+  });
+
+  it("falls back to cash only for pickup", () => {
+    assert.equal(selectCheckoutPaymentMethod("pickup", [], "PAYPAL"), "CASH_ON_PICKUP");
+    assert.equal(selectCheckoutPaymentMethod("delivery", [], "CASH_ON_PICKUP"), "PENDING");
+  });
+});
+
+describe("delivery payment copy", () => {
+  it("never promises cash on delivery", () => {
+    assert.match(checkoutPayCopy("delivery", "PAYPAL", 1), /PayPal/);
+    assert.match(checkoutCtaLabel("delivery", "PAYPAL", 1), /PayPal/);
+    assert.doesNotMatch(checkoutPayCopy("delivery", "PENDING", 0), /recibirlo/i);
+    assert.equal(assertDeliveryPaymentAllowed("delivery", "PENDING"), false);
+    assert.equal(assertDeliveryPaymentAllowed("delivery", "CASH_ON_PICKUP"), false);
+    assert.equal(assertDeliveryPaymentAllowed("delivery", "PAYPAL"), true);
+  });
+
+  it("treats a 409 already-recorded payment as settled, not as a new checkout", () => {
+    assert.equal(
+      isSettledPaymentError({ status: 409, data: { code: "PAYMENT_ALREADY_RECORDED" } }),
+      true,
+    );
+    assert.equal(
+      isSettledPaymentError({ status: 409, data: { code: "PAYMENT_CAPTURE_PENDING" } }),
+      true,
+    );
+    assert.equal(isSettledPaymentError({ status: 400, data: { code: "PAYMENT_ALREADY_RECORDED" } }), false);
+  });
+});

@@ -1243,6 +1243,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && path === "/api/checkout/payment-methods") {
+    overlayProviderResponse(paymentProviders.PAYPAL);
+    overlayProviderResponse(paymentProviders.MERCADO_PAGO);
+    for (const method of paymentMethodConfigs) {
+      if (method.configurationStatus === "configured") method.enabled = true;
+    }
     const fulfillmentMethod = url.searchParams.get("fulfillmentMethod") || "pickup";
     const methods = paymentMethodConfigs.filter((method) => {
       if (!method.enabled || method.configurationStatus !== "configured") return false;
@@ -1555,6 +1560,13 @@ const server = http.createServer(async (req, res) => {
         const deliveryFee = body?.fulfillmentMethod === "delivery" ? 80 : 0;
         const paymentMethod = body?.paymentMethod
           || (body?.fulfillmentMethod === "pickup" ? "CASH_ON_PICKUP" : "PENDING");
+        if (
+          body?.fulfillmentMethod === "delivery" &&
+          (!paymentMethod || paymentMethod === "PENDING" || paymentMethod === "CASH_ON_PICKUP" || paymentMethod === "CASH")
+        ) {
+          send(res, 400, { error: "Delivery requires an online payment method", code: "PAYMENT_METHOD_NOT_ALLOWED" });
+          return;
+        }
         if (paymentMethod === "CASH_ON_PICKUP" && body?.fulfillmentMethod !== "pickup") {
           send(res, 400, { error: "CASH_ON_PICKUP is only available for pickup", code: "PAYMENT_METHOD_NOT_ALLOWED" });
           return;
@@ -1620,6 +1632,23 @@ const server = http.createServer(async (req, res) => {
       ? "https://www.sandbox.paypal.com/checkoutnow?token=local-mock"
       : "https://sandbox.mercadopago.com/checkout/v1/redirect?pref_id=local-mock";
     send(res, 200, { provider, redirectUrl, providerReference: "local-mock", mode: "redirect" });
+    return;
+  }
+
+  const syncPaymentMatch = path.match(/^\/api\/orders\/([^/]+)\/payment\/sync$/);
+  if (syncPaymentMatch && req.method === "POST") {
+    const order = orders.find((item) => item.id === syncPaymentMatch[1]);
+    if (!order) {
+      send(res, 404, { error: "Order not found" });
+      return;
+    }
+    if (order.paymentMethod === "PAYPAL" || order.paymentMethod === "MERCADO_PAGO" || order.paymentMethod === "ONLINE") {
+      order.paymentStatus = "paid";
+      order.status = "paid";
+      order.amountPaid = order.total;
+      order.paidAt = new Date().toISOString();
+    }
+    send(res, 200, { applied: true, reason: "mark_paid", paymentStatus: order.paymentStatus });
     return;
   }
 

@@ -245,13 +245,18 @@ export function createPayPalGateway(http: GatewayHttp = defaultGatewayHttp): Pay
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Prefer: "return=representation",
           "PayPal-Request-Id": `capture:${lookupId}`,
         },
         body: "{}",
       });
       if (response.status === 422) return readOrder(call, credentials, lookupId);
       const payload = assertProviderOk(response, "capture") as Record<string, unknown>;
-      return paymentFromOrder(payload);
+      const captured = paymentFromOrder(payload);
+      if (captured.amount == null || !captured.currency) {
+        return readOrder(call, credentials, lookupId);
+      }
+      return captured;
     },
     parseWebhook(input): GatewayWebhookEvent {
       const body = asRecord(input.body);

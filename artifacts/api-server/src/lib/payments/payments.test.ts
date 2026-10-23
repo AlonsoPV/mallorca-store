@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   DEFAULT_PAYMENT_METHOD_CONFIGS,
+  assertStorefrontPaymentAllowed,
   resolveAvailableMethods,
 } from "./catalog.ts";
 import {
@@ -65,6 +66,51 @@ describe("resolveAvailableMethods", () => {
     });
     assert.equal(methods.some((m) => m.code === "CASH_ON_PICKUP"), false);
     assert.equal(methods.length, 0);
+  });
+
+  it("lists PayPal for delivery when enabled and never cash", () => {
+    const methods = resolveAvailableMethods({
+      fulfillmentMethod: "delivery",
+      configs: DEFAULT_PAYMENT_METHOD_CONFIGS.map((row) =>
+        row.code === "PAYPAL" ? { ...row, enabled: true, configurationStatus: "configured" } : row,
+      ),
+      providerAvailability: {
+        CASH_ON_PICKUP: { provider: "CASH_ON_PICKUP", available: true, configurationStatus: "configured" },
+        PAYPAL: { provider: "PAYPAL", available: true, configurationStatus: "configured" },
+      },
+      audience: "storefront",
+    });
+    assert.deepEqual(methods.map((m) => m.code), ["PAYPAL"]);
+  });
+
+  it("rejects PENDING and cash for storefront delivery", () => {
+    const available = [{ code: "PAYPAL" }];
+    assert.throws(
+      () =>
+        assertStorefrontPaymentAllowed({
+          fulfillmentMethod: "delivery",
+          requested: "PENDING",
+          available,
+        }),
+      (error: Error & { code?: string }) => error.code === "PAYMENT_METHOD_NOT_ALLOWED",
+    );
+    assert.throws(
+      () =>
+        assertStorefrontPaymentAllowed({
+          fulfillmentMethod: "delivery",
+          requested: "CASH_ON_PICKUP",
+          available,
+        }),
+      (error: Error & { code?: string }) => error.code === "PAYMENT_METHOD_NOT_ALLOWED",
+    );
+    assert.equal(
+      assertStorefrontPaymentAllowed({
+        fulfillmentMethod: "delivery",
+        requested: "PAYPAL",
+        available,
+      }),
+      "PAYPAL",
+    );
   });
 });
 

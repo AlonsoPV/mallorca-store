@@ -30,6 +30,13 @@ import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cartLeadNotice, formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
 import { isCartNotFoundError, isLikelyCreatedOrderError } from "@/lib/cart-recovery";
+import {
+  assertDeliveryPaymentAllowed,
+  checkoutCtaLabel,
+  checkoutPayCopy,
+  isOnlineCheckoutPayment,
+  selectCheckoutPaymentMethod,
+} from "@/lib/checkout-payment";
 import { track } from "@/lib/analytics";
 import {
   formatSlotTime,
@@ -185,12 +192,8 @@ export default function CheckoutPage() {
   }, [cart?.branch?.id, cart?.branch?.pickupAvailable, cart?.branch?.deliveryAvailable, checkoutDate, fulfillmentMethod, setFulfillmentContext, setFulfillmentMethod]);
 
   useEffect(() => {
-    if (fulfillmentMethod === "delivery") {
-      setPaymentMethod("PENDING");
-      return;
-    }
-    if (paymentMethods.some((method) => method.code === paymentMethod)) return;
-    setPaymentMethod((paymentMethods[0]?.code as PaymentMethod | undefined) ?? "CASH_ON_PICKUP");
+    const next = selectCheckoutPaymentMethod(fulfillmentMethod, paymentMethods, paymentMethod);
+    if (next !== paymentMethod) setPaymentMethod(next as PaymentMethod);
   }, [fulfillmentMethod, paymentMethods, paymentMethod]);
   const createOrder = useCreateOrder();
   const previewOrder = usePreviewOrder();
@@ -324,13 +327,22 @@ export default function CheckoutPage() {
       return;
     }
 
+    const selectedPayment = selectCheckoutPaymentMethod(fulfillmentMethod, paymentMethods, paymentMethod) as PaymentMethod;
+    if (
+      fulfillmentMethod === "delivery" &&
+      (!assertDeliveryPaymentAllowed(fulfillmentMethod, selectedPayment) ||
+        !paymentMethods.some((method) => method.code === selectedPayment))
+    ) {
+      toast({
+        title: "Elige un pago en línea",
+        description: "El envío a domicilio no admite efectivo contra entrega. Activa PayPal o Mercado Pago.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (isSubmitting || createOrder.isPending) return;
     setIsSubmitting(true);
-    const selectedPayment = paymentMethods.some((method) => method.code === paymentMethod)
-      ? paymentMethod
-      : fulfillmentMethod === "pickup"
-        ? "CASH_ON_PICKUP"
-        : "PENDING";
     try {
       const order = await createOrder.mutateAsync({
         data: {
@@ -362,8 +374,7 @@ export default function CheckoutPage() {
         sessionStorage.removeItem("mallorca_checkout_draft");
       } catch { /* Receipt remains accessible when browser storage is unavailable. */ }
       try { clearCartSession(); } catch { /* Converted carts cannot be reused; retry payment from the receipt. */ }
-      const isOnline =
-        selectedPayment === "MERCADO_PAGO" || selectedPayment === "PAYPAL" || selectedPayment === "ONLINE";
+      const isOnline = isOnlineCheckoutPayment(selectedPayment);
       if (isOnline) {
         try {
           const session = await startOrderPayment(order.id, { guestAccessToken: order.guestAccessToken });
@@ -483,8 +494,9 @@ export default function CheckoutPage() {
     return null;
   }
 
-  const payCopy = fulfillmentMethod === "delivery" ? "Pagas al recibirlo" : "Efectivo al recoger";
-  const ctaLabel = fulfillmentMethod === "delivery" ? "Confirmar pedido · Pagas al recibirlo" : "Confirmar pedido";
+  const payCopy = checkoutPayCopy(fulfillmentMethod, paymentMethod, paymentMethods.length);
+  const ctaLabel = checkoutCtaLabel(fulfillmentMethod, paymentMethod, paymentMethods.length);
+  const deliveryNeedsOnlinePay = fulfillmentMethod === "delivery" && paymentMethods.length === 0;
 
   return (
     <StoreLayout>
@@ -565,7 +577,7 @@ export default function CheckoutPage() {
                   <RadioGroupItem value="delivery" id="delivery" className="sr-only" disabled={!cart.branch.deliveryAvailable} />
                   <Label htmlFor="delivery" className="font-semibold cursor-pointer">Envío a domicilio</Label>
                   {cart.branch.deliveryAvailable ? (
-                    <p className="text-sm text-muted-foreground mt-1">Pagas al recibirlo. Cobertura por GPS.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Pagas en línea. Cobertura por GPS.</p>
                   ) : (
                     <p className="text-sm text-destructive mt-1">Esta sucursal no ofrece domicilio.</p>
                   )}
@@ -614,7 +626,14 @@ export default function CheckoutPage() {
               )}
             </section>
 
-            {paymentMethods.length > 0 ? (
+            {deliveryNeedsOnlinePay ? (
+              <section>
+                <h2 className="font-serif text-xl mb-4">3. Forma de pago</h2>
+                <div className="border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                  El envío a domicilio se paga en línea. No hay PayPal ni Mercado Pago activos para esta sucursal.
+                </div>
+              </section>
+            ) : paymentMethods.length > 0 ? (
               <section>
                 <h2 className="font-serif text-xl mb-4">3. Forma de pago</h2>
                 <RadioGroup
@@ -649,7 +668,7 @@ export default function CheckoutPage() {
             <section>
               <h2 className="font-serif text-xl mb-4 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-primary" />
-                {paymentMethods.length > 0 ? "4. Fecha y horario" : "3. Fecha y horario"}
+                {paymentMethods.length > 0 || deliveryNeedsOnlinePay ? "4. Fecha y horario" : "3. Fecha y horario"}
               </h2>
               <div className="flex min-w-0 gap-2 overflow-x-auto pb-2">
                 {upcomingDays.map((day) => {
@@ -781,7 +800,8 @@ export default function CheckoutPage() {
                   isLoadingSlots ||
                   !selectedSlotAvailable ||
                   availabilityChanges.length > 0 ||
-                  (fulfillmentMethod === "delivery" && !deliveryInfo?.eligible)
+                  (fulfillmentMethod === "delivery" && !deliveryInfo?.eligible) ||
+                  deliveryNeedsOnlinePay
                 }
                 className="w-full h-12 rounded-none bg-primary text-primary-foreground hover:bg-primary/90"
               >
@@ -821,7 +841,8 @@ export default function CheckoutPage() {
             isLoadingSlots ||
             !selectedSlotAvailable ||
             availabilityChanges.length > 0 ||
-            (fulfillmentMethod === "delivery" && !deliveryInfo?.eligible)
+            (fulfillmentMethod === "delivery" && !deliveryInfo?.eligible) ||
+            deliveryNeedsOnlinePay
           }
         >
           {isSubmitting || createOrder.isPending ? "Confirmando…" : ctaLabel}

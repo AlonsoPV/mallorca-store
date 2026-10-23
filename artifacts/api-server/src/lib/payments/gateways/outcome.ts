@@ -1,6 +1,13 @@
 import { amountsMatch } from "./http.ts";
 import type { GatewayPayment } from "./types.ts";
 
+export function shouldReuseCheckoutSession(payment: GatewayPayment): boolean {
+  return (
+    payment.status === "pending" &&
+    ["CREATED", "SAVED", "PAYER_ACTION_REQUIRED"].includes(payment.rawStatus)
+  );
+}
+
 export type GatewayOutcome =
   | { action: "ignore"; reason: string }
   | { action: "mark_paid"; amount: number }
@@ -16,12 +23,14 @@ export function decideGatewayOutcome(input: {
   const { payment } = input;
   if (payment.status === "approved") {
     if (input.paymentStatus === "paid") return { action: "ignore", reason: "already_paid" };
-    const currency = payment.currency?.toUpperCase() ?? "";
+    const currency = (payment.currency ?? "MXN").toUpperCase();
     if (currency !== "MXN") return { action: "ignore", reason: "currency" };
-    if (payment.amount == null || !amountsMatch(input.orderTotal, payment.amount)) {
+    const expected = Number(input.orderTotal);
+    const captured = payment.amount == null ? expected : Number(payment.amount);
+    if (!Number.isFinite(expected) || !Number.isFinite(captured) || !amountsMatch(expected, captured)) {
       return { action: "ignore", reason: "amount" };
     }
-    return { action: "mark_paid", amount: input.orderTotal };
+    return { action: "mark_paid", amount: expected };
   }
   if (payment.status === "refunded") {
     if (input.paymentStatus !== "paid" && input.paymentStatus !== "refunded") {

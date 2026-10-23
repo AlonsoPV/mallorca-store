@@ -127,12 +127,41 @@ export function resolveAvailableMethods(input: ResolveMethodsInput): CheckoutPay
 }
 
 export function assertCashDeliveryBlocked(method: string | null | undefined, fulfillment: string): void {
-  if (method === "CASH_ON_PICKUP" && fulfillment !== "pickup") {
+  if ((method === "CASH_ON_PICKUP" || method === "CASH") && fulfillment !== "pickup") {
     throw Object.assign(new Error("CASH_ON_PICKUP is only available for pickup"), {
       status: 400,
       code: "PAYMENT_METHOD_NOT_ALLOWED",
     });
   }
+}
+
+export function assertStorefrontPaymentAllowed(input: {
+  fulfillmentMethod: "pickup" | "delivery";
+  requested: string | null | undefined;
+  available: Array<{ code: string }>;
+}): string {
+  const requested =
+    input.requested ??
+    (input.fulfillmentMethod === "pickup" ? "CASH_ON_PICKUP" : null);
+
+  if (
+    input.fulfillmentMethod === "delivery" &&
+    (!requested || requested === "PENDING" || requested === "CASH_ON_PICKUP" || requested === "CASH")
+  ) {
+    throw Object.assign(new Error("Delivery requires an online payment method"), {
+      status: 400,
+      code: "PAYMENT_METHOD_NOT_ALLOWED",
+    });
+  }
+
+  if (!requested || !input.available.some((method) => method.code === requested)) {
+    throw Object.assign(new Error("Payment method not available"), {
+      status: 400,
+      code: "PAYMENT_METHOD_NOT_ALLOWED",
+    });
+  }
+
+  return requested;
 }
 
 export function providerAvailabilityMap(

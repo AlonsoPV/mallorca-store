@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { describe, it } from "node:test";
 import { amountsMatch, providerErrorSummary } from "./http.ts";
 import { createMercadoPagoGateway, verifyMercadoPagoSignature } from "./mercado-pago.ts";
-import { decideGatewayOutcome } from "./outcome.ts";
+import { decideGatewayOutcome, shouldReuseCheckoutSession } from "./outcome.ts";
 import { clearPayPalTokenCache, createPayPalGateway } from "./paypal.ts";
 import type { GatewayCredentials, GatewayHttp } from "./types.ts";
 import { PaymentGatewayError } from "./types.ts";
@@ -63,6 +63,48 @@ describe("gateway money and outcome", () => {
     });
     assert.equal(short.action, "ignore");
     if (short.action === "ignore") assert.equal(short.reason, "amount");
+  });
+
+  it("reuses a PayPal checkout only while the payer still has to approve", () => {
+    const base = {
+      provider: "PAYPAL" as const,
+      checkoutId: "ORDER9",
+      providerPaymentId: "ORDER9",
+      amount: 10,
+      currency: "MXN",
+      externalReference: "order-9",
+    };
+    assert.equal(
+      shouldReuseCheckoutSession({ ...base, status: "pending", rawStatus: "CREATED" }),
+      true,
+    );
+    assert.equal(
+      shouldReuseCheckoutSession({ ...base, status: "pending", rawStatus: "APPROVED" }),
+      false,
+    );
+    assert.equal(
+      shouldReuseCheckoutSession({ ...base, status: "approved", rawStatus: "COMPLETED" }),
+      false,
+    );
+  });
+
+  it("marks an approved PayPal capture paid even without currency or amount on the payload", () => {
+    const paid = decideGatewayOutcome({
+      orderTotal: "250" as unknown as number,
+      paymentStatus: "processing",
+      payment: {
+        provider: "PAYPAL",
+        checkoutId: "ORDER9",
+        providerPaymentId: "CAP9",
+        status: "approved",
+        amount: null,
+        currency: null,
+        externalReference: "order-9",
+        rawStatus: "COMPLETED",
+      },
+    });
+    assert.equal(paid.action, "mark_paid");
+    if (paid.action === "mark_paid") assert.equal(paid.amount, 250);
   });
 
   it("maps rejected, cancelled, pending and refunded outcomes", () => {

@@ -50,6 +50,7 @@ import {
 } from "./order-pricing";
 import { getActivePromotion, resolveCatalogPrice } from "./catalog";
 import {
+  assertStorefrontPaymentAllowed,
   providerCodeForMethod,
   resolveAvailableMethods,
   resolveCreateOrderPaymentState,
@@ -378,15 +379,19 @@ export async function createOrder(
       fulfillmentMethod: input.fulfillmentMethod,
       audience: "storefront",
     });
-    const requested =
-      input.paymentMethod ??
-      (input.fulfillmentMethod === "pickup" ? "CASH_ON_PICKUP" : "PENDING");
-    if (available.length === 0) {
-      if (requested !== "PENDING") {
-        throw new OrderCreateError("Payment method not available", 400, "PAYMENT_METHOD_NOT_ALLOWED");
-      }
-    } else if (!available.some((method) => method.code === requested)) {
-      throw new OrderCreateError("Payment method not available", 400, "PAYMENT_METHOD_NOT_ALLOWED");
+    try {
+      assertStorefrontPaymentAllowed({
+        fulfillmentMethod: input.fulfillmentMethod,
+        requested: input.paymentMethod,
+        available,
+      });
+    } catch (error) {
+      const coded = error as Error & { status?: number; code?: string };
+      throw new OrderCreateError(
+        coded.message || "Payment method not available",
+        coded.status ?? 400,
+        coded.code ?? "PAYMENT_METHOD_NOT_ALLOWED",
+      );
     }
   }
 

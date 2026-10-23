@@ -4,7 +4,7 @@ import { db, orderPaymentsTable, ordersTable, paymentEventsTable } from "@worksp
 import { commitOrderReservations, releaseOrderReservations } from "../../inventory-hold.ts";
 import { logger } from "../../logger.ts";
 import { writeOrderAudit } from "../../order-audit.ts";
-import { decideGatewayOutcome } from "./outcome.ts";
+import { decideGatewayOutcome, shouldReuseCheckoutSession } from "./outcome.ts";
 import { createMercadoPagoGateway } from "./mercado-pago.ts";
 import { createPayPalGateway } from "./paypal.ts";
 import { enforceSandboxCredentials } from "../sandbox-lock.ts";
@@ -131,17 +131,45 @@ export async function startGatewayCheckout(input: {
   const credentials = enforceSandboxCredentials(input.credentials);
   const provider = credentials.provider;
   const locked = await loadCheckoutLock(input.orderId, provider);
-  if (locked.session) {
-    logger.info(
-      {
-        orderId: locked.order.id,
+  const existingCheckoutId = locked.payment?.providerCheckoutId?.trim();
+  if (existingCheckoutId) {
+    const settled = await reconcileGatewayPayment({ orderId: locked.order.id, credentials });
+    if (settled.paymentStatus === "paid") {
+      throw new PaymentGatewayError("PAYMENT_ALREADY_RECORDED", "Payment already recorded", 409);
+    }
+    const current = await getPaymentGateway(provider).fetchPayment(credentials, existingCheckoutId);
+    if (current.status === "approved") {
+      const captured = await settleFetchedPayment({
         provider,
-        paypalOrderId: locked.session.providerReference,
-        stage: "checkout_reuse",
-      },
-      "payment checkout reused",
-    );
-    return locked.session;
+        payment: current,
+        orderId: locked.order.id,
+        eventKey: `return:${locked.order.id}:${existingCheckoutId}`,
+        lookupId: existingCheckoutId,
+        source: "return",
+      });
+      if (captured.paymentStatus === "paid") {
+        throw new PaymentGatewayError("PAYMENT_ALREADY_RECORDED", "Payment already recorded", 409);
+      }
+    }
+    if (shouldReuseCheckoutSession(current) && locked.session) {
+      logger.info(
+        {
+          orderId: locked.order.id,
+          provider,
+          paypalOrderId: locked.session.providerReference,
+          stage: "checkout_reuse",
+        },
+        "payment checkout reused",
+      );
+      return locked.session;
+    }
+    if (current.status !== "cancelled" && current.status !== "rejected") {
+      throw new PaymentGatewayError(
+        "PAYMENT_CAPTURE_PENDING",
+        "Payment is still being confirmed",
+        409,
+      );
+    }
   }
   const urls = storefrontReturnUrls(input.storefrontBase, locked.order.id, locked.order.guestAccessToken);
   logger.info(
@@ -273,23 +301,20 @@ async function settleFetchedPayment(input: {
 }): Promise<{ applied: boolean; reason: string; paymentStatus?: string }> {
   return db.transaction(async (tx) => {
     if (input.eventKey) {
-      const remembered = await rememberPaymentEvent(tx, {
+      await rememberPaymentEvent(tx, {
         provider: input.provider,
         eventKey: input.eventKey,
         orderId: input.orderId,
         lookupId: input.lookupId,
         rawStatus: input.payment.rawStatus,
       });
-      if (remembered === "duplicate_event") {
-        return { applied: false, reason: "duplicate_event" };
-      }
     }
     const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, input.orderId)).for("update");
     if (!order) return { applied: false, reason: "order_not_found" };
     const methodProvider = gatewayCodeForMethod(order.paymentMethod);
     if (methodProvider !== input.provider) return { applied: false, reason: "provider_mismatch" };
     const outcome = decideGatewayOutcome({
-      orderTotal: order.total,
+      orderTotal: Number(order.total),
       paymentStatus: order.paymentStatus,
       payment: input.payment,
     });
@@ -497,8 +522,8 @@ export async function reconcileGatewayPayment(input: {
     "payment return reconciling",
   );
   const payment = await getPaymentGateway(provider).fetchPayment(credentials, lookupId);
-  const orderId = payment.externalReference || order.id;
-  if (orderId !== order.id) {
+  const referenced = payment.externalReference?.trim();
+  if (referenced && referenced !== order.id && payment.checkoutId !== lookupId) {
     logger.warn(
       { orderId: order.id, externalReference: payment.externalReference, stage: "return_reconcile" },
       "payment return reference mismatch",

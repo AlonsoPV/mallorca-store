@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { StoreLayout } from "@/components/layout/store-layout";
 import { useCart } from "@/lib/cart-context";
@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAppAuth } from "@/lib/app-auth";
 import { useToast } from "@/hooks/use-toast";
+import { isSettledPaymentError } from "@/lib/checkout-payment";
 import {
   money,
   purchaseResult,
@@ -69,7 +70,6 @@ export default function OrderDetailsPage() {
   const [downloading, setDownloading] = useState(false);
   const [startingPayment, setStartingPayment] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const syncedRef = useRef(false);
   const paymentReturn = new URLSearchParams(useSearch()).get("pago") ?? "";
   const refetchInterval = paymentReturn === "ok" || paymentReturn === "pendiente" ? 2500 : 30000;
   // A valid guest link remains usable even when the customer has signed in meanwhile.
@@ -98,22 +98,36 @@ export default function OrderDetailsPage() {
   }, [order?.paymentStatus, clearCartSession]);
 
   useEffect(() => {
-    if (!order || !id || syncedRef.current) return;
+    if (!id) return;
     if (paymentReturn !== "ok" && paymentReturn !== "pendiente") return;
-    if (order.paymentStatus === "paid" || order.paymentStatus === "failed") return;
-    syncedRef.current = true;
+    let cancelled = false;
     setSyncing(true);
-    void customFetch<{ paymentStatus?: string }>(`/api/orders/${encodeURIComponent(id)}/payment/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guestAccessToken: isGuest ? token : undefined }),
-    })
-      .then(() => query.refetch())
-      .catch(() => {
-        syncedRef.current = false;
-      })
-      .finally(() => setSyncing(false));
-  }, [id, isGuest, order, paymentReturn, query, token]);
+    void (async () => {
+      for (let attempt = 0; attempt < 8 && !cancelled; attempt++) {
+        try {
+          const result = await customFetch<{ paymentStatus?: string }>(
+            `/api/orders/${encodeURIComponent(id)}/payment/sync`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ guestAccessToken: isGuest ? token : undefined }),
+            },
+          );
+          if (cancelled) return;
+          await query.refetch();
+          if (result.paymentStatus === "paid" || result.paymentStatus === "failed") break;
+        } catch {
+          /* Keep polling the gateway; a single 404/500 must not send the buyer back to PayPal. */
+        }
+        if (attempt < 7) await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
+    })().finally(() => {
+      if (!cancelled) setSyncing(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isGuest, paymentReturn, query, token]);
   const base = isGuest
     ? `/api/guest/orders/${encodeURIComponent(id || "")}/${encodeURIComponent(token || "")}`
     : `/api/orders/${encodeURIComponent(id || "")}`;
@@ -157,21 +171,38 @@ export default function OrderDetailsPage() {
     }
   }
   async function payOnline() {
-    if (!order || startingPayment) return;
+    if (!order || startingPayment || syncing) return;
     setStartingPayment(true);
     try {
+      const synced = await customFetch<{ paymentStatus?: string }>(
+        `/api/orders/${encodeURIComponent(order.id)}/payment/sync`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guestAccessToken: isGuest ? token : undefined }),
+        },
+      );
+      if (synced.paymentStatus === "paid") {
+        await query.refetch();
+        return;
+      }
       const session = await startOrderPayment(order.id, {
         guestAccessToken: isGuest ? token : undefined,
       });
       if (!session.redirectUrl) throw new Error("missing redirect");
       window.location.assign(session.redirectUrl);
-    } catch {
-      setStartingPayment(false);
+    } catch (error) {
+      if (isSettledPaymentError(error)) {
+        await query.refetch();
+        return;
+      }
       toast({
         title: "No se pudo abrir el pago",
         description: "Intenta de nuevo en unos minutos. Tu pedido sigue guardado.",
         variant: "destructive",
       });
+    } finally {
+      setStartingPayment(false);
     }
   }
   if (!isGuest && isLoaded && !isSignedIn)
@@ -280,9 +311,9 @@ export default function OrderDetailsPage() {
                 <CreditCard className="mr-2 h-4 w-4" />
               )}
               {startingPayment
-                ? "Abriendo el pago…"
-                : order.paymentStatus === "processing"
-                  ? `Continuar pago con ${payLabel}`
+                ? "Confirmando el pago…"
+                : paymentReturn === "ok" || order.paymentStatus === "processing"
+                  ? `Confirmar pago con ${payLabel}`
                   : `Pagar con ${payLabel}`}
             </Button>
           ) : null}
