@@ -39,6 +39,6 @@ test('inactive image access is path-scoped and staff-gated', () => {
   assert.match(storageRoute, /'private, no-store'/);
 });
 
-test('public images are revalidated on each browser request', () => {
-  assert.match(storageRoute, /public, max-age=0, must-revalidate/);
+test('public catalog images use a long browser cache with immutable UUID paths', () => {
+  assert.match(storageRoute, /public, max-age=604800, immutable/);
 });

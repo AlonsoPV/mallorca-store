@@ -339,7 +339,7 @@ router.get('/storage/objects/*path', async (req: Request, res: Response) => {
     res.setHeader(
       'Cache-Control',
       isPublicImage
-        ? 'public, max-age=0, must-revalidate'
+        ? 'public, max-age=604800, immutable'
         : 'private, no-store',
     );
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -374,7 +374,7 @@ router.get('/storage/objects/*path', async (req: Request, res: Response) => {
     res.setHeader(
       'Cache-Control',
       isPublicImage
-        ? 'public, max-age=0, must-revalidate'
+        ? 'public, max-age=604800, immutable'
         : 'private, no-store',
     );
     res.setHeader('X-Content-Type-Options', 'nosniff');

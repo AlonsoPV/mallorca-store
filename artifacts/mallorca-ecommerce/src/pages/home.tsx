@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { StoreLayout } from "@/components/layout/store-layout";
@@ -113,6 +113,9 @@ export default function Home() {
   });
   const [heroShift, setHeroShift] = useState({ x: 0, y: 0 });
   const [heroIndex, setHeroIndex] = useState(0);
+  const heroSectionRef = useRef<HTMLElement | null>(null);
+  const heroRafRef = useRef<number | null>(null);
+  const heroPointerRef = useRef({ x: 0, y: 0 });
   const [seasonalIndex, setSeasonalIndex] = useState(0);
   const [seasonalPaused, setSeasonalPaused] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -170,6 +173,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const next = HERO_SLIDES[(heroIndex + 1) % HERO_SLIDES.length];
+    if (!next?.src) return;
+    const preload = new Image();
+    preload.src = next.src;
+  }, [heroIndex]);
+
+  useEffect(() => {
     if (
       seasonalList.length < 2 ||
       seasonalPaused ||
@@ -185,35 +195,54 @@ export default function Home() {
   }, [seasonalList.length, seasonalPaused]);
 
   const handleHeroMove = (event: React.MouseEvent<HTMLElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    setHeroShift({
-      x: ((event.clientX - bounds.left) / bounds.width - 0.5) * 8,
-      y: ((event.clientY - bounds.top) / bounds.height - 0.5) * 6,
+    heroSectionRef.current = event.currentTarget;
+    heroPointerRef.current = { x: event.clientX, y: event.clientY };
+    if (heroRafRef.current != null) return;
+    heroRafRef.current = window.requestAnimationFrame(() => {
+      heroRafRef.current = null;
+      const section = heroSectionRef.current;
+      if (!section) return;
+      const bounds = section.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return;
+      const { x, y } = heroPointerRef.current;
+      setHeroShift({
+        x: ((x - bounds.left) / bounds.width - 0.5) * 8,
+        y: ((y - bounds.top) / bounds.height - 0.5) * 6,
+      });
     });
   };
+
+  const handleHeroLeave = () => {
+    if (heroRafRef.current != null) {
+      window.cancelAnimationFrame(heroRafRef.current);
+      heroRafRef.current = null;
+    }
+    setHeroShift({ x: 0, y: 0 });
+  };
+
+  const activeHero = HERO_SLIDES[heroIndex] ?? HERO_SLIDES[0];
 
   return (
     <StoreLayout>
       <section
         className="relative isolate flex h-[100dvh] max-h-[100dvh] min-h-[100dvh] flex-col overflow-hidden bg-[var(--mallorca-cacao)] text-white"
         onMouseMove={handleHeroMove}
-        onMouseLeave={() => setHeroShift({ x: 0, y: 0 })}
+        onMouseLeave={handleHeroLeave}
       >
         <div
           className="absolute inset-0 transition-transform duration-700"
           style={{ transform: `scale(1.04) translate(${heroShift.x}px, ${heroShift.y}px)` }}
         >
-          {HERO_SLIDES.map((slide, index) => (
+          {activeHero ? (
             <img
-              key={slide.src}
-              src={slide.src}
-              alt={slide.alt}
-              className={cn(
-                "mallorca-image absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-1000",
-                index === heroIndex ? "opacity-100" : "opacity-0",
-              )}
+              key={activeHero.src}
+              src={activeHero.src}
+              alt={activeHero.alt}
+              fetchPriority={heroIndex === 0 ? "high" : "auto"}
+              decoding="async"
+              className="mallorca-image absolute inset-0 h-full w-full object-cover object-center"
             />
-          ))}
+          ) : null}
         </div>
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(37,33,30,.14)_0%,rgba(37,33,30,.06)_36%,rgba(37,33,30,.74)_100%)]" />
         <div className="absolute inset-0 bg-[var(--mallorca-red)]/10 mix-blend-multiply" />
@@ -811,6 +840,8 @@ export default function Home() {
                   <img
                     src={image.src}
                     alt={image.alt}
+                    loading="lazy"
+                    decoding="async"
                     className="mallorca-image aspect-[3/4] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04] sm:aspect-[4/5]"
                   />
                 </figure>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { ClerkProvider } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { esES } from '@clerk/localizations';
@@ -30,25 +30,41 @@ import Checkout from '@/pages/checkout';
 import OrderDetails from '@/pages/order-details';
 import Account from '@/pages/account';
 import { PrivacyPage, TermsPage } from '@/pages/legal';
-
-import AdminDashboard from '@/pages/admin/dashboard';
-import AdminProductsList from '@/pages/admin/products-list';
-import AdminProductForm from '@/pages/admin/product-form';
-import AdminOrdersList from '@/pages/admin/orders-list';
-import AdminOrderDetail from '@/pages/admin/order-detail';
-import AdminOrderNew from '@/pages/admin/order-new';
-import AdminAgenda from '@/pages/admin/agenda';
-import AdminImport from '@/pages/admin/import';
-import AdminBranches from '@/pages/admin/branches';
-import AdminBranchForm from '@/pages/admin/branch-form';
-import AdminAlerts from '@/pages/admin/alerts';
-import AdminBranchDetail from '@/pages/admin/branch-detail';
-import AdminReports from '@/pages/admin/reports';
-import AdminUsers from '@/pages/admin/users';
-import AdminPaymentMethods from '@/pages/admin/payment-methods';
-import AdminMailboxes from '@/pages/admin/mailboxes';
-import AdminMenus from '@/pages/admin/menus';
 import { AdminGuard } from '@/components/layout/admin-guard';
+
+const AdminDashboard = lazy(() => import('@/pages/admin/dashboard'));
+const AdminProductsList = lazy(() => import('@/pages/admin/products-list'));
+const AdminProductForm = lazy(() => import('@/pages/admin/product-form'));
+const AdminOrdersList = lazy(() => import('@/pages/admin/orders-list'));
+const AdminOrderDetail = lazy(() => import('@/pages/admin/order-detail'));
+const AdminOrderNew = lazy(() => import('@/pages/admin/order-new'));
+const AdminAgenda = lazy(() => import('@/pages/admin/agenda'));
+const AdminImport = lazy(() => import('@/pages/admin/import'));
+const AdminBranches = lazy(() => import('@/pages/admin/branches'));
+const AdminBranchForm = lazy(() => import('@/pages/admin/branch-form'));
+const AdminAlerts = lazy(() => import('@/pages/admin/alerts'));
+const AdminBranchDetail = lazy(() => import('@/pages/admin/branch-detail'));
+const AdminReports = lazy(() => import('@/pages/admin/reports'));
+const AdminUsers = lazy(() => import('@/pages/admin/users'));
+const AdminPaymentMethods = lazy(() => import('@/pages/admin/payment-methods'));
+const AdminMailboxes = lazy(() => import('@/pages/admin/mailboxes'));
+const AdminMenus = lazy(() => import('@/pages/admin/menus'));
+
+function AdminRoute({ children }: { children: ReactNode }) {
+  return (
+    <AdminGuard>
+      <Suspense
+        fallback={
+          <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+            Cargando panel…
+          </div>
+        }
+      >
+        {children}
+      </Suspense>
+    </AdminGuard>
+  );
+}
 
 import { CartProvider } from '@/lib/cart-context';
 import {
@@ -232,72 +248,72 @@ function AppRoutes() {
       <Route path="/recuperar-contrasena/:token" component={ResetPasswordPage} />
 
       <Route path="/admin">
-        <AdminGuard><AdminDashboard /></AdminGuard>
+        <AdminRoute><AdminDashboard /></AdminRoute>
       </Route>
       <Route path="/admin/productos">
-        <AdminGuard><AdminProductWorkspace /></AdminGuard>
+        <AdminRoute><AdminProductWorkspace /></AdminRoute>
       </Route>
       <Route path="/admin/productos/nuevo">
-        <AdminGuard><AdminProductForm /></AdminGuard>
+        <AdminRoute><AdminProductForm /></AdminRoute>
       </Route>
       <Route path="/admin/productos/:id">
-        <AdminGuard><AdminProductForm /></AdminGuard>
+        <AdminRoute><AdminProductForm /></AdminRoute>
       </Route>
       <Route path="/admin/pedidos/nuevo">
-        <AdminGuard><AdminOrderNew /></AdminGuard>
+        <AdminRoute><AdminOrderNew /></AdminRoute>
       </Route>
       <Route path="/admin/pedidos/:id">
-        <AdminGuard><AdminOrderDetail /></AdminGuard>
+        <AdminRoute><AdminOrderDetail /></AdminRoute>
       </Route>
       <Route path="/admin/pedidos">
-        <AdminGuard><AdminOrdersList /></AdminGuard>
+        <AdminRoute><AdminOrdersList /></AdminRoute>
       </Route>
       <Route path="/admin/agenda">
-        <AdminGuard><AdminAgenda /></AdminGuard>
+        <AdminRoute><AdminAgenda /></AdminRoute>
       </Route>
       <Route path="/admin/inventario">
-        <AdminGuard><LegacyInventoryRedirect /></AdminGuard>
+        <AdminRoute><LegacyInventoryRedirect /></AdminRoute>
       </Route>
       <Route path="/admin/importar">
-        <AdminGuard><AdminImport /></AdminGuard>
+        <AdminRoute><AdminImport /></AdminRoute>
       </Route>
       <Route path="/admin/sucursales">
-        <AdminGuard><AdminBranches /></AdminGuard>
+        <AdminRoute><AdminBranches /></AdminRoute>
       </Route>
       <Route path="/admin/sucursales/nueva">
-        <AdminGuard><AdminBranchForm /></AdminGuard>
+        <AdminRoute><AdminBranchForm /></AdminRoute>
       </Route>
       <Route path="/admin/sucursales/:id/editar">
-        <AdminGuard><AdminBranchForm /></AdminGuard>
+        <AdminRoute><AdminBranchForm /></AdminRoute>
       </Route>
       <Route path="/admin/sucursales/:id">
-        <AdminGuard><AdminBranchDetail /></AdminGuard>
+        <AdminRoute><AdminBranchDetail /></AdminRoute>
       </Route>
       <Route path="/admin/reportes">
-        <AdminGuard><AdminReports /></AdminGuard>
+        <AdminRoute><AdminReports /></AdminRoute>
       </Route>
       <Route path="/admin/roles">
         <Redirect to="/admin/usuarios?tab=roles" />
       </Route>
       <Route path="/admin/usuarios">
-        <AdminGuard><AdminUsers /></AdminGuard>
+        <AdminRoute><AdminUsers /></AdminRoute>
       </Route>
       <Route path="/admin/responsables">
-        <AdminGuard>
+        <AdminRoute>
           <Redirect to="/admin/usuarios?tab=asignaciones" />
-        </AdminGuard>
+        </AdminRoute>
       </Route>
       <Route path="/admin/formas-de-pago">
-        <AdminGuard><AdminPaymentMethods /></AdminGuard>
+        <AdminRoute><AdminPaymentMethods /></AdminRoute>
       </Route>
       <Route path="/admin/correos">
-        <AdminGuard><AdminMailboxes /></AdminGuard>
+        <AdminRoute><AdminMailboxes /></AdminRoute>
       </Route>
       <Route path="/admin/menus">
-        <AdminGuard><AdminMenus /></AdminGuard>
+        <AdminRoute><AdminMenus /></AdminRoute>
       </Route>
       <Route path="/admin/alertas">
-        <AdminGuard><AdminAlerts /></AdminGuard>
+        <AdminRoute><AdminAlerts /></AdminRoute>
       </Route>
 
       <Route component={NotFound} />
