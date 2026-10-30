@@ -44,6 +44,7 @@ import {
   AlertTriangle,
   Archive,
   Copy,
+  FilePenLine,
   MapPin,
   MoreHorizontal,
   Phone,
@@ -438,10 +439,7 @@ export default function AdminBranches() {
 
                           <div className="flex flex-wrap items-center gap-2 bg-muted/20 px-3 py-3 @min-[40rem]:mt-auto">
                             <Button asChild className="h-9 min-w-[9rem] flex-1 rounded-none">
-                              <Link href={`/admin/sucursales/${branch.id}`}>Ver operación</Link>
-                            </Button>
-                            <Button asChild variant="outline" className="h-9 shrink-0 rounded-none bg-background">
-                              <Link href={`/admin/sucursales/${branch.id}/editar`}>Editar</Link>
+                              <Link href={`/admin/sucursales/${branch.id}`}>Abrir sucursal</Link>
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -456,6 +454,10 @@ export default function AdminBranches() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="rounded-none">
+                                <DropdownMenuItem onClick={() => setLocation(`/admin/sucursales/${branch.id}/editar`)}>
+                                  <FilePenLine className="mr-2 h-3.5 w-3.5" />
+                                  Editar ficha
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openDuplicate(branch)}>
                                   <Copy className="mr-2 h-3.5 w-3.5" />
                                   Duplicar configuración

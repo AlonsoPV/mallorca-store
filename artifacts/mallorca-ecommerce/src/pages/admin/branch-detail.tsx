@@ -1,20 +1,34 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "wouter";
+import { Link, useLocation, useParams, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetAdminBranch,
   useListBranchAssignments,
   useListAdminUsers,
+  useListAdminProducts,
+  useListAdminBranches,
+  useListCategories,
+  useUpdateAdminInventory,
   useCreateBranchAssignment,
   useUpdateBranchAssignment,
   useDeleteBranchAssignment,
   useUpdateAdminBranch,
   useListBranchAudit,
   getGetAdminBranchQueryKey,
+  getListAdminProductsQueryKey,
   getListBranchAssignmentsQueryKey,
   getListBranchAuditQueryKey,
+  type AdminProduct,
 } from "@workspace/api-client-react";
 import { AdminLayout } from "@/components/layout/admin-layout";
+import {
+  BranchWorkspaceNav,
+  branchPedidosVistaFromSearch,
+  branchTabFromSearch,
+  branchWorkspaceHref,
+} from "@/components/admin/branch-workspace-nav";
+import { ProductStockSheet } from "@/components/admin/product-stock-sheet";
+import { ProductQuickEdit } from "@/pages/admin/product-quick-edit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,42 +37,16 @@ import { useToast } from "@/hooks/use-toast";
 import { formatOrderTime, formatPriceMx, ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
 import { sanitizeErrorCopy } from "@/lib/cart-recovery";
-import {
-  ArrowLeft,
-  Bell,
-  Boxes,
-  CalendarDays,
-  ClipboardList,
-  Clock3,
-  LayoutDashboard,
-  Package,
-  Settings2,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, Minus, Plus } from "lucide-react";
 
-const BRANCH_TABS = [
-  { label: "Resumen", icon: LayoutDashboard, group: "ops" },
-  { label: "Pedidos", icon: ClipboardList, group: "ops" },
-  { label: "Agenda", icon: CalendarDays, group: "ops" },
-  { label: "Inventario", icon: Boxes, group: "ops" },
-  { label: "Alertas", icon: Bell, group: "ops" },
-  { label: "Productos", icon: Package, group: "catalog" },
-  { label: "Horarios", icon: Clock3, group: "admin" },
-  { label: "Equipo", icon: Users, group: "admin" },
-  { label: "Configuración", icon: Settings2, group: "admin" },
-] as const;
-
-/** Tab indices after operational reordering (Inventario/Alertas before Productos). */
 const TAB = {
-  resumen: 0,
-  pedidos: 1,
-  agenda: 2,
-  inventario: 3,
-  alertas: 4,
-  productos: 5,
-  horarios: 6,
-  equipo: 7,
-  configuracion: 8,
+  resumen: "resumen",
+  pedidos: "pedidos",
+  productos: "productos",
+  alertas: "alertas",
+  horarios: "horarios",
+  equipo: "equipo",
+  configuracion: "configuracion",
 } as const;
 
 const BRANCH_STATUS_LABEL: Record<string, string> = {
@@ -69,6 +57,79 @@ const BRANCH_STATUS_LABEL: Record<string, string> = {
 
 function branchStatus(branch: { status?: string | null; active?: boolean | null }) {
   return branch.status || (branch.active ? "active" : "inactive");
+}
+
+function productEditorHref(branchId: number, productId?: number) {
+  const from = encodeURIComponent(`/admin/sucursales/${branchId}?tab=productos`);
+  return productId
+    ? `/admin/productos/${productId}?from=${from}`
+    : `/admin/productos/nuevo?from=${from}`;
+}
+
+function stockStatusLabel(status?: string | null) {
+  if (status === "OUT_OF_STOCK") return "Agotado";
+  if (status === "CRITICAL_STOCK") return "Crítico";
+  if (status === "LOW_STOCK") return "Stock bajo";
+  return "Normal";
+}
+
+function stockStatusClass(status?: string | null) {
+  if (status === "OUT_OF_STOCK") return "text-destructive";
+  if (status === "CRITICAL_STOCK") return "text-orange-900";
+  if (status === "LOW_STOCK") return "text-amber-800";
+  return "text-emerald-800";
+}
+
+function mergeBranchCatalog(data: {
+  products?: Array<{ product?: { id?: number }; configuration?: Record<string, unknown> }>;
+  inventory?: Array<{ product?: { id?: number }; configuration?: Record<string, unknown> }>;
+}) {
+  const byId = new Map<number, any>();
+  for (const row of [...(data.products ?? []), ...(data.inventory ?? [])]) {
+    const id = row.product?.id ?? Number((row.configuration as { productId?: number } | undefined)?.productId);
+    if (!Number.isInteger(id) || id < 1) continue;
+    const previous = byId.get(id) ?? {};
+    byId.set(id, {
+      ...previous,
+      ...row,
+      product: row.product ?? previous.product,
+      configuration: { ...previous.configuration, ...row.configuration },
+    });
+  }
+  return [...byId.values()];
+}
+
+function ViewSwitch({
+  options,
+  value,
+  onSelect,
+  label,
+}: {
+  options: Array<{ id: string; label: string }>;
+  value: string;
+  onSelect: (id: string) => void;
+  label: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex overflow-hidden border border-border">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          aria-pressed={value === option.id}
+          onClick={() => onSelect(option.id)}
+          className={cn(
+            "h-9 px-3 text-sm transition-colors",
+            value === option.id
+              ? "bg-primary text-primary-foreground"
+              : "bg-background text-foreground hover:bg-muted",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function DataTable({
@@ -138,14 +199,43 @@ export default function AdminBranchDetail() {
   const updateBranch = useUpdateAdminBranch();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [tab, setTab] = useState(0);
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const tab = branchTabFromSearch(search);
+  const pedidosVista = branchPedidosVistaFromSearch(search);
   const [assignUserId, setAssignUserId] = useState("");
   const [assignRole, setAssignRole] = useState<"branch_manager" | "staff" | "operations">("staff");
+  const [quickEditId, setQuickEditId] = useState<number | null>(null);
+  const [stockTarget, setStockTarget] = useState<AdminProduct | null>(null);
+  const catalogQuery = useListAdminProducts(
+    {},
+    { query: { enabled: tab === TAB.productos && Number.isFinite(branchId) } },
+  );
+  const branchesQuery = useListAdminBranches({
+    query: { enabled: tab === TAB.productos && Number.isFinite(branchId) },
+  });
+  const categoriesQuery = useListCategories({
+    query: { enabled: tab === TAB.productos && Number.isFinite(branchId) },
+  });
+  const updateInventory = useUpdateAdminInventory();
 
   const data = query.data;
   const summary = (data as any)?.summary;
   const branch = data?.branch;
   const status = branch ? branchStatus(branch) : "inactive";
+
+  const catalogById = useMemo(() => {
+    const map = new Map<number, AdminProduct>();
+    for (const product of catalogQuery.data ?? []) map.set(product.id, product);
+    return map;
+  }, [catalogQuery.data]);
+
+  const branchCatalog = useMemo(
+    () => mergeBranchCatalog({ products: (data as any)?.products, inventory: (data as any)?.inventory }),
+    [data],
+  );
+
+  const quickProduct = quickEditId != null ? catalogById.get(quickEditId) ?? null : null;
 
   const agendaOrders = useMemo(() => {
     const orders = Array.isArray(data?.orders) ? [...data.orders] : [];
@@ -161,6 +251,26 @@ export default function AdminBranchDetail() {
   async function refresh() {
     await qc.invalidateQueries({ queryKey: getGetAdminBranchQueryKey(branchId) });
     await qc.invalidateQueries({ queryKey: getListBranchAssignmentsQueryKey(branchId) });
+    await qc.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
+  }
+
+  async function adjustStock(row: any, quantity: number) {
+    const productId = row.product?.id;
+    if (!Number.isInteger(productId) || quantity < 0 || updateInventory.isPending) return;
+    try {
+      await updateInventory.mutateAsync({
+        data: {
+          branchProductId: typeof row.configuration?.id === "number" ? row.configuration.id : undefined,
+          branchId,
+          productId,
+          quantity,
+          reason: "Ajuste desde sucursal",
+        },
+      });
+      await refresh();
+    } catch {
+      toast({ title: "No se pudo actualizar el stock", variant: "destructive" });
+    }
   }
 
   async function saveConfig(patch: Record<string, unknown>) {
@@ -213,15 +323,12 @@ export default function AdminBranchDetail() {
                     {branch.phone ? <span className="whitespace-nowrap"> · {branch.phone}</span> : null}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 @min-[24rem]:grid-cols-3 @min-[46rem]:flex @min-[46rem]:shrink-0">
-                  <Button variant="outline" className="h-9 rounded-none px-3" asChild>
-                    <Link href={`/admin/sucursales/${branchId}/editar`}>Editar</Link>
-                  </Button>
+                <div className="grid grid-cols-2 gap-2 @min-[46rem]:flex @min-[46rem]:shrink-0">
                   <Button variant="outline" className="h-9 rounded-none px-3" asChild>
                     <Link href={`/admin/pedidos/nuevo?branchId=${branchId}`}>Nuevo pedido</Link>
                   </Button>
-                  <Button className="col-span-2 h-9 rounded-none px-3 @min-[24rem]:col-span-1" asChild>
-                    <Link href={`/admin/pedidos?view=agenda&branchId=${branchId}`}>Abrir agenda</Link>
+                  <Button className="h-9 rounded-none px-3" asChild>
+                    <Link href={branchWorkspaceHref(branchId, "pedidos", { vista: "agenda" })}>Ver agenda</Link>
                   </Button>
                 </div>
               </div>
@@ -249,7 +356,7 @@ export default function AdminBranchDetail() {
                   {
                     label: "Agotados",
                     value: String(summary?.outOfStock ?? 0),
-                    goTo: TAB.inventario,
+                    goTo: TAB.productos,
                     emphasize: (summary?.outOfStock ?? 0) > 0,
                   },
                 ] as const
@@ -257,7 +364,7 @@ export default function AdminBranchDetail() {
                 <button
                   key={item.label}
                   type="button"
-                  onClick={() => setTab(item.goTo)}
+                  onClick={() => setLocation(branchWorkspaceHref(branchId, item.goTo))}
                   className={cn(
                     "min-w-0 border border-border bg-background px-3 py-3 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40",
                     tab === item.goTo && "border-foreground/40 bg-muted/30",
@@ -278,57 +385,12 @@ export default function AdminBranchDetail() {
               ))}
             </div>
 
-            <nav
-              role="tablist"
-              aria-label="Secciones de la sucursal"
-              className="sticky top-0 z-10 -mx-1 flex gap-1 overflow-x-auto bg-muted/30 px-1 py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {BRANCH_TABS.map((item, i) => {
-                const Icon = item.icon;
-                const selected = tab === i;
-                const showDivider = i > 0 && BRANCH_TABS[i - 1].group !== item.group;
-                const badge =
-                  item.label === "Alertas" && (summary?.alertsOpen ?? 0) > 0
-                    ? summary.alertsOpen
-                    : item.label === "Pedidos" && (summary?.ordersToday ?? 0) > 0
-                      ? summary.ordersToday
-                      : null;
-                return (
-                  <div key={item.label} className="flex shrink-0 items-center gap-1">
-                    {showDivider ? (
-                      <span className="mx-0.5 h-6 w-px shrink-0 bg-border" aria-hidden />
-                    ) : null}
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => setTab(i)}
-                      className={cn(
-                        "inline-flex h-10 items-center gap-2 px-3 text-sm font-medium whitespace-nowrap transition-colors",
-                        selected
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
-                      )}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                      <span>{item.label}</span>
-                      {badge != null ? (
-                        <span
-                          className={cn(
-                            "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums",
-                            selected
-                              ? "bg-primary-foreground/20 text-primary-foreground"
-                              : "bg-amber-100 text-amber-900",
-                          )}
-                        >
-                          {badge}
-                        </span>
-                      ) : null}
-                    </button>
-                  </div>
-                );
-              })}
-            </nav>
+            <BranchWorkspaceNav
+              branchId={branchId}
+              active={tab}
+              ordersToday={summary?.ordersToday ?? 0}
+              alertsOpen={summary?.alertsOpen ?? 0}
+            />
 
             {tab === TAB.resumen && (
               <div className="grid md:grid-cols-2 gap-6">
@@ -364,10 +426,10 @@ export default function AdminBranchDetail() {
                   )}
                   <div className="flex gap-2 pt-2">
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/admin/pedidos?branchId=${branchId}`}>Ver pedidos</Link>
+                      <Link href={branchWorkspaceHref(branchId, "pedidos")}>Ver pedidos</Link>
                     </Button>
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/admin/inventario?branchId=${branchId}`}>Ver inventario</Link>
+                      <Link href={branchWorkspaceHref(branchId, "productos")}>Ver productos</Link>
                     </Button>
                   </div>
                 </div>
@@ -375,63 +437,72 @@ export default function AdminBranchDetail() {
             )}
 
             {tab === TAB.pedidos && (
-              <DataTable
-                columns={["#", "Cliente", "Total", "Estado", ""]}
-                empty="No hay pedidos en esta sucursal."
-                emptyAction={
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/pedidos?branchId=${branchId}`}>Ir a pedidos</Link>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <ViewSwitch
+                    label="Vista de pedidos"
+                    value={pedidosVista}
+                    onSelect={(id) =>
+                      setLocation(
+                        branchWorkspaceHref(branchId, "pedidos", id === "agenda" ? { vista: "agenda" } : undefined),
+                      )
+                    }
+                    options={[
+                      { id: "lista", label: "Lista" },
+                      { id: "agenda", label: "Agenda" },
+                    ]}
+                  />
+                  <Button variant="outline" size="sm" className="rounded-none" asChild>
+                    <Link
+                      href={
+                        pedidosVista === "agenda"
+                          ? `/admin/pedidos?view=agenda&branchId=${branchId}`
+                          : `/admin/pedidos?branchId=${branchId}`
+                      }
+                    >
+                      Abrir módulo
+                    </Link>
                   </Button>
-                }
-                rows={(Array.isArray(data.orders) ? data.orders : []).slice(0, 30).map((o: any) => [
-                  `#${o.id}`,
-                  o.customerName || o.userId || "—",
-                  formatPriceMx(o.total),
-                  ORDER_STATUS_LABELS[o.status as keyof typeof ORDER_STATUS_LABELS] || o.status,
-                  <Link key="l" href={`/admin/pedidos/${o.id}`} className="text-primary text-xs">
-                    Ver
-                  </Link>,
-                ])}
-              />
-            )}
-
-            {tab === TAB.agenda && (
-              <DataTable
-                columns={["Hora", "Pedido", "Estado", ""]}
-                empty="No hay pedidos activos en agenda."
-                emptyAction={
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/pedidos?view=agenda&branchId=${branchId}`}>Abrir agenda completa</Link>
-                  </Button>
-                }
-                rows={agendaOrders.map((o: any) => [
-                  formatOrderTime(o.scheduledStart),
-                  `#${o.orderNumber ?? o.id}`,
-                  ORDER_STATUS_LABELS[o.status as keyof typeof ORDER_STATUS_LABELS] || o.status,
-                  <Link key="l" href={`/admin/pedidos/${o.id}`} className="text-primary text-xs">
-                    Ver
-                  </Link>,
-                ])}
-              />
-            )}
-
-            {tab === TAB.inventario && (
-              <DataTable
-                columns={["Producto", "SKU", "Stock", "Mínimo", "Estado"]}
-                empty="No hay inventario en esta sucursal."
-                emptyAction={
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/inventario?branchId=${branchId}`}>Abrir inventario</Link>
-                  </Button>
-                }
-                rows={(Array.isArray(data.inventory) ? data.inventory : []).map((row: any) => [
-                  row.product?.name || "—",
-                  row.product?.sku || "—",
-                  row.configuration?.inventory ?? 0,
-                  row.configuration?.minStock ?? 0,
-                  row.configuration?.alertState || "NORMAL",
-                ])}
-              />
+                </div>
+                {pedidosVista === "agenda" ? (
+                  <DataTable
+                    columns={["Hora", "Pedido", "Estado", ""]}
+                    empty="No hay pedidos activos en agenda."
+                    emptyAction={
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/admin/pedidos?view=agenda&branchId=${branchId}`}>Abrir agenda completa</Link>
+                      </Button>
+                    }
+                    rows={agendaOrders.map((o: any) => [
+                      formatOrderTime(o.scheduledStart),
+                      `#${o.orderNumber ?? o.id}`,
+                      ORDER_STATUS_LABELS[o.status as keyof typeof ORDER_STATUS_LABELS] || o.status,
+                      <Link key="l" href={`/admin/pedidos/${o.id}`} className="text-primary text-xs">
+                        Ver
+                      </Link>,
+                    ])}
+                  />
+                ) : (
+                  <DataTable
+                    columns={["#", "Cliente", "Total", "Estado", ""]}
+                    empty="No hay pedidos en esta sucursal."
+                    emptyAction={
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/admin/pedidos?branchId=${branchId}`}>Ir a pedidos</Link>
+                      </Button>
+                    }
+                    rows={(Array.isArray(data.orders) ? data.orders : []).slice(0, 30).map((o: any) => [
+                      `#${o.id}`,
+                      o.customerName || o.userId || "—",
+                      formatPriceMx(o.total),
+                      ORDER_STATUS_LABELS[o.status as keyof typeof ORDER_STATUS_LABELS] || o.status,
+                      <Link key="l" href={`/admin/pedidos/${o.id}`} className="text-primary text-xs">
+                        Ver
+                      </Link>,
+                    ])}
+                  />
+                )}
+              </div>
             )}
 
             {tab === TAB.alertas && (
@@ -453,32 +524,154 @@ export default function AdminBranchDetail() {
             )}
 
             {tab === TAB.productos && (
-              <DataTable
-                columns={["Producto", "Disponible", "Stock"]}
-                empty="No hay productos asignados."
-                emptyAction={
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/admin/productos">Asignar productos</Link>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Catálogo y existencias de esta sucursal. Edita el producto o ajusta el stock sin salir.
+                  </p>
+                  <Button size="sm" className="rounded-none" asChild>
+                    <Link href={productEditorHref(branchId)}>Nuevo producto</Link>
                   </Button>
-                }
-                rows={(Array.isArray(data.products) ? data.products : []).map((row: any) => [
-                  row.product?.name || "—",
-                  row.configuration?.available ? "Sí" : "No",
-                  row.configuration?.inventory ?? 0,
-                ])}
-              />
+                </div>
+                <DataTable
+                  columns={["Producto", "SKU", "Disponible", "Stock", "Mínimo", "Estado", ""]}
+                  empty="No hay productos asignados a esta sucursal."
+                  emptyAction={
+                    <Button size="sm" className="rounded-none" asChild>
+                      <Link href={productEditorHref(branchId)}>Añadir producto</Link>
+                    </Button>
+                  }
+                  rows={branchCatalog.map((row: any) => {
+                    const productId = row.product?.id as number | undefined;
+                    const listedProduct = productId ? catalogById.get(productId) : undefined;
+                    const stockProduct =
+                      listedProduct ??
+                      (productId
+                        ? ({
+                            id: productId,
+                            name: row.product?.name ?? "",
+                            sku: row.product?.sku ?? "",
+                          } as AdminProduct)
+                        : undefined);
+                    const stock = Number(row.configuration?.inventory ?? 0);
+                    const alertState = String(row.configuration?.alertState || "NORMAL");
+                    return [
+                      productId ? (
+                        <Link
+                          key="name"
+                          href={productEditorHref(branchId, productId)}
+                          className="font-medium hover:text-primary"
+                        >
+                          {row.product?.name || "—"}
+                        </Link>
+                      ) : (
+                        row.product?.name || "—"
+                      ),
+                      <span key="sku" className="font-mono text-xs">
+                        {row.product?.sku || "—"}
+                      </span>,
+                      row.configuration?.available ? "Sí" : "No",
+                      <div key="stock" className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 shrink-0 rounded-none"
+                          disabled={stock === 0 || updateInventory.isPending}
+                          aria-label={`Disminuir stock de ${row.product?.name || "producto"}`}
+                          onClick={() => void adjustStock(row, stock - 1)}
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </Button>
+                        <button
+                          type="button"
+                          className={cn(
+                            "min-w-10 px-1 text-center text-sm font-medium underline decoration-dotted underline-offset-4",
+                            stock === 0 && "text-destructive",
+                          )}
+                          disabled={!stockProduct}
+                          onClick={() => stockProduct && setStockTarget(stockProduct)}
+                          title="Ajustar existencias"
+                        >
+                          {stock}
+                        </button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 shrink-0 rounded-none"
+                          disabled={updateInventory.isPending}
+                          aria-label={`Aumentar stock de ${row.product?.name || "producto"}`}
+                          onClick={() => void adjustStock(row, stock + 1)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>,
+                      row.configuration?.minStock ?? 0,
+                      <span key="state" className={cn("text-xs font-medium", stockStatusClass(alertState))}>
+                        {stockStatusLabel(alertState)}
+                      </span>,
+                      productId ? (
+                        <div key="actions" className="flex justify-end gap-3 text-xs">
+                          <Link href={productEditorHref(branchId, productId)} className="text-primary">
+                            Editar
+                          </Link>
+                          {listedProduct ? (
+                            <button
+                              type="button"
+                              className="text-muted-foreground hover:text-foreground"
+                              onClick={() => setQuickEditId(productId)}
+                            >
+                              Rápida
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        "—"
+                      ),
+                    ];
+                  })}
+                />
+                {stockTarget ? (
+                  <ProductStockSheet
+                    product={stockTarget}
+                    branchId={branchId}
+                    onClose={() => {
+                      setStockTarget(null);
+                      void refresh();
+                    }}
+                  />
+                ) : null}
+                {quickProduct ? (
+                  <ProductQuickEdit
+                    product={quickProduct}
+                    branches={branchesQuery.data ?? []}
+                    categories={categoriesQuery.data ?? []}
+                    onClose={() => setQuickEditId(null)}
+                    onSaved={() => {
+                      setQuickEditId(null);
+                      void refresh();
+                    }}
+                  />
+                ) : null}
+              </div>
             )}
 
             {tab === TAB.horarios && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="font-semibold mb-3">Horario semanal</h2>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h2 className="font-semibold">Horario semanal</h2>
+                    <Button variant="outline" size="sm" className="rounded-none" asChild>
+                      <Link href={branchWorkspaceHref(branchId, "ficha", "horarios")}>Editar horarios</Link>
+                    </Button>
+                  </div>
                   <DataTable
                     columns={["Día", "Horario"]}
                     empty="No hay horarios configurados."
                     emptyAction={
                       <Button variant="outline" size="sm" asChild>
-                        <Link href={`/admin/sucursales/${branchId}/editar`}>Configurar horarios</Link>
+                        <Link href={branchWorkspaceHref(branchId, "ficha", "horarios")}>Editar horarios</Link>
                       </Button>
                     }
                     rows={(branch.hours || []).map((h: any) => [
@@ -738,7 +931,7 @@ export default function AdminBranchDetail() {
                     {!((data as any).contact?.whatsappUrl) && "Sin WhatsApp configurado."}
                   </p>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/sucursales/${branchId}/editar`}>Editar identidad y canales</Link>
+                    <Link href={branchWorkspaceHref(branchId, "ficha", "identidad")}>Editar ficha</Link>
                   </Button>
                 </section>
 

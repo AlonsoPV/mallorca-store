@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation, useParams } from "wouter";
+import { Link, useLocation, useParams, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateAdminBranch,
@@ -16,6 +16,7 @@ import {
   type BranchUpdate,
 } from "@workspace/api-client-react";
 import { AdminLayout } from "@/components/layout/admin-layout";
+import { BranchWorkspaceNav } from "@/components/admin/branch-workspace-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -258,6 +259,7 @@ export default function AdminBranchForm() {
   const isNew = !params.id || params.id === "nueva";
   const branchId = isNew ? null : Number(params.id);
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const { toast } = useToast();
   const qc = useQueryClient();
   const existing = useGetAdminBranch(branchId ?? 0, {
@@ -272,7 +274,11 @@ export default function AdminBranchForm() {
   const assign = useCreateBranchAssignment();
   const updateAssign = useUpdateBranchAssignment();
 
-  const [section, setSection] = useState(0);
+  const [section, setSection] = useState(() => {
+    const seccion = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("seccion");
+    const idx = SECTIONS.findIndex((item) => item.id === seccion);
+    return idx >= 0 ? idx : 0;
+  });
   const [form, setForm] = useState<FormState>(emptyForm);
   const [codeWarning, setCodeWarning] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -289,6 +295,19 @@ export default function AdminBranchForm() {
   const skipImageSync = useRef(false);
   const shortNameTouched = useRef(false);
   const slugTouched = useRef(false);
+  const summary = (existing.data as { summary?: { ordersToday?: number; alertsOpen?: number } } | undefined)?.summary;
+
+  function goSection(index: number) {
+    setSection(index);
+    if (!branchId) return;
+    setLocation(`/admin/sucursales/${branchId}/editar?seccion=${SECTIONS[index].id}`);
+  }
+
+  useEffect(() => {
+    const seccion = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("seccion");
+    const idx = SECTIONS.findIndex((item) => item.id === seccion);
+    if (idx >= 0) setSection(idx);
+  }, [search]);
 
   useEffect(() => {
     if (!existing.data?.branch) return;
@@ -534,9 +553,8 @@ export default function AdminBranchForm() {
         });
       }
 
-      // Stay on the form: new → edit URL; edit → same screen (refetch rehydrates).
       if (isNew && id) {
-        setLocation(`/admin/sucursales/${id}/editar`);
+        setLocation(activate ? `/admin/sucursales/${id}` : `/admin/sucursales/${id}/editar`);
       } else if (savedBranch) {
         skipImageSync.current = true;
         setForm(hydrateFormFromBranch(savedBranch, primaryUserId || ""));
@@ -657,15 +675,18 @@ export default function AdminBranchForm() {
 
   return (
     <AdminLayout>
-      <div className="p-6 md:p-10 space-y-6 overflow-auto max-w-4xl">
+      <div className="@container space-y-6 overflow-auto p-4 sm:p-6 md:p-10">
         <div className="flex items-center justify-between gap-4">
           <div>
             <Link href="/admin/sucursales" className="text-sm text-muted-foreground hover:text-foreground">
               ← Sucursales
             </Link>
-            <h1 className="text-3xl font-serif font-bold mt-1">
-              {isNew ? "Nueva sucursal" : `Editar · ${form.name || "Sucursal"}`}
+            <h1 className="mt-1 font-serif text-3xl font-bold">
+              {isNew ? "Nueva sucursal" : form.name || "Sucursal"}
             </h1>
+            {!isNew ? (
+              <p className="mt-1 text-sm text-muted-foreground">Ficha: identidad, horarios y canales.</p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!isNew && form.slug ? (
@@ -677,20 +698,25 @@ export default function AdminBranchForm() {
                 </a>
               </Button>
             ) : null}
-            {!isNew ? (
-              <Button type="button" variant="ghost" asChild>
-                <Link href={`/admin/sucursales/${branchId}`}>Ver operación</Link>
-              </Button>
-            ) : null}
           </div>
         </div>
 
+        {branchId ? (
+          <BranchWorkspaceNav
+            branchId={branchId}
+            active="ficha"
+            ordersToday={summary?.ordersToday ?? 0}
+            alertsOpen={summary?.alertsOpen ?? 0}
+          />
+        ) : null}
+
+        <div className="max-w-4xl space-y-6">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {SECTIONS.map((item, i) => (
             <button
               key={item.id}
               type="button"
-              onClick={() => setSection(i)}
+              onClick={() => goSection(i)}
               className={cn(
                 "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors",
                 section === i ? "bg-foreground text-background" : "bg-background text-muted-foreground hover:text-foreground",
@@ -1143,13 +1169,13 @@ export default function AdminBranchForm() {
           )}
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-6 md:-mx-10 border-t bg-background/95 backdrop-blur px-6 md:px-10 py-3 flex flex-wrap items-center justify-between gap-3">
-          <Button type="button" variant="outline" disabled={section === 0} onClick={() => setSection((s) => s - 1)}>
+        <div className="sticky bottom-0 z-10 -mx-4 sm:-mx-6 md:-mx-10 border-t bg-background/95 backdrop-blur px-4 sm:px-6 md:px-10 py-3 flex flex-wrap items-center justify-between gap-3">
+          <Button type="button" variant="outline" disabled={section === 0} onClick={() => goSection(section - 1)}>
             Anterior
           </Button>
           <div className="flex gap-2">
             {section < SECTIONS.length - 1 && (
-              <Button type="button" variant="secondary" onClick={() => setSection((s) => s + 1)}>
+              <Button type="button" variant="secondary" onClick={() => goSection(section + 1)}>
                 Siguiente
               </Button>
             )}
@@ -1180,6 +1206,7 @@ export default function AdminBranchForm() {
               </>
             )}
           </div>
+        </div>
         </div>
       </div>
     </AdminLayout>

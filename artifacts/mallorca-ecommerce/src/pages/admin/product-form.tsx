@@ -20,7 +20,7 @@ import {
   type PromotionType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams, Link, useLocation } from "wouter";
+import { useParams, Link, useLocation, useSearch } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -58,7 +58,18 @@ import { CrossSellPicker } from "@/components/cross-sell-picker";
 
 const PRODUCTS_LIST_QUERY_KEY = "admin.productos.search";
 
-function productsListHref() {
+function safeAdminReturn(from: string | null) {
+  if (!from || !from.startsWith("/admin/") || from.startsWith("//") || from.includes("://")) {
+    return null;
+  }
+  return from;
+}
+
+function productsListHref(search = "") {
+  const from = safeAdminReturn(
+    new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("from"),
+  );
+  if (from) return from;
   try {
     return `/admin/productos${sessionStorage.getItem(PRODUCTS_LIST_QUERY_KEY) || ""}`;
   } catch {
@@ -127,6 +138,7 @@ type ImageAsset = {
 export default function AdminProductForm() {
   const { id } = useParams<{ id?: string }>();
   const isEditing = !!id && id !== "nuevo";
+  const search = useSearch();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -152,7 +164,7 @@ export default function AdminProductForm() {
   const [tagNames, setTagNames] = useState<string[]>([]);
   const [crossSellProductIds, setCrossSellProductIds] = useState<number[]>([]);
   const [showCrossSell, setShowCrossSell] = useState(false);
-  const [listHref] = useState(productsListHref);
+  const [listHref] = useState(() => productsListHref(search));
   const imageInputRef = useRef<HTMLInputElement>(null);
   const imageId = useRef(0);
 
