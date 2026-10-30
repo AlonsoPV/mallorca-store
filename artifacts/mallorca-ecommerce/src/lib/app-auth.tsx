@@ -38,6 +38,22 @@ export type AppAuthState = {
 
 const AppAuthContext = createContext<AppAuthState | null>(null);
 
+/** First paint on production home: no Clerk JS until the session shell hydrates. */
+export function GuestAuthProvider({ children }: { children: ReactNode }) {
+  const value = useMemo<AppAuthState>(
+    () => ({
+      isLoaded: true,
+      isSignedIn: false,
+      user: null,
+      signInLocalDev: () => {},
+      signOut: async () => {},
+      addListener: null,
+    }),
+    [],
+  );
+  return <AppAuthContext.Provider value={value}>{children}</AppAuthContext.Provider>;
+}
+
 /** Clerk stand-in for localhost when publishable keys are missing. */
 export function LocalAuthProvider({ children }: { children: ReactNode }) {
   const [isSignedIn, setIsSignedIn] = useState(readLocalDevSignedIn);

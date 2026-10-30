@@ -50,6 +50,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 import { useQueryClient } from "@tanstack/react-query";
 import { normalizeSearch } from "@/lib/admin-search-params";
 import {
@@ -200,8 +201,11 @@ export default function AdminOrderDetail() {
       const code = coded.code || coded.data?.code;
       toast({
         title: code === "UNPAID_ON_COMPLETE" ? "Pago pendiente" : "No se pudo actualizar el estado",
-        description: coded.error || coded.data?.error || coded.message,
-        variant: "destructive",
+        description:
+          code === "UNPAID_ON_COMPLETE"
+            ? "Registra el cobro antes de entregar, o ábrelo y entrega con override."
+            : sanitizeErrorCopy(error, "Inténtalo de nuevo."),
+        variant: "notice",
       });
     }
   };
@@ -228,11 +232,10 @@ export default function AdminOrderDetail() {
       setNotesOpen(false);
       refresh();
     } catch (error) {
-      const coded = error as { error?: string; message?: string; data?: { error?: string } };
       toast({
         title: "No se pudieron guardar las notas",
-        description: coded.error || coded.data?.error || coded.message,
-        variant: "destructive",
+        description: sanitizeErrorCopy(error, "Inténtalo de nuevo."),
+        variant: "notice",
       });
     }
   };
@@ -890,8 +893,8 @@ export default function AdminOrderDetail() {
                             data?.code === "PAYMENT_ALREADY_RECORDED"
                               ? "Este pedido ya está cobrado"
                               : "No se pudo registrar el pago",
-                          description: data?.error || (error as Error).message,
-                          variant: "destructive",
+                          description: sanitizeErrorCopy(error, "Inténtalo de nuevo."),
+                          variant: "notice",
                         });
                       }
                     }}

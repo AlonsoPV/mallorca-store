@@ -61,6 +61,7 @@ router.get("/branches", async (_req, res): Promise<void> => {
 });
 
 router.get("/branches/:slug", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
   const params = GetBranchParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -121,6 +122,7 @@ router.get("/categories", async (_req, res): Promise<void> => {
 });
 
 router.get("/products", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
   const rawQuery: Record<string, unknown> = { ...req.query };
   if (typeof rawQuery.scheduledStart === "string") {
     rawQuery.scheduledStart = new Date(rawQuery.scheduledStart);

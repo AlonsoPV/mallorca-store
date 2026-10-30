@@ -126,6 +126,22 @@ export function groupOrdersBySlot(
     }));
 }
 
+function nextActiveSlotKey(days: AgendaDayGroup[]): string | null {
+  let bestKey: string | null = null;
+  let bestTime = Number.POSITIVE_INFINITY;
+  for (const day of days) {
+    for (const [time, slotOrders] of day.slots) {
+      const hasOpen = slotOrders.some((order) => !isClosedOrderStatus(order.status));
+      if (!hasOpen) continue;
+      const start = new Date(slotOrders[0]?.scheduledStart ?? 0).getTime();
+      if (!Number.isFinite(start) || start >= bestTime) continue;
+      bestTime = start;
+      bestKey = `${day.dateKey}-${time}`;
+    }
+  }
+  return bestKey;
+}
+
 export function OrdersAgendaView({
   search,
   days,
@@ -142,6 +158,7 @@ export function OrdersAgendaView({
   onAdvance: (orderId: string, status: OrderStatusUpdateStatus) => void;
 }) {
   const showDayHeadings = days.length > 1;
+  const nextSlotKey = nextActiveSlotKey(days);
   return (
     <div className="space-y-8">
       {days.map((day) => (
@@ -151,6 +168,8 @@ export function OrdersAgendaView({
           ) : null}
           {day.slots.map(([time, slotOrders]) => {
             const Heading = showDayHeadings ? "h3" : "h2";
+            const slotKey = `${day.dateKey}-${time}`;
+            const isNextSlot = nextSlotKey === slotKey;
             const active = slotOrders.filter(
               (order) => !isClosedOrderStatus(order.status),
             );
@@ -165,14 +184,21 @@ export function OrdersAgendaView({
               0,
             );
             return (
-              <section key={`${day.dateKey}-${time}`} className="space-y-2">
+              <section key={slotKey} className="space-y-2">
                 <Heading className="flex items-baseline justify-between gap-3">
-                  <time
-                    dateTime={slotOrders[0]?.scheduledStart}
-                    className="font-serif text-xl tabular-nums tracking-tight"
-                  >
-                    {time}
-                  </time>
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                    <time
+                      dateTime={slotOrders[0]?.scheduledStart}
+                      className="font-serif text-xl tabular-nums tracking-tight"
+                    >
+                      {time}
+                    </time>
+                    {isNextSlot ? (
+                      <span className="font-sans text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--mallorca-red,#c43b2b)]">
+                        Próximo pedido
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="shrink-0 font-sans text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     {slotOrders.length}{" "}
                     {slotOrders.length === 1 ? "pedido" : "pedidos"}

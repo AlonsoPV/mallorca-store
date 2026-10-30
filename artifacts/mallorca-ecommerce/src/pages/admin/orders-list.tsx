@@ -31,6 +31,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 import {
   normalizeSearch,
   readSearchParam,
@@ -312,8 +313,8 @@ export default function AdminOrdersList() {
         description:
           code === "UNPAID_ON_COMPLETE"
             ? "Registra el cobro antes de entregar, o ábrelo y entrega con override."
-            : coded.error || coded.data?.error || coded.message,
-        variant: "destructive",
+            : sanitizeErrorCopy(error, "Inténtalo de nuevo."),
+        variant: "notice",
       });
     } finally {
       setPendingId(null);

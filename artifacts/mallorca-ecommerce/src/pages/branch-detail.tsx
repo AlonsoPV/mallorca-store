@@ -398,28 +398,6 @@ export default function BranchDetail() {
                     ) : null}
             </div>
 
-            {gallery.length > 0 && (
-              <div>
-                <h3 className="font-sans text-xs uppercase tracking-widest font-semibold mb-4 text-foreground/70">Galería</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {gallery.map((url, i) => (
-                    <ImageWithFallback
-                      key={`${url}-${i}`}
-                      src={url}
-                      alt={`${branch.name} ${i + 1}`}
-                      className="aspect-square w-full object-cover"
-                      fallback={
-                        <img
-                          src={branchGalleryFallback(branch.slug, i)}
-                          alt={`${branch.name} ${i + 1}`}
-                          className="aspect-square w-full object-cover"
-                        />
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
           </aside>
 
           {/* Branch Products */}
@@ -503,6 +481,35 @@ export default function BranchDetail() {
           </div>
           
         </div>
+
+        {gallery.length > 0 ? (
+          <section className="mt-16 w-full">
+            <h3 className="font-sans text-xs uppercase tracking-widest font-semibold mb-4 text-foreground/70">
+              Galería
+            </h3>
+            <div className="flex w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
+              {gallery.map((url, i) => (
+                <div
+                  key={`${url}-${i}`}
+                  className="aspect-[4/3] min-w-[min(70vw,16rem)] flex-1 basis-0"
+                >
+                  <ImageWithFallback
+                    src={url}
+                    alt={`${branch.name} ${i + 1}`}
+                    className="h-full w-full object-cover"
+                    fallback={
+                      <img
+                        src={branchGalleryFallback(branch.slug, i)}
+                        alt={`${branch.name} ${i + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </StoreLayout>
   );

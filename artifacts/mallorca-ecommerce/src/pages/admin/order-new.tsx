@@ -17,6 +17,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
+import { toastStorefrontNotice } from "@/components/storefront-notice";
 import {
   ORDER_SOURCE_LABELS,
   PAYMENT_METHOD_LABELS,
@@ -456,10 +457,9 @@ export default function AdminOrderNew() {
       toast({ title: `Pedido #${order.orderNumber} creado correctamente` });
       setLocation(`/admin/pedidos/${order.id}`);
     } catch (error: unknown) {
-      const err = error as { message?: string };
-      toast({
-        title: err?.message ?? "No se pudo crear el pedido",
-        variant: "destructive",
+      toastStorefrontNotice(error, {
+        title: "No se pudo crear el pedido",
+        description: "Revisa disponibilidad, horario y datos del cliente.",
       });
     }
   };

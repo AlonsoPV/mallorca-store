@@ -1,8 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
-import { ClerkProvider } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { esES } from '@clerk/localizations';
-import { shadcn } from '@clerk/themes';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import {
   Route,
   Switch,
@@ -11,26 +7,35 @@ import {
   Router as WouterRouter,
   Redirect
 } from 'wouter';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-import NotFound from '@/pages/not-found';
 import Home from '@/pages/home';
-import Store from '@/pages/store';
-import ProductDetail from '@/pages/product-detail';
-import Branches from '@/pages/branches';
-import BranchDetail from '@/pages/branch-detail';
-import SignInPage from '@/pages/sign-in';
-import SignUpPage from '@/pages/sign-up';
-import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/forgot-password';
-import Cart from '@/pages/cart';
-import Checkout from '@/pages/checkout';
-import OrderDetails from '@/pages/order-details';
-import Account from '@/pages/account';
-import { PrivacyPage, TermsPage } from '@/pages/legal';
 import { AdminGuard } from '@/components/layout/admin-guard';
+import { CartProvider } from '@/lib/cart-context';
+import {
+  AuthShow,
+  GuestAuthProvider,
+  LocalAuthProvider,
+} from '@/lib/app-auth';
+
+const Store = lazy(() => import('@/pages/store'));
+const ProductDetail = lazy(() => import('@/pages/product-detail'));
+const Branches = lazy(() => import('@/pages/branches'));
+const BranchDetail = lazy(() => import('@/pages/branch-detail'));
+const SignInPage = lazy(() => import('@/pages/sign-in'));
+const SignUpPage = lazy(() => import('@/pages/sign-up'));
+const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password').then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import('@/pages/forgot-password').then((m) => ({ default: m.ResetPasswordPage })));
+const Cart = lazy(() => import('@/pages/cart'));
+const Checkout = lazy(() => import('@/pages/checkout'));
+const OrderDetails = lazy(() => import('@/pages/order-details'));
+const Account = lazy(() => import('@/pages/account'));
+const PrivacyPage = lazy(() => import('@/pages/legal').then((m) => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import('@/pages/legal').then((m) => ({ default: m.TermsPage })));
+const NotFound = lazy(() => import('@/pages/not-found'));
 
 const AdminDashboard = lazy(() => import('@/pages/admin/dashboard'));
 const AdminProductsList = lazy(() => import('@/pages/admin/products-list'));
@@ -49,6 +54,7 @@ const AdminUsers = lazy(() => import('@/pages/admin/users'));
 const AdminPaymentMethods = lazy(() => import('@/pages/admin/payment-methods'));
 const AdminMailboxes = lazy(() => import('@/pages/admin/mailboxes'));
 const AdminMenus = lazy(() => import('@/pages/admin/menus'));
+const ClerkShell = lazy(() => import('@/clerk-shell'));
 
 function AdminRoute({ children }: { children: ReactNode }) {
   return (
@@ -66,13 +72,13 @@ function AdminRoute({ children }: { children: ReactNode }) {
   );
 }
 
-import { CartProvider } from '@/lib/cart-context';
-import {
-  AuthShow,
-  ClerkAuthBridge,
-  LocalAuthProvider,
-  useAppClerkListener,
-} from '@/lib/app-auth';
+function Page({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<div className="min-h-[50vh] bg-background" />}>
+      {children}
+    </Suspense>
+  );
+}
 
 const queryClient = new QueryClient();
 
@@ -81,107 +87,24 @@ const isLoopbackHost = hostname === "localhost" || hostname === "127.0.0.1";
 const envClerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as
   | string
   | undefined;
-
-// On loopback, never call publishableKeyFromHost — it invents clerk.localhost
-// and Clerk JS fails to load from https://clerk.localhost/...
-const clerkPubKey = isLoopbackHost
-  ? envClerkPubKey
-  : publishableKeyFromHost(hostname, envClerkPubKey);
-
-// Clerk's FAPI proxy only works behind the production API; skip it locally.
-const clerkProxyUrl = isLoopbackHost
-  ? undefined
-  : (import.meta.env.VITE_CLERK_PROXY_URL as string | undefined);
+const shouldLoadClerk = isLoopbackHost ? Boolean(envClerkPubKey) : true;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || "/"
-    : path;
-}
-
-const clerkAppearance = {
-  theme: shadcn,
-  cssLayerName: "clerk",
-  options: {
-    logoPlacement: "inside" as const,
-    logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-  },
-  variables: {
-    colorPrimary: "hsl(350 40% 30%)",
-    colorForeground: "hsl(20 20% 10%)",
-    colorMutedForeground: "hsl(20 15% 40%)",
-    colorDanger: "hsl(0 70% 40%)",
-    colorBackground: "hsl(0 0% 100%)",
-    colorInput: "hsl(0 0% 100%)",
-    colorInputForeground: "hsl(20 20% 10%)",
-    colorNeutral: "hsl(35 20% 85%)",
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    borderRadius: "0px",
-  },
-  elements: {
-    rootBox: "w-full flex justify-center",
-    cardBox: "bg-background rounded-none border border-border w-[440px] max-w-full overflow-hidden shadow-xl",
-    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    headerTitle: "font-serif text-2xl font-bold text-foreground",
-    headerSubtitle: "text-muted-foreground text-sm",
-    socialButtons: { display: "none" },
-    socialButtonsBlockButton: { display: "none" },
-    dividerRow: { display: "none" },
-    alternativeMethods: { display: "none" },
-    footerAction__signUp: { display: "none" },
-    socialButtonsBlockButtonText: "text-foreground font-medium",
-    formFieldLabel: "text-foreground font-semibold text-sm",
-    footerActionLink: "text-primary hover:text-primary/90 font-medium",
-    footerActionText: "text-muted-foreground",
-    dividerText: "text-muted-foreground bg-background px-2",
-    identityPreviewEditButton: "text-primary hover:text-primary/90",
-    formFieldSuccessText: "text-green-600",
-    alertText: "text-destructive",
-    logoBox: "h-12 flex justify-center",
-    logoImage: "h-full w-auto object-contain",
-    formButtonPrimary: "bg-primary text-primary-foreground hover:bg-primary/90 rounded-none font-medium h-10",
-    formFieldInput: "border border-input bg-background rounded-none focus:ring-1 focus:ring-ring text-foreground px-3 py-2",
-    footerAction: "justify-center mt-4",
-    footerAction__signIn: { display: "none" },
-    dividerLine: "bg-border h-[1px]",
-    alert: "bg-destructive/10 border border-destructive/20 rounded-none",
-    otpCodeFieldInput: "border border-input bg-background rounded-none focus:ring-1 focus:ring-ring text-foreground",
-    formFieldRow: "mb-4",
-    main: "w-full space-y-6",
-  },
-};
-
-function ClerkQueryClientCacheInvalidator() {
-  const addListener = useAppClerkListener();
-  const queryClient = useQueryClient();
-  const prevUserIdRef = useRef<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    if (!addListener) return;
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
-      if (
-        prevUserIdRef.current !== undefined &&
-        prevUserIdRef.current !== userId
-      ) {
-        queryClient.clear();
-      }
-      prevUserIdRef.current = userId;
-    });
-    return unsubscribe;
-  }, [addListener, queryClient]);
-
-  return null;
+function needsClerkSoon(path: string) {
+  return (
+    path.startsWith("/sign-in") ||
+    path.startsWith("/sign-up") ||
+    path.startsWith("/cuenta") ||
+    path.startsWith("/admin") ||
+    path.startsWith("/recuperar")
+  );
 }
 
 function AccountRedirect() {
   return (
     <>
       <AuthShow when="signed-in">
-        <Account />
+        <Page><Account /></Page>
       </AuthShow>
       <AuthShow when="signed-out">
         <Redirect to="/sign-in" />
@@ -230,22 +153,22 @@ function AppRoutes() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/tienda" component={Store} />
-      <Route path="/producto/:slug" component={ProductDetail} />
-      <Route path="/sucursales" component={Branches} />
-      <Route path="/sucursales/:slug" component={BranchDetail} />
-      <Route path="/terminos-y-condiciones" component={TermsPage} />
-      <Route path="/aviso-de-privacidad" component={PrivacyPage} />
+      <Route path="/tienda">{() => <Page><Store /></Page>}</Route>
+      <Route path="/producto/:slug">{() => <Page><ProductDetail /></Page>}</Route>
+      <Route path="/sucursales">{() => <Page><Branches /></Page>}</Route>
+      <Route path="/sucursales/:slug">{() => <Page><BranchDetail /></Page>}</Route>
+      <Route path="/terminos-y-condiciones">{() => <Page><TermsPage /></Page>}</Route>
+      <Route path="/aviso-de-privacidad">{() => <Page><PrivacyPage /></Page>}</Route>
 
-      <Route path="/carrito" component={Cart} />
-      <Route path="/checkout" component={Checkout} />
-      <Route path="/pedido/:id/:token" component={OrderDetails} />
+      <Route path="/carrito">{() => <Page><Cart /></Page>}</Route>
+      <Route path="/checkout">{() => <Page><Checkout /></Page>}</Route>
+      <Route path="/pedido/:id/:token">{() => <Page><OrderDetails /></Page>}</Route>
       <Route path="/cuenta" component={AccountRedirect} />
 
-      <Route path="/sign-in/*?" component={SignInPage} />
-      <Route path="/sign-up/*?" component={SignUpPage} />
-      <Route path="/recuperar-contrasena" component={ForgotPasswordPage} />
-      <Route path="/recuperar-contrasena/:token" component={ResetPasswordPage} />
+      <Route path="/sign-in/*?">{() => <Page><SignInPage /></Page>}</Route>
+      <Route path="/sign-up/*?">{() => <Page><SignUpPage /></Page>}</Route>
+      <Route path="/recuperar-contrasena">{() => <Page><ForgotPasswordPage /></Page>}</Route>
+      <Route path="/recuperar-contrasena/:token">{() => <Page><ResetPasswordPage /></Page>}</Route>
 
       <Route path="/admin">
         <AdminRoute><AdminDashboard /></AdminRoute>
@@ -316,65 +239,80 @@ function AppRoutes() {
         <AdminRoute><AdminAlerts /></AdminRoute>
       </Route>
 
-      <Route component={NotFound} />
+      <Route>{() => <Page><NotFound /></Page>}</Route>
     </Switch>
   );
 }
 
-function AppShell({ children }: { children: ReactNode }) {
+function AppContent() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ClerkQueryClientCacheInvalidator />
-      <CartProvider>
-        <RoutedErrorBoundary>{children}</RoutedErrorBoundary>
-      </CartProvider>
-    </QueryClientProvider>
+    <CartProvider>
+      <RoutedErrorBoundary>
+        <AppRoutes />
+      </RoutedErrorBoundary>
+    </CartProvider>
   );
 }
 
-function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
-
-  if (!clerkPubKey) {
-    if (import.meta.env.PROD) {
-      return <div className="min-h-screen bg-background p-8 text-center text-foreground">El inicio de sesión no está disponible. Contacta al administrador.</div>;
-    }
+function GuestShell() {
+  if (isLoopbackHost && !envClerkPubKey) {
     return (
       <LocalAuthProvider>
-        <AppShell>
-          <AppRoutes />
-        </AppShell>
+        <AppContent />
       </LocalAuthProvider>
     );
   }
+  return (
+    <GuestAuthProvider>
+      <AppContent />
+    </GuestAuthProvider>
+  );
+}
+
+function AuthShell() {
+  const [location] = useLocation();
+  const [clerkReady, setClerkReady] = useState(() => needsClerkSoon(location));
+
+  useEffect(() => {
+    if (!shouldLoadClerk || clerkReady) return;
+    if (needsClerkSoon(location)) {
+      setClerkReady(true);
+      return;
+    }
+    const idle = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (idle.requestIdleCallback) {
+      const id = idle.requestIdleCallback(() => setClerkReady(true), { timeout: 2000 });
+      return () => idle.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(() => setClerkReady(true), 1);
+    return () => window.clearTimeout(timer);
+  }, [clerkReady, location]);
+
+  if (!shouldLoadClerk || !clerkReady) {
+    return <GuestShell />;
+  }
 
   return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      appearance={clerkAppearance}
-      signInUrl={`${basePath}/sign-in`}
-      signUpUrl={`${basePath}/sign-in`}
-      localization={esES}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <ClerkAuthBridge>
-        <AppShell>
-          <AppRoutes />
-        </AppShell>
-      </ClerkAuthBridge>
-    </ClerkProvider>
+    <Suspense fallback={<GuestShell />}>
+      <ClerkShell>
+        <AppContent />
+      </ClerkShell>
+    </Suspense>
   );
 }
 
 function App() {
   return (
     <TooltipProvider>
-      <WouterRouter base={basePath}>
-        <ClerkProviderWithRoutes />
-      </WouterRouter>
-      <Toaster />
+      <QueryClientProvider client={queryClient}>
+        <WouterRouter base={basePath}>
+          <AuthShell />
+        </WouterRouter>
+        <Toaster />
+      </QueryClientProvider>
     </TooltipProvider>
   );
 }

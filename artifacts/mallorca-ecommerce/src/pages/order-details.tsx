@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppAuth } from "@/lib/app-auth";
-import { useToast } from "@/hooks/use-toast";
+import { toastStorefrontMessage } from "@/components/storefront-notice";
 import { isSettledPaymentError, paymentSyncShouldStop, paypalReturnCheckoutId } from "@/lib/checkout-payment";
 import {
   money,
@@ -65,7 +65,6 @@ function emailCopy(status?: string) {
 export default function OrderDetailsPage() {
   const { id, token } = useParams<{ id: string; token?: string }>();
   const { isSignedIn, isLoaded } = useAppAuth();
-  const { toast } = useToast();
   const { clearCartSession } = useCart();
   const [downloading, setDownloading] = useState(false);
   const [startingPayment, setStartingPayment] = useState(false);
@@ -190,12 +189,11 @@ export default function OrderDetailsPage() {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch {
-      toast({
-        title: "No se pudo descargar",
-        description:
-          "Tu pedido sigue registrado. Vuelve a intentar la descarga.",
-        variant: "destructive",
-      });
+      toastStorefrontMessage(
+        "No se pudo descargar el comprobante",
+        "Tu pedido sigue registrado. Vuelve a intentar la descarga.",
+        "order",
+      );
     } finally {
       setDownloading(false);
     }
@@ -238,11 +236,11 @@ export default function OrderDetailsPage() {
         await query.refetch();
         return;
       }
-      toast({
-        title: "No se pudo abrir el pago",
-        description: "Intenta de nuevo en unos minutos. Tu pedido sigue guardado.",
-        variant: "destructive",
-      });
+      toastStorefrontMessage(
+        "No se pudo abrir el pago",
+        "Inténtalo de nuevo en unos minutos. Tu pedido sigue guardado.",
+        "payment",
+      );
     } finally {
       setStartingPayment(false);
     }

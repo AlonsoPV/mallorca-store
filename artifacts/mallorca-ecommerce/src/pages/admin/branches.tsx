@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 import { branchFulfillmentLabel } from "@/lib/availability-copy";
 import { cn } from "@/lib/utils";
 import {
@@ -156,7 +157,7 @@ export default function AdminBranches() {
       toast({ title: "Sucursal desactivada" });
       await invalidate();
     } catch (err: any) {
-      const msg = err?.payload?.error || err?.message || "No se pudo desactivar";
+      const msg = sanitizeErrorCopy(err, "No se pudo desactivar");
       const ok = window.confirm(`${msg}\n\n¿Continuar de todos modos?`);
       if (!ok) return;
       try {
@@ -164,7 +165,7 @@ export default function AdminBranches() {
         toast({ title: "Sucursal desactivada" });
         await invalidate();
       } catch {
-        toast({ title: "Error al desactivar", variant: "destructive" });
+        toast({ title: "No se pudo desactivar", variant: "notice" });
       }
     }
   }
@@ -176,7 +177,7 @@ export default function AdminBranches() {
       toast({ title: "Sucursal archivada" });
       await invalidate();
     } catch {
-      toast({ title: "Error al archivar", variant: "destructive" });
+      toast({ title: "No se pudo archivar", variant: "notice" });
     }
   }
 
@@ -188,8 +189,8 @@ export default function AdminBranches() {
       await invalidate();
     } catch (err: any) {
       toast({
-        title: err?.payload?.error || "No se puede eliminar. Usa Archivar.",
-        variant: "destructive",
+        title: sanitizeErrorCopy(err, "No se puede eliminar. Usa Archivar."),
+        variant: "notice",
       });
     }
   }
@@ -214,7 +215,7 @@ export default function AdminBranches() {
       await invalidate();
       if (created?.id) setLocation(`/admin/sucursales/${created.id}/editar`);
     } catch (err: any) {
-      toast({ title: err?.payload?.error || "Error al duplicar", variant: "destructive" });
+      toast({ title: sanitizeErrorCopy(err, "No se pudo duplicar"), variant: "notice" });
     }
   }
 
@@ -272,7 +273,7 @@ export default function AdminBranches() {
         ) : (
           <>
             <div className="@container">
-              <div className="grid grid-cols-2 gap-2 @min-[34rem]:grid-cols-4 @min-[34rem]:gap-3">
+              <div className="grid grid-cols-2 gap-1.5 @min-[34rem]:grid-cols-4">
                 <SummaryStat label="Total" value={summary.total} />
                 <SummaryStat label="Activas" value={summary.active} />
                 <SummaryStat label="Pedidos hoy" value={summary.ordersToday} />
@@ -571,20 +572,20 @@ function SummaryStat({
   return (
     <div
       className={cn(
-        "flex h-full min-w-0 flex-col justify-between gap-2 border border-border bg-background px-3 py-3",
+        "flex min-w-0 items-baseline justify-between gap-2 border border-border bg-background px-2.5 py-2",
         alert && "border-amber-300/80 bg-amber-50/40",
       )}
     >
-      <div className="flex items-start gap-1.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted-foreground @min-[34rem]:min-h-8 @min-[34rem]:text-[11px]">
-        {alert ? <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-700" /> : null}
-        <span className="min-w-0">{label}</span>
-      </div>
-      <div>
-        <div className="font-serif text-2xl leading-none tracking-tight tabular-nums">{value}</div>
-        <div className={cn("mt-1.5 text-[11px] leading-tight text-muted-foreground", !hint && "invisible")}>
-          {hint || "\u00a0"}
+      <div className="min-w-0">
+        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-muted-foreground">
+          {alert ? <AlertTriangle className="h-3 w-3 shrink-0 text-amber-700" /> : null}
+          <span className="min-w-0 truncate">{label}</span>
         </div>
+        {hint ? (
+          <div className="mt-0.5 text-[10px] leading-none text-muted-foreground">{hint}</div>
+        ) : null}
       </div>
+      <div className="shrink-0 font-serif text-xl leading-none tracking-tight tabular-nums">{value}</div>
     </div>
   );
 }

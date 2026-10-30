@@ -454,6 +454,10 @@ function cartLeadMinutesForCart(cart) {
 }
 
 function cartView(cart) {
+  cart.items = cart.items.filter((item) => {
+    const product = products.find((row) => row.id === item.productId);
+    return Boolean(product) && (product.status ?? "active") === "active";
+  });
   const subtotal = cart.items.reduce((sum, item) => sum + item.lineTotal, 0);
   const quantity = cart.items.reduce((sum, item) => sum + item.quantity, 0);
   return {
@@ -1100,6 +1104,7 @@ function send(res, status, body) {
   const payload = body === undefined ? "" : JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type",
     "access-control-allow-methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
@@ -1186,7 +1191,7 @@ function readJson(req) {
 }
 
 function filterProducts(url) {
-  let list = [...products];
+  let list = products.filter((product) => (product.status ?? "active") === "active");
   const featured = url.searchParams.get("featured");
   const categorySlug = url.searchParams.get("categorySlug");
   const search = url.searchParams.get("search")?.toLowerCase();
@@ -1232,9 +1237,9 @@ function filterProducts(url) {
         return { ...row, available: Boolean(row.available) && isReadyForLead(at, lead) };
       }),
     }));
-    if (!includeUnavailable) {
-      list = list.filter((p) => p.availability.some((row) => row.available && (row.inventory ?? 0) > 0));
-    }
+  }
+  if (branchSlug && !includeUnavailable) {
+    list = list.filter((product) => product.availability.some((row) => row.available && (row.inventory ?? 0) > 0));
   }
   return list;
 }
@@ -1294,11 +1299,16 @@ const server = http.createServer(async (req, res) => {
       "x-accel-buffering": "no",
     });
     res.write("retry: 3000\n\n");
+    const listener = (event) => {
+      res.write(`event: catalog-change\ndata: ${JSON.stringify(event)}\n\n`);
+    };
+    catalogListeners.add(listener);
     const heartbeat = setInterval(() => {
       res.write(": heartbeat\n\n");
     }, 15_000);
     req.on("close", () => {
       clearInterval(heartbeat);
+      catalogListeners.delete(listener);
       res.end();
     });
     return;
@@ -1392,13 +1402,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && path.startsWith("/api/products/")) {
     const slug = path.slice("/api/products/".length);
     const found = products.find((p) => p.slug === slug);
-    if (!found) {
+    if (!found || (found.status ?? "active") !== "active") {
       send(res, 404, { error: "Product not found" });
       return;
     }
     send(res, 200, {
       ...found,
-      description: found.shortDescription,
+      description: found.description ?? found.shortDescription,
       gallery: Array.isArray(found.gallery) ? found.gallery : [],
       ingredients: null,
       allergens: null,
@@ -1408,7 +1418,7 @@ const server = http.createServer(async (req, res) => {
       variants: [],
       tags: found.tags ?? [],
       crossSellProductIds: found.crossSellProductIds ?? [],
-      status: "active",
+      status: found.status ?? "active",
     });
     return;
   }
@@ -3206,10 +3216,25 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && path === "/api/orders/preview") {
     readJson(req)
       .then((body) => {
-        const subtotal = Number(body?.subtotal) || 320;
+        const cart = carts.get(body?.cartId);
+        if (!cart || !cart.items.length) {
+          send(res, 409, { error: "Cart is empty" });
+          return;
+        }
+        const view = cartView(cart);
+        const lines = view.items.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+          available: true,
+          reason: null,
+        }));
+        const subtotal = view.subtotal;
         const deliveryFee = body?.fulfillmentMethod === "delivery" ? 80 : 0;
         send(res, 200, {
-          lines: [],
+          lines,
           subtotal,
           promotionDiscountTotal: 0,
           discountAmount: 0,
@@ -3395,6 +3420,262 @@ function branchFromDatabaseRow(row) {
   };
 }
 
+const catalogListeners = new Set();
+
+function publishCatalogChange(productId, reason = "product") {
+  const event = {
+    productId,
+    reason,
+    changedAt: new Date().toISOString(),
+  };
+  for (const listener of catalogListeners) listener(event);
+}
+
+function asNumber(value, fallback = 0) {
+  if (value == null || value === "") return fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function asNullableNumber(value) {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function promotionFinalPrice(basePrice, promotion) {
+  const safeBase = Math.max(0, asNumber(basePrice));
+  const value = Math.max(0, asNumber(promotion.value));
+  const raw = promotion.type === "fixed"
+    ? value
+    : promotion.type === "percentage"
+      ? safeBase * (1 - Math.min(100, value) / 100)
+      : safeBase - value;
+  const finalPrice = Math.round(Math.max(0, Math.min(safeBase, raw)) * 100) / 100;
+  return { finalPrice, savings: Math.round((safeBase - finalPrice) * 100) / 100 };
+}
+
+function catalogSignature(list) {
+  return JSON.stringify(list.map((product) => ({
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    price: product.price,
+    salePrice: product.salePrice,
+    status: product.status ?? "active",
+    featured: Boolean(product.featured),
+    seasonal: Boolean(product.seasonal),
+    imageUrl: product.imageUrl ?? null,
+    availability: (product.availability ?? []).map((row) => [
+      row.branchId,
+      row.available,
+      row.inventory,
+      row.price,
+      row.salePrice,
+    ]),
+  })));
+}
+
+function applyCatalogSnapshot(nextProducts, nextCategories) {
+  const changed = catalogSignature(products) !== catalogSignature(nextProducts);
+  if (!changed && nextCategories == null) return false;
+  const previousIds = new Set(products.map((product) => product.id));
+  products.splice(0, products.length, ...nextProducts);
+  nextProductId = products.reduce((max, product) => Math.max(max, product.id), 0) + 1;
+  if (nextCategories?.length) {
+    categories.splice(0, categories.length, ...nextCategories);
+  }
+  if (!changed) return false;
+  const changedIds = new Set(previousIds);
+  for (const product of nextProducts) changedIds.add(product.id);
+  for (const id of changedIds) publishCatalogChange(id, "product");
+  const visible = nextProducts.filter((product) => (product.status ?? "active") === "active").length;
+  console.log(`[local-mock-api] storefront products synced from database (${visible} active / ${nextProducts.length})`);
+  return true;
+}
+
+async function readCatalogFromDatabase(client) {
+  const { rows: productRows } = await client.query(`
+    select p.id, p.sku, p.name, p.slug, p.short_description, p.description, p.price, p.sale_price,
+           p.image_url, p.gallery, p.tags, p.featured, p.seasonal, p.status, p.minimum_lead_time_hours,
+           p.category_id, c.name as category_name, c.slug as category_slug
+    from products p
+    join categories c on c.id = p.category_id
+    order by p.name
+  `);
+  if (!productRows.length) return null;
+  const ids = productRows.map((row) => row.id);
+  const { rows: linkRows } = await client.query(`
+    select pc.product_id, pc.is_primary, c.id, c.name, c.slug
+    from product_categories pc
+    join categories c on c.id = pc.category_id
+    where pc.product_id = any($1::int[])
+  `, [ids]);
+  const { rows: stockRows } = await client.query(`
+    select bp.product_id, bp.branch_id, bp.available, bp.inventory, bp.min_stock, bp.critical_stock,
+           bp.auto_alert_enabled, bp.alert_state, bp.price_override, bp.sale_price_override,
+           bp.preparation_time_minutes, bp.pickup_available, bp.delivery_available,
+           b.slug as branch_slug, b.name as branch_name, b.preparation_time_minutes as branch_prep
+    from branch_products bp
+    join branches b on b.id = bp.branch_id
+    where b.active = true and bp.product_id = any($1::int[])
+  `, [ids]);
+  const { rows: categoryRows } = await client.query(`
+    select id, name, slug, description, image_url
+    from categories
+    where active = true
+    order by sort_order, id
+  `);
+  let promoRows = [];
+  let promoBranchRows = [];
+  try {
+    const promos = await client.query(`
+      select id, product_id, name, type, value, starts_at, ends_at
+      from promotions
+      where cancelled_at is null and starts_at <= now() and ends_at >= now()
+        and product_id = any($1::int[])
+    `, [ids]);
+    promoRows = promos.rows;
+    if (promoRows.length) {
+      const promoBranches = await client.query(`
+        select promotion_id, branch_id
+        from promotion_branches
+        where promotion_id = any($1::int[])
+      `, [promoRows.map((row) => row.id)]);
+      promoBranchRows = promoBranches.rows;
+    }
+  } catch {
+    promoRows = [];
+    promoBranchRows = [];
+  }
+
+  const categoriesByProduct = new Map();
+  for (const row of linkRows) {
+    const list = categoriesByProduct.get(row.product_id) ?? [];
+    list.push({ id: row.id, name: row.name, slug: row.slug, isPrimary: Boolean(row.is_primary) });
+    categoriesByProduct.set(row.product_id, list);
+  }
+  const stockByProduct = new Map();
+  for (const row of stockRows) {
+    const list = stockByProduct.get(row.product_id) ?? [];
+    list.push(row);
+    stockByProduct.set(row.product_id, list);
+  }
+  const branchesByPromo = new Map();
+  for (const row of promoBranchRows) {
+    const list = branchesByPromo.get(row.promotion_id) ?? [];
+    list.push(row.branch_id);
+    branchesByPromo.set(row.promotion_id, list);
+  }
+  const promoByProduct = new Map();
+  for (const row of promoRows) {
+    const current = promoByProduct.get(row.product_id);
+    if (!current || new Date(row.starts_at) > new Date(current.starts_at)) promoByProduct.set(row.product_id, row);
+  }
+
+  const nextProducts = productRows.map((row) => {
+    const price = asNumber(row.price);
+    const salePrice = asNullableNumber(row.sale_price);
+    const promo = promoByProduct.get(row.id);
+    const productCategories = categoriesByProduct.get(row.id) ?? [{
+      id: row.category_id,
+      name: row.category_name,
+      slug: row.category_slug,
+      isPrimary: true,
+    }];
+    const availabilityRows = (stockByProduct.get(row.id) ?? []).map((stock) => {
+      const basePrice = asNullableNumber(stock.price_override) ?? price;
+      const legacySale = stock.sale_price_override == null ? salePrice : asNullableNumber(stock.sale_price_override);
+      const promoBranches = promo ? (branchesByPromo.get(promo.id) ?? []) : [];
+      const promoApplies = Boolean(promo) && (promoBranches.length === 0 || promoBranches.includes(stock.branch_id));
+      const priced = promoApplies ? promotionFinalPrice(basePrice, promo) : null;
+      const inventory = asNumber(stock.inventory);
+      return availability(stock.branch_id, stock.branch_slug, stock.branch_name, basePrice, {
+        available: stock.available !== false,
+        inventory,
+        minStock: asNumber(stock.min_stock),
+        criticalStock: stock.critical_stock == null ? null : asNumber(stock.critical_stock),
+        autoAlertEnabled: stock.auto_alert_enabled !== false,
+        alertState: stock.alert_state,
+        priceOverride: asNullableNumber(stock.price_override),
+        salePriceOverride: asNullableNumber(stock.sale_price_override),
+        salePrice: priced?.finalPrice ?? legacySale,
+        preparationTimeMinutes: stock.preparation_time_minutes ?? stock.branch_prep ?? asNumber(row.minimum_lead_time_hours) * 60,
+        pickupAvailable: stock.pickup_available !== false,
+        deliveryAvailable: stock.delivery_available !== false,
+        promotion: promoApplies ? {
+          id: promo.id,
+          name: promo.name,
+          type: promo.type,
+          value: asNumber(promo.value),
+          startsAt: new Date(promo.starts_at).toISOString(),
+          endsAt: new Date(promo.ends_at).toISOString(),
+          status: "active",
+          finalPrice: priced.finalPrice,
+          savings: priced.savings,
+          branchIds: promoBranches,
+        } : null,
+      });
+    });
+    return {
+      id: row.id,
+      sku: row.sku,
+      name: row.name,
+      slug: row.slug,
+      shortDescription: row.short_description,
+      description: row.description,
+      price,
+      salePrice,
+      categoryName: row.category_name,
+      categorySlug: row.category_slug,
+      categories: productCategories,
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      crossSellProductIds: [],
+      imageUrl: row.image_url,
+      gallery: Array.isArray(row.gallery) ? row.gallery : [],
+      featured: Boolean(row.featured),
+      seasonal: Boolean(row.seasonal),
+      status: row.status ?? "active",
+      minimumLeadTimeHours: asNumber(row.minimum_lead_time_hours),
+      availability: availabilityRows,
+    };
+  });
+
+  const activeProducts = nextProducts.filter((product) => product.status === "active");
+  const nextCategories = categoryRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    imageUrl: row.image_url,
+    productCount: activeProducts.filter((product) =>
+      product.categorySlug === row.slug || (product.categories ?? []).some((category) => category.slug === row.slug),
+    ).length,
+  }));
+  return { products: nextProducts, categories: nextCategories };
+}
+
+async function syncProductsFromDatabase(client) {
+  const owned = !client;
+  let connection = client;
+  if (!connection) {
+    const connectionString = readDatabaseUrl();
+    if (!connectionString) return;
+    const requireFromDb = createRequire(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../lib/db/package.json"),
+    );
+    const { Client } = requireFromDb("pg");
+    connection = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
+    await connection.connect();
+  }
+  try {
+    const snapshot = await readCatalogFromDatabase(connection);
+    if (snapshot) applyCatalogSnapshot(snapshot.products, snapshot.categories);
+  } finally {
+    if (owned) await connection.end();
+  }
+}
+
 async function hydrateBranchesFromDatabase() {
   if (process.env.PORT === "0") return;
   const connectionString = readDatabaseUrl();
@@ -3410,20 +3691,31 @@ async function hydrateBranchesFromDatabase() {
   await client.connect();
   try {
     const { rows } = await client.query("select * from branches order by id");
-    if (!rows.length) return;
-    for (const row of rows) {
-      const mapped = branchFromDatabaseRow(row);
-      const idx = branches.findIndex((item) => item.id === mapped.id || item.slug === mapped.slug);
-      if (idx >= 0) {
-        branches[idx] = { ...branches[idx], ...mapped };
-      } else {
-        branches.push(mapped);
+    if (rows.length) {
+      for (const row of rows) {
+        const mapped = branchFromDatabaseRow(row);
+        const idx = branches.findIndex((item) => item.id === mapped.id || item.slug === mapped.slug);
+        if (idx >= 0) {
+          branches[idx] = { ...branches[idx], ...mapped };
+        } else {
+          branches.push(mapped);
+        }
       }
+      console.log(`[local-mock-api] storefront branches loaded from database (${rows.length})`);
     }
-    console.log(`[local-mock-api] storefront branches loaded from database (${rows.length})`);
+    await syncProductsFromDatabase(client);
   } finally {
     await client.end();
   }
+}
+
+function startCatalogSync() {
+  if (!readDatabaseUrl()) return;
+  setInterval(() => {
+    syncProductsFromDatabase().catch((err) => {
+      console.error("[local-mock-api] product sync failed", err.message);
+    });
+  }, 5000);
 }
 
 hydrateBranchesFromDatabase()
@@ -3431,6 +3723,7 @@ hydrateBranchesFromDatabase()
     console.error("[local-mock-api] could not load branches from database; using seed", err.message);
   })
   .finally(() => {
+    startCatalogSync();
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`[local-mock-api] listening on http://127.0.0.1:${server.address().port}`);
       console.log(`[local-mock-api] auth: Authorization: Bearer local-dev`);

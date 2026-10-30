@@ -6,6 +6,7 @@ import { AdminLoading, AdminError } from "@/components/admin";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 import { accessKey, customFetch, modules, roles, type Policy, type RoleAccessResponse } from "@/lib/role-access";
 
 export default function AdminRolesPanel() {
@@ -29,7 +30,7 @@ export default function AdminRolesPanel() {
       void qc.invalidateQueries({ queryKey: accessKey });
       toast({ title: "Accesos guardados", description: "La configuración se aplica a todos los usuarios de cada rol." });
     },
-    onError: (error: Error) => toast({ title: "No se pudieron guardar los accesos", description: error.message, variant: "destructive" }),
+    onError: (error: unknown) => toast({ title: "No se pudieron guardar los accesos", description: sanitizeErrorCopy(error, "Inténtalo de nuevo."), variant: "notice" }),
   });
   useEffect(() => {
     if (!changed) return;

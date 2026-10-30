@@ -1,16 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { StoreLayout } from "@/components/layout/store-layout";
 import { useCart } from "@/lib/cart-context";
 import { useGetCart, useUpdateCartItem, useDeleteCartItem, getGetCartQueryKey } from "@workspace/api-client-react";
+import { writeCartCache } from "@/lib/cart-cache";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { formatMxn } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
 import { ImageWithFallback } from "@/components/image-with-fallback";
-import { isCartNotFoundError } from "@/lib/cart-recovery";
+import { isCartNotFoundError, storefrontNoticeFromError, type StorefrontNotice } from "@/lib/cart-recovery";
+import { StorefrontNoticeBanner } from "@/components/storefront-notice";
 
 export default function CartPage() {
   const { cartId, clearCartSession } = useCart();
@@ -20,7 +21,7 @@ export default function CartPage() {
   const updateCartItem = useUpdateCartItem();
   const deleteCartItem = useDeleteCartItem();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const [notice, setNotice] = useState<StorefrontNotice | null>(null);
 
   useEffect(() => {
     if (!cartId || !isError || !isCartNotFoundError(error)) return;
@@ -35,31 +36,33 @@ export default function CartPage() {
   const handleUpdateQuantity = async (itemId: number, newQuantity: number) => {
     if (newQuantity < 1) return;
     try {
-      await updateCartItem.mutateAsync({
+      const updated = await updateCartItem.mutateAsync({
         id: cartId!,
         itemId,
         data: { quantity: newQuantity }
       });
-      queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(cartId!) });
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err?.message || "No se pudo actualizar la cantidad.",
-        variant: "destructive"
-      });
+      writeCartCache(queryClient, updated);
+    } catch (err: unknown) {
+      setNotice(
+        storefrontNoticeFromError(err, {
+          title: "No pudimos actualizar tu bolsa",
+          description: "Revisa cuántas piezas quedan e inténtalo de nuevo.",
+        }),
+      );
     }
   };
 
   const handleDeleteItem = async (itemId: number) => {
     try {
-      await deleteCartItem.mutateAsync({ id: cartId!, itemId });
-      queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(cartId!) });
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar el producto.",
-        variant: "destructive"
-      });
+      const updated = await deleteCartItem.mutateAsync({ id: cartId!, itemId });
+      writeCartCache(queryClient, updated);
+    } catch (err: unknown) {
+      setNotice(
+        storefrontNoticeFromError(err, {
+          title: "No pudimos quitarlo",
+          description: "Inténtalo de nuevo en un momento.",
+        }),
+      );
     }
   };
 
@@ -98,7 +101,14 @@ export default function CartPage() {
       <div className="container mx-auto px-4 py-5 md:py-8 pb-28 lg:pb-12">
         <span className="mallorca-kicker text-primary">Casi listo</span>
         <h1 className="mallorca-display mb-4 mt-0 text-3xl md:text-4xl">Tu bolsa</h1>
-        
+        {notice ? (
+          <StorefrontNoticeBanner
+            notice={notice}
+            className="mb-5"
+            onDismiss={() => setNotice(null)}
+          />
+        ) : null}
+
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-10">
           <div className="w-full lg:w-2/3">
               <div className="mb-4 flex items-center justify-between border-y border-border py-3">

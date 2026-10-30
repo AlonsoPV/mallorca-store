@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 
 const MAILBOXES_KEY = ["admin", "mailboxes"] as const;
 
@@ -113,8 +114,7 @@ const emptyForm = (role: MailboxRole = "system"): FormState => ({
 });
 
 function errorMessage(error: unknown) {
-  const e = error as { error?: string; message?: string; data?: { error?: string } };
-  return e?.data?.error || e?.error || e?.message || "No se pudo guardar el correo.";
+  return sanitizeErrorCopy(error, "No se pudo guardar el correo.");
 }
 
 export default function AdminMailboxes() {
@@ -154,7 +154,7 @@ export default function AdminMailboxes() {
       toast({ title: "Correo de Hostinger guardado" });
     },
     onError: (error) => {
-      toast({ title: errorMessage(error), variant: "destructive" });
+      toast({ title: errorMessage(error), variant: "notice" });
     },
   });
 

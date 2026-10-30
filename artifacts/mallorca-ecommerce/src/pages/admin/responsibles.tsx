@@ -23,10 +23,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 
 function errorMessage(error: unknown) {
-  const e = error as { error?: string; message?: string };
-  return e?.error || e?.message || "La operación no pudo completarse.";
+  return sanitizeErrorCopy(error, "La operación no pudo completarse.");
 }
 
 export default function AdminAssignmentsPanel() {
@@ -70,7 +70,7 @@ export default function AdminAssignmentsPanel() {
       toast({ title: success });
       refresh();
     } catch (e) {
-      toast({ title: errorMessage(e), variant: "destructive" });
+      toast({ title: errorMessage(e), variant: "notice" });
     }
   };
 

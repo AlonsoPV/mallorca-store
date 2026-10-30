@@ -238,6 +238,9 @@ export default function Home() {
               key={activeHero.src}
               src={activeHero.src}
               alt={activeHero.alt}
+              width={1920}
+              height={1080}
+              sizes="100vw"
               fetchPriority={heroIndex === 0 ? "high" : "auto"}
               decoding="async"
               className="mallorca-image absolute inset-0 h-full w-full object-cover object-center"
@@ -339,12 +342,12 @@ export default function Home() {
       </section>
 
       {showFeatured ? (
-      <section className="overflow-hidden bg-[var(--mallorca-cream)] py-20 md:py-28">
+      <section className="flex h-[100dvh] max-h-[100dvh] flex-col justify-center overflow-hidden bg-[var(--mallorca-cream)] py-8 md:py-10">
         <div className="container mx-auto px-5 md:px-8">
-          <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
               <span className="mallorca-kicker text-[var(--mallorca-red)]">Destacados</span>
-              <h2 className="mallorca-display mt-4 max-w-2xl text-5xl leading-[0.92] md:text-7xl">¿Qué se te antoja hoy?</h2>
+              <h2 className="mallorca-display mt-3 max-w-2xl text-4xl leading-[0.92] md:mt-4 md:text-6xl">¿Qué se te antoja hoy?</h2>
             </div>
             <div className="flex items-center gap-4 md:mb-1">
               <div className="flex items-center gap-2" aria-hidden={isLoadingFeatured}>
@@ -354,7 +357,7 @@ export default function Home() {
                   disabled={!featuredCanPrev}
                   onClick={() => featuredApi?.scrollPrev()}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-full border border-[var(--mallorca-cacao)]/20 text-[var(--mallorca-cacao)] transition-colors",
+                    "flex h-10 w-10 items-center justify-center rounded-full border border-[var(--mallorca-cacao)]/20 text-[var(--mallorca-cacao)] transition-colors",
                     featuredCanPrev
                       ? "hover:border-[var(--mallorca-red)] hover:bg-[var(--mallorca-red)] hover:text-white"
                       : "cursor-not-allowed opacity-35",
@@ -368,7 +371,7 @@ export default function Home() {
                   disabled={!featuredCanNext}
                   onClick={() => featuredApi?.scrollNext()}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-full border border-[var(--mallorca-cacao)]/20 text-[var(--mallorca-cacao)] transition-colors",
+                    "flex h-10 w-10 items-center justify-center rounded-full border border-[var(--mallorca-cacao)]/20 text-[var(--mallorca-cacao)] transition-colors",
                     featuredCanNext
                       ? "hover:border-[var(--mallorca-red)] hover:bg-[var(--mallorca-red)] hover:text-white"
                       : "cursor-not-allowed opacity-35",
@@ -384,11 +387,11 @@ export default function Home() {
           </div>
 
           {isLoadingFeatured ? (
-            <div className="mt-12 flex gap-5 overflow-hidden">
+            <div className="mt-6 flex gap-5 overflow-hidden md:mt-8">
               {[1, 2, 3].map((item) => (
                 <div
                   key={item}
-                  className="aspect-[0.78] w-[78%] shrink-0 animate-pulse bg-black/5 sm:w-[46%] lg:w-[31%]"
+                  className="h-[min(18rem,38dvh)] w-[78%] shrink-0 animate-pulse bg-black/5 sm:w-[46%] lg:w-[31%]"
                 />
               ))}
             </div>
@@ -400,7 +403,7 @@ export default function Home() {
                 dragFree: true,
                 containScroll: "trimSnaps",
               }}
-              className="mt-12"
+              className="mt-6 md:mt-8"
             >
               <CarouselContent className="-ml-5 md:-ml-6">
                 {featuredList.slice(0, 8).map((product) => (
@@ -408,7 +411,10 @@ export default function Home() {
                     key={product.id}
                     className="basis-[78%] pl-5 sm:basis-[46%] md:pl-6 lg:basis-[31%]"
                   >
-                    <ProductCard product={product} />
+                    <ProductCard
+                      product={product}
+                      className="[&>a>div]:!aspect-auto [&>a>div]:h-[min(18rem,38dvh)] [&_.pt-4]:pt-3 [&_h3]:text-base sm:[&_h3]:text-lg [&_p.mb-3]:mb-2 [&_p.mb-3]:hidden sm:[&_p.mb-3]:line-clamp-1 sm:[&_p.mb-3]:block"
+                    />
                   </CarouselItem>
                 ))}
               </CarouselContent>
@@ -419,22 +425,22 @@ export default function Home() {
       ) : null}
 
       {showSeasonal ? (
-      <section className="overflow-hidden bg-[var(--mallorca-white)] px-5 py-16 sm:py-20 md:px-8 md:py-28">
+      <section className="flex h-[100dvh] max-h-[100dvh] flex-col justify-center overflow-hidden bg-[var(--mallorca-white)] px-5 py-8 md:px-8 md:py-10">
         <div className="container mx-auto">
-          <div className="grid items-stretch gap-8 sm:gap-10 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:gap-10 lg:gap-12 xl:gap-16">
+          <div className="grid items-center gap-6 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:gap-10 lg:gap-12 xl:gap-16">
             <div className="order-2 flex min-w-0 flex-col justify-center md:order-1">
               <span className="mallorca-kicker text-[var(--mallorca-red)]">Temporada</span>
-              <h2 className="mallorca-display mt-3 max-w-xl text-[clamp(2rem,8vw,4.25rem)] leading-[1.02] sm:mt-4 sm:leading-[0.95]">
+              <h2 className="mallorca-display mt-3 max-w-xl text-[clamp(2rem,6.5vw,3.75rem)] leading-[1.02] sm:leading-[0.95]">
                 Lo que el horno{" "}
                 <br className="hidden sm:block" />
                 <em>saca ahora.</em>
               </h2>
-              <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground sm:mt-6 sm:text-[0.95rem] md:text-base">
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground md:mt-5 md:text-[0.95rem]">
                 {seasonalHero?.shortDescription || "Piezas de temporada, hechas cuando el calendario y el horno coinciden."}
               </p>
               <Link
                 href={seasonalHero ? `/producto/${seasonalHero.slug}` : "/tienda"}
-                className="group mt-7 inline-flex max-w-full items-center gap-3 self-start sm:mt-8"
+                className="group mt-5 inline-flex max-w-full items-center gap-3 self-start md:mt-6"
               >
                 <span className="border-b border-[var(--mallorca-red)]/35 pb-1 text-[0.68rem] font-bold uppercase tracking-[0.16em] text-[var(--mallorca-red)] transition-colors group-hover:border-[var(--mallorca-red)] sm:text-[0.72rem] sm:tracking-[0.18em]">
                   Descubrir temporada
@@ -443,6 +449,23 @@ export default function Home() {
                   <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </span>
               </Link>
+              {extraSeasonal.length > 0 ? (
+                <div className="mt-6 hidden border-t border-[var(--mallorca-cacao)]/10 pt-5 md:mt-8 md:block">
+                  <p className="mallorca-kicker text-[var(--mallorca-cacao)]/45">También esta temporada</p>
+                  <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+                    {extraSeasonal.slice(0, 4).map((product) => (
+                      <li key={product.id}>
+                        <Link
+                          href={`/producto/${product.slug}`}
+                          className="text-sm text-[var(--mallorca-cacao)]/80 underline-offset-4 transition-colors hover:text-[var(--mallorca-red)] hover:underline"
+                        >
+                          {product.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
 
             <div
@@ -452,13 +475,13 @@ export default function Home() {
               aria-label="Productos de temporada"
             >
               {isLoadingSeasonal || !seasonalHero ? (
-                <div className="aspect-[5/4] max-h-[22rem] animate-pulse bg-[var(--mallorca-sand)] sm:max-h-[26rem] md:aspect-[4/3] md:max-h-none md:min-h-[18rem] lg:min-h-[22rem] xl:min-h-[26rem]" />
+                <div className="h-[min(16rem,36dvh)] animate-pulse bg-[var(--mallorca-sand)] sm:h-[min(20rem,42dvh)] md:h-[min(26rem,56dvh)]" />
               ) : (
                 <Link
                   href={`/producto/${seasonalHero.slug}`}
                   className="relative block overflow-hidden bg-[var(--mallorca-sand)]"
                 >
-                  <div className="aspect-[5/4] max-h-[22rem] sm:max-h-[26rem] md:aspect-[4/3] md:max-h-none md:min-h-[18rem] lg:min-h-[22rem] xl:min-h-[26rem]">
+                  <div className="h-[min(16rem,36dvh)] sm:h-[min(20rem,42dvh)] md:h-[min(26rem,56dvh)]">
                     <ImageWithFallback
                       key={seasonalHero.id}
                       src={seasonalHero.imageUrl || storeSeasonalFallback}
@@ -533,28 +556,12 @@ export default function Home() {
               ) : null}
             </div>
           </div>
-
-          {extraSeasonal.length > 0 ? (
-            <div className="mt-12 border-t border-[var(--mallorca-cacao)]/10 pt-10 sm:mt-14 sm:pt-12 md:mt-16">
-              <div className="mb-6 flex items-end justify-between gap-4 sm:mb-8">
-                <p className="mallorca-kicker text-[var(--mallorca-cacao)]/45">También esta temporada</p>
-                <Link href="/tienda" className="editorial-link text-xs font-bold text-[var(--mallorca-red)] sm:text-sm">
-                  Ver todo <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                </Link>
-              </div>
-              <div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 sm:gap-y-12 lg:grid-cols-3">
-                {extraSeasonal.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       </section>
       ) : null}
 
       {branches && branches.length > 0 ? (
-      <section className="relative overflow-hidden bg-[var(--mallorca-cacao)] px-5 py-20 text-white md:px-8 md:py-28">
+      <section className="relative flex h-[100dvh] max-h-[100dvh] flex-col justify-center overflow-hidden bg-[var(--mallorca-cacao)] px-5 py-6 text-white md:px-8 md:py-8">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-[0.07]"
@@ -564,13 +571,13 @@ export default function Home() {
           }}
         />
         <div className="container relative mx-auto">
-          <div className="mb-10 grid gap-8 border-b border-white/10 pb-10 md:mb-14 md:grid-cols-[minmax(0,1.4fr)_auto] md:items-end md:gap-12 md:pb-12">
+          <div className="mb-4 grid gap-3 border-b border-white/10 pb-4 md:mb-6 md:grid-cols-[minmax(0,1.4fr)_auto] md:items-end md:gap-10 md:pb-6">
             <div className="max-w-2xl">
               <span className="mallorca-kicker text-[var(--mallorca-butter)]">Hospitalidad Mallorca</span>
-              <h2 className="mallorca-display mt-4 text-[clamp(2.6rem,7vw,4.75rem)] leading-[0.92]">
+              <h2 className="mallorca-display mt-2 text-[clamp(2rem,5.5vw,3.75rem)] leading-[0.92] md:mt-3">
                 ¿Dónde nos vemos?
               </h2>
-              <p className="mt-5 max-w-md text-sm leading-relaxed text-white/70 md:text-base">
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-white/70 md:mt-3">
                 Pan recién horneado, algo dulce y una pausa en la ciudad.
               </p>
             </div>
@@ -587,7 +594,7 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2 md:gap-6 lg:gap-8">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:gap-6">
             {branches.slice(0, 2).map((branch, index) => {
               const shortName = branch.shortName || branch.name.replace(/^Mallorca\s+/i, "");
               const addressLines = formatBranchPostalLines(branch);
@@ -602,9 +609,9 @@ export default function Home() {
                 <Link
                   key={branch.id}
                   href={`/sucursales/${branch.slug}`}
-                  className="group flex flex-col border border-white/12 bg-white/[0.03] transition-colors duration-300 hover:border-white/25 hover:bg-white/[0.055]"
+                  className="group flex min-w-0 flex-col border border-white/12 bg-white/[0.03] transition-colors duration-300 hover:border-white/25 hover:bg-white/[0.055]"
                 >
-                  <div className="relative aspect-[5/4] overflow-hidden bg-[var(--mallorca-sand)] md:aspect-[16/11]">
+                  <div className="relative h-[min(10rem,24dvh)] overflow-hidden bg-[var(--mallorca-sand)] sm:h-[min(12rem,28dvh)] md:h-[min(14rem,32dvh)]">
                     <ImageWithFallback
                       src={branchImageFor(branch.slug, branch.imageUrl)}
                       alt={branch.name}
@@ -618,57 +625,59 @@ export default function Home() {
                       }
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[var(--mallorca-cacao)]/80 via-[var(--mallorca-cacao)]/15 to-transparent" />
-                    <span className="absolute left-4 top-4 mallorca-kicker text-white/80 md:left-5 md:top-5">
+                    <span className="absolute left-2.5 top-2.5 mallorca-kicker text-white/80 sm:left-4 sm:top-3 md:left-5 md:top-4">
                       {String(index + 1).padStart(2, "0")}
                     </span>
-                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 md:p-6">
+                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3 sm:gap-4 sm:p-4 md:p-5">
                       <div className="min-w-0">
-                        <span className="mallorca-kicker text-white/70">
+                        <span className="mallorca-kicker hidden text-white/70 sm:inline">
                           {branch.neighborhood || branch.city}
                         </span>
-                        <h3 className="mallorca-display mt-2 text-3xl leading-none md:text-4xl">
+                        <h3 className="mallorca-display mt-0 text-lg leading-none sm:mt-1.5 sm:text-2xl md:text-3xl">
                           {shortName}
                         </h3>
                       </div>
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[var(--mallorca-cacao)] transition-colors duration-300 group-hover:bg-[var(--mallorca-red)] group-hover:text-white">
-                        <ArrowUpRight className="h-4 w-4" />
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[var(--mallorca-cacao)] transition-colors duration-300 group-hover:bg-[var(--mallorca-red)] group-hover:text-white sm:h-10 sm:w-10">
+                        <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex flex-1 flex-col gap-4 p-5 md:gap-5 md:p-6">
-                    <div className="flex items-start gap-2.5">
-                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--mallorca-butter)]" />
-                      <div className="min-w-0 text-sm leading-relaxed text-white/75">
-                        <p>{streetLine || placeLine}</p>
+                  <div className="flex flex-col gap-2 p-3 sm:gap-3 sm:p-4 md:p-5">
+                    <div className="flex items-start gap-2 sm:gap-2.5">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--mallorca-butter)] sm:h-4 sm:w-4" />
+                      <div className="min-w-0 text-xs leading-snug text-white/75 sm:text-sm">
+                        <p className="truncate">{streetLine || placeLine}</p>
                         {streetLine && (restLines[0] || placeLine) ? (
-                          <p className="mt-1 text-white/55">{restLines[0] || placeLine}</p>
+                          <p className="mt-0.5 hidden truncate text-white/55 sm:block">{restLines[0] || placeLine}</p>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/10 pt-4 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-white/55">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-white/10 pt-2 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-white/55 sm:gap-x-3 sm:pt-3 sm:text-[0.68rem] sm:tracking-[0.14em]">
                       {hoursToday ? (
                         <span className="inline-flex items-center gap-1.5 text-white/80">
-                          <Clock className="h-3.5 w-3.5 text-[var(--mallorca-butter)]" />
-                          {hoursToday}
+                          <Clock className="h-3 w-3 text-[var(--mallorca-butter)] sm:h-3.5 sm:w-3.5" />
+                          <span className="truncate">{hoursToday}</span>
                         </span>
                       ) : null}
                       {hoursToday && services.length > 0 ? (
-                        <span className="hidden text-white/25 sm:inline" aria-hidden>
+                        <span className="hidden text-white/25 md:inline" aria-hidden>
                           ·
                         </span>
                       ) : null}
-                      {services.map((service, serviceIndex) => (
-                        <span key={service} className="inline-flex items-center gap-3">
-                          {serviceIndex > 0 ? (
-                            <span className="text-white/25" aria-hidden>
-                              ·
-                            </span>
-                          ) : null}
-                          {service}
-                        </span>
-                      ))}
+                      <span className="hidden md:inline-flex md:flex-wrap md:items-center md:gap-3">
+                        {services.map((service, serviceIndex) => (
+                          <span key={service} className="inline-flex items-center gap-3">
+                            {serviceIndex > 0 ? (
+                              <span className="text-white/25" aria-hidden>
+                                ·
+                              </span>
+                            ) : null}
+                            {service}
+                          </span>
+                        ))}
+                      </span>
                     </div>
                   </div>
                 </Link>

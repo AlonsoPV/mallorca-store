@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 import { cn } from "@/lib/utils";
 import { getImageUrl } from "@/lib/image-url";
 import {
@@ -498,11 +499,10 @@ export default function AdminBranchForm() {
           try {
             await ensurePrimaryAssignment(id, primaryUserId);
           } catch (err: unknown) {
-            const msg =
-              (err as { payload?: { error?: string }; message?: string })?.payload?.error ||
-              (err as { message?: string })?.message ||
-              "No se pudo asignar el responsable";
-            toast({ title: msg, variant: "destructive" });
+            toast({
+              title: sanitizeErrorCopy(err, "No se pudo asignar el responsable"),
+              variant: "notice",
+            });
           }
         }
       }
@@ -548,7 +548,7 @@ export default function AdminBranchForm() {
         );
       }
     } catch (err: any) {
-      toast({ title: err?.payload?.error || err?.message || "Error al guardar", variant: "destructive" });
+      toast({ title: sanitizeErrorCopy(err, "No se pudo guardar"), variant: "notice" });
     } finally {
       setSaving(false);
     }
@@ -631,14 +631,14 @@ export default function AdminBranchForm() {
                 ? {
                     ...item,
                     status: "error",
-                    error: error instanceof Error ? error.message : "Error al subir",
+                    error: sanitizeErrorCopy(error, "No se pudo subir"),
                   }
                 : item,
             ),
           );
           toast({
             title: `No se pudo subir ${asset.fileName}`,
-            variant: "destructive",
+            variant: "notice",
           });
         }
       }

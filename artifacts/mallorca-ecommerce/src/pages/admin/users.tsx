@@ -44,6 +44,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 import { generatePassword, generateUsername } from "@/lib/staff-credentials";
 import { cn } from "@/lib/utils";
 
@@ -94,8 +95,7 @@ const emptyCreate = (): CreateForm => ({
 });
 
 function errorMessage(error: unknown) {
-  const e = error as { error?: string; message?: string; data?: { error?: string } };
-  return e?.data?.error || e?.error || e?.message || "La operación no pudo completarse.";
+  return sanitizeErrorCopy(error, "La operación no pudo completarse.");
 }
 
 type UsersTab = "directorio" | "asignaciones" | "roles";
@@ -233,7 +233,7 @@ export default function AdminUsers() {
       }
       refresh();
     } catch (e) {
-      toast({ title: errorMessage(e), variant: "destructive" });
+      toast({ title: errorMessage(e), variant: "notice" });
     }
   };
 
@@ -268,7 +268,7 @@ export default function AdminUsers() {
       }
       refresh();
     } catch (e) {
-      toast({ title: errorMessage(e), variant: "destructive" });
+      toast({ title: errorMessage(e), variant: "notice" });
     }
   };
 

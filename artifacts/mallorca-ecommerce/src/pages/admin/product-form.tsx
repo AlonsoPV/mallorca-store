@@ -44,6 +44,7 @@ import {
   Boxes,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -630,11 +631,11 @@ export default function AdminProductForm() {
     };
 
     const handleError = (error?: unknown) => {
-      const message =
-        error && typeof error === "object" && "message" in error && typeof (error as any).message === "string"
-          ? (error as any).message
-          : "No se pudo guardar. Revisa los datos e inténtalo de nuevo.";
-      toast({ title: "No se pudo guardar el producto", description: message, variant: "destructive" });
+      toast({
+        title: "No se pudo guardar el producto",
+        description: sanitizeErrorCopy(error, "Revisa los datos e inténtalo de nuevo."),
+        variant: "notice",
+      });
       setShowConfirmDialog(false);
     };
 

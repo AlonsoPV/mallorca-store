@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { LogOut, Package, User, Clock, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { toastStorefrontNotice } from "@/components/storefront-notice";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -38,8 +39,11 @@ export default function AccountPage() {
       });
       await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       toast({ title: "Perfil actualizado", description: "Tus datos se han guardado exitosamente." });
-    } catch (err: any) {
-      toast({ title: "Error", description: "No se pudo actualizar tu perfil.", variant: "destructive" });
+    } catch (err: unknown) {
+      toastStorefrontNotice(err, {
+        title: "No se pudo guardar tu perfil",
+        description: "Revisa tus datos e inténtalo de nuevo.",
+      });
     }
   };
 

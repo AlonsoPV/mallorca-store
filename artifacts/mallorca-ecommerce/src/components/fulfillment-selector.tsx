@@ -25,11 +25,12 @@ import {
 } from "@workspace/api-client-react";
 import type { FulfillmentPreview } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { writeCartCache } from "@/lib/cart-cache";
 import { useCart } from "@/lib/cart-context";
 import { track } from "@/lib/analytics";
 import { formatSlotTime, mexicoTodayLocalDate, sameSlot, slotToIso } from "@/lib/slot-time";
 import { cartLeadNotice } from "@/lib/availability-copy";
-import { useToast } from "@/hooks/use-toast";
+import { toastStorefrontMessage, toastStorefrontNotice } from "@/components/storefront-notice";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -41,7 +42,6 @@ const dayLabels = ["L", "M", "M", "J", "V", "S", "D"];
 
 export function FulfillmentSelector({ required = false }: FulfillmentSelectorProps) {
   const { branchId, cartId, selectedDate, selectedTime, fulfillmentMethod, setFulfillmentContext } = useCart();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const today = startOfDay(mexicoTodayLocalDate());
   const [isOpen, setIsOpen] = useState(false);
@@ -124,11 +124,11 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
 
   const applySelection = async () => {
     if (!draftDate || !draftTime) {
-      toast({
-        title: "Completa tu horario",
-        description: "Selecciona una fecha y un horario para ver los productos disponibles.",
-        variant: "destructive",
-      });
+      toastStorefrontMessage(
+        "Completa tu horario",
+        "Selecciona una fecha y un horario para ver los productos disponibles.",
+        "cart",
+      );
       return;
     }
 
@@ -154,11 +154,10 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
         setPreview(null);
         setIsOpen(false);
       }
-    } catch (error: any) {
-      toast({
+    } catch (error: unknown) {
+      toastStorefrontNotice(error, {
         title: "No pudimos validar ese horario",
-        description: error?.message || "Selecciona otro horario e inténtalo nuevamente.",
-        variant: "destructive",
+        description: "Selecciona otro horario e inténtalo de nuevo.",
       });
     } finally {
       setIsApplying(false);
@@ -169,18 +168,18 @@ export function FulfillmentSelector({ required = false }: FulfillmentSelectorPro
     if (!preview || !draftDate || !draftTime || !preview.slotAvailable) return;
     setIsApplying(true);
     try {
+      let updated = null;
       for (const item of preview.unavailableItems) {
-        await deleteCartItem.mutateAsync({ id: cartId!, itemId: item.cartItemId });
+        updated = await deleteCartItem.mutateAsync({ id: cartId!, itemId: item.cartItemId });
       }
       setFulfillmentContext(draftDate, draftTime);
-      await queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(cartId!) });
+      if (updated) writeCartCache(queryClient, updated);
       setPreview(null);
       setIsOpen(false);
-    } catch (error: any) {
-      toast({
+    } catch (error: unknown) {
+      toastStorefrontNotice(error, {
         title: "No pudimos actualizar tu bolsa",
-        description: error?.message || "Conservamos tu fecha actual.",
-        variant: "destructive",
+        description: "Conservamos tu fecha actual.",
       });
     } finally {
       setIsApplying(false);

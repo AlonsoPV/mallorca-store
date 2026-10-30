@@ -1,7 +1,7 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
@@ -19,6 +19,51 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+function preloadLcpAssets(): Plugin {
+  return {
+    name: 'preload-lcp-assets',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (!ctx.bundle) return html;
+        const files = Object.values(ctx.bundle)
+          .filter((item): item is { type: 'asset'; fileName: string } => item.type === 'asset')
+          .map((item) => item.fileName);
+        const hero = files.find((name) => name.includes('temporada-05') && name.endsWith('.webp'));
+        const playfair = files.find(
+          (name) =>
+            name.includes('playfair-display-400-normal-latin') &&
+            name.endsWith('.woff2') &&
+            !name.includes('latin-ext'),
+        );
+        const jakarta = files.find(
+          (name) =>
+            name.includes('plus-jakarta-sans-400-normal-latin') &&
+            name.endsWith('.woff2') &&
+            !name.includes('latin-ext'),
+        );
+        const tags: string[] = [];
+        if (hero) {
+          tags.push(
+            `<link rel="preload" as="image" href="/${hero}" type="image/webp" fetchpriority="high" />`,
+          );
+        }
+        if (playfair) {
+          tags.push(`<link rel="preload" as="font" type="font/woff2" href="/${playfair}" crossorigin />`);
+        }
+        if (jakarta) {
+          tags.push(`<link rel="preload" as="font" type="font/woff2" href="/${jakarta}" crossorigin />`);
+        }
+        if (!tags.length) return html;
+        return html.replace(
+          '<link rel="icon"',
+          `${tags.join('\n    ')}\n    <link rel="icon"`,
+        );
+      },
+    },
+  };
+}
+
 const basePath = process.env.BASE_PATH;
 
 if (!basePath) {
@@ -32,6 +77,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    preloadLcpAssets(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined

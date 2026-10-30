@@ -4,14 +4,15 @@ import { cn } from "@/lib/utils";
 import { ArrowUpRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
-import { useAddCartItem, useCreateCartSession, getGetCartQueryKey } from "@workspace/api-client-react";
+import { useAddCartItem, useCreateCartSession } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { writeCartCache } from "@/lib/cart-cache";
 import { useState } from "react";
 import { ImageWithFallback } from "@/components/image-with-fallback";
 import { formatMxn, productAvailabilityCopy } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
 import { isStaleCartMutationError } from "@/lib/cart-recovery";
+import { toastStorefrontNotice } from "@/components/storefront-notice";
 
 interface ProductCardProps {
   product: ProductCardType;
@@ -24,7 +25,6 @@ export function ProductCard({ product, className, showBranchAvailability = false
   const addCartItem = useAddCartItem();
   const createSession = useCreateCartSession();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
 
   const pageAvailability = showBranchAvailability ? product.availability?.[0] : undefined;
@@ -78,8 +78,9 @@ export function ProductCard({ product, className, showBranchAvailability = false
       if (!activeCartId) {
         activeCartId = await createFreshCart(activeBranchId);
       }
+      let updated;
       try {
-        await addCartItem.mutateAsync({
+        updated = await addCartItem.mutateAsync({
           id: activeCartId,
           data: { productId: product.id, quantity: 1, variantId: null },
         });
@@ -87,16 +88,19 @@ export function ProductCard({ product, className, showBranchAvailability = false
         if (!isStaleCartMutationError(error)) throw error;
         clearCartSession();
         activeCartId = await createFreshCart(activeBranchId);
-        await addCartItem.mutateAsync({
+        updated = await addCartItem.mutateAsync({
           id: activeCartId,
           data: { productId: product.id, quantity: 1, variantId: null },
         });
       }
-      queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(activeCartId) });
+      writeCartCache(queryClient, updated);
       track("add_to_cart", { productId: product.id, name: product.name, quantity: 1, value: currentSalePrice ?? currentPrice });
       openMiniCart();
-    } catch (error: any) {
-      toast({ title: "No pudimos añadirlo", description: error?.message || "Intenta de nuevo.", variant: "destructive" });
+    } catch (error: unknown) {
+      toastStorefrontNotice(error, {
+        title: "No pudimos añadirlo a tu bolsa",
+        description: "Inténtalo de nuevo en un momento.",
+      });
     } finally {
       setIsAdding(false);
     }

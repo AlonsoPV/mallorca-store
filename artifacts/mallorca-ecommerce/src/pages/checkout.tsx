@@ -30,6 +30,7 @@ import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cartLeadNotice, formatMxn, resolveFulfillmentMethod } from "@/lib/availability-copy";
 import { isCartNotFoundError, isLikelyCreatedOrderError } from "@/lib/cart-recovery";
+import { toastStorefrontMessage, toastStorefrontNotice } from "@/components/storefront-notice";
 import {
   assertDeliveryPaymentAllowed,
   checkoutCtaLabel,
@@ -141,6 +142,16 @@ export default function CheckoutPage() {
   const validateDelivery = useValidateDelivery();
   const [deliveryInfo, setDeliveryInfo] = useState<{ eligible: boolean; fee: number; reason: string | null } | null>(null);
 
+  const cartRevision = useMemo(() => {
+    if (!cart) return "";
+    return [
+      cart.quantity,
+      cart.subtotal,
+      cart.maxLeadTimeMinutes,
+      ...cart.items.map((item) => `${item.id}:${item.quantity}:${item.unitPrice}:${item.lineTotal}`),
+    ].join("|");
+  }, [cart]);
+
   const { data: slots, isLoading: isLoadingSlots, isError: isSlotsError, refetch: refetchSlots } = useListFulfillmentSlots({
     branchId: branchId!,
     date: checkoutDate,
@@ -149,12 +160,16 @@ export default function CheckoutPage() {
   }, {
     query: {
       enabled: !!cartId && !!branchId && !!checkoutDate && !!fulfillmentMethod,
-      queryKey: getListFulfillmentSlotsQueryKey({
-        branchId: branchId!,
-        date: checkoutDate,
-        method: fulfillmentMethod,
-        cartId: cartId!,
-      }),
+      queryKey: [
+        ...getListFulfillmentSlotsQueryKey({
+          branchId: branchId!,
+          date: checkoutDate,
+          method: fulfillmentMethod,
+          cartId: cartId!,
+        }),
+        cart?.maxLeadTimeMinutes ?? 0,
+        cart?.quantity ?? 0,
+      ],
     },
   });
 
@@ -198,6 +213,7 @@ export default function CheckoutPage() {
   const createOrder = useCreateOrder();
   const previewOrder = usePreviewOrder();
   const [preview, setPreview] = useState<AdminOrderPreview | null>(null);
+  const [previewRevision, setPreviewRevision] = useState("");
 
   const upcomingDays = useMemo(
     () => Array.from({ length: 14 }, (_, index) => addDays(mexicoTodayLocalDate(), index)),
@@ -239,12 +255,19 @@ export default function CheckoutPage() {
       return;
     }
     let cancelled = false;
+    const revision = cartRevision;
     const handle = window.setTimeout(async () => {
       try {
         const result = await previewOrder.mutateAsync({ data: previewBody });
-        if (!cancelled) setPreview(result);
+        if (!cancelled) {
+          setPreview(result);
+          setPreviewRevision(revision);
+        }
       } catch (error) {
-        if (!cancelled) setPreview(null);
+        if (!cancelled) {
+          setPreview(null);
+          setPreviewRevision("");
+        }
         if (isCartNotFoundError(error) || isLikelyCreatedOrderError(error)) {
           setSkipPreview(true);
         }
@@ -256,6 +279,7 @@ export default function CheckoutPage() {
     };
   }, [
     cartId,
+    cartRevision,
     selectedSlot,
     fulfillmentMethod,
     customerEmail,
@@ -272,7 +296,7 @@ export default function CheckoutPage() {
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      toast({ title: "Geolocalización no soportada", description: "Tu navegador no soporta geolocalización.", variant: "destructive" });
+      toastStorefrontMessage("Geolocalización no soportada", "Tu navegador no permite compartir ubicación.");
       return;
     }
     setIsGettingLocation(true);
@@ -293,22 +317,21 @@ export default function CheckoutPage() {
             });
             setDeliveryInfo({ eligible: result.eligible, fee: result.deliveryFee, reason: result.reason });
             if (!result.eligible) {
-              toast({
-                title: "Envío no disponible",
-                description: result.reason || "Tu ubicación está fuera del área de cobertura.",
-                variant: "destructive"
-              });
+              toastStorefrontMessage(
+                "Envío no disponible",
+                result.reason || "Tu ubicación está fuera del área de cobertura.",
+              );
             } else {
               toast({ title: "Ubicación confirmada", description: "Estás dentro de nuestra área de entrega." });
             }
           } catch {
-            toast({ title: "Error validando entrega", description: "Intenta de nuevo más tarde.", variant: "destructive" });
+            toastStorefrontMessage("No pudimos validar la entrega", "Inténtalo de nuevo en un momento.");
           }
         }
       },
       () => {
         setIsGettingLocation(false);
-        toast({ title: "Error obteniendo ubicación", description: "Asegúrate de conceder permisos al navegador.", variant: "destructive" });
+        toastStorefrontMessage("No pudimos leer tu ubicación", "Concede permiso al navegador e inténtalo de nuevo.");
       }
     );
   };
@@ -318,12 +341,12 @@ export default function CheckoutPage() {
     if (!cartId || !cart) return;
 
     if (fulfillmentMethod === "delivery" && (!deliveryInfo?.eligible || !lat || !lng || !deliveryAddress)) {
-      toast({ title: "Revisa tu entrega", description: "Completa dirección y comparte tu ubicación para validar cobertura.", variant: "destructive" });
+      toastStorefrontMessage("Revisa tu entrega", "Completa la dirección y comparte tu ubicación para validar cobertura.");
       return;
     }
 
     if (!checkoutDate || !selectedSlot || !selectedSlotAvailable) {
-      toast({ title: "Horario faltante", description: "Selecciona fecha y un horario disponible aquí mismo.", variant: "destructive" });
+      toastStorefrontMessage("Falta el horario", "Selecciona fecha y un horario disponible aquí mismo.", "cart");
       return;
     }
 
@@ -333,11 +356,10 @@ export default function CheckoutPage() {
       (!assertDeliveryPaymentAllowed(fulfillmentMethod, selectedPayment) ||
         !paymentMethods.some((method) => method.code === selectedPayment))
     ) {
-      toast({
-        title: "Elige un pago en línea",
-        description: "El envío a domicilio no admite efectivo contra entrega. Activa PayPal o Mercado Pago.",
-        variant: "destructive",
-      });
+      toastStorefrontMessage(
+        "Elige un pago en línea",
+        "El envío a domicilio no admite efectivo contra entrega. Activa PayPal o Mercado Pago.",
+      );
       return;
     }
 
@@ -384,11 +406,10 @@ export default function CheckoutPage() {
             return;
           }
         } catch {
-          toast({
-            title: "No se pudo abrir el pago",
-            description: "El pedido quedó creado. Puedes reintentar el pago desde el recibo.",
-            variant: "destructive",
-          });
+          toastStorefrontMessage(
+            "No se pudo abrir el pago",
+            "El pedido quedó creado. Puedes reintentar el pago desde el recibo.",
+          );
         }
         setLocation(orderUrl);
         return;
@@ -407,31 +428,35 @@ export default function CheckoutPage() {
         } catch { /* Fall through if storage is unavailable. */ }
         if (isCartNotFoundError(err)) {
           try { clearCartSession(); } catch { /* */ }
-          toast({
-            title: "Este carrito ya se convirtió en pedido",
-            description: "Si ya confirmaste, entra desde el recibo o reintenta el pago ahí. Si no, arma un carrito nuevo.",
-            variant: "destructive",
-          });
+          toastStorefrontMessage(
+            "Este carrito ya se convirtió en pedido",
+            "Si ya confirmaste, entra desde el recibo o reintenta el pago ahí. Si no, arma un carrito nuevo.",
+            "cart",
+          );
           return;
         }
-        toast({
-          title: "No se confirmó el pedido en pantalla",
-          description: "Si el pedido aparece en tu correo o en Pedidos, no vuelvas a confirmar. Reintenta el pago desde el recibo.",
-          variant: "destructive",
-        });
+        toastStorefrontMessage(
+          "No se confirmó el pedido en pantalla",
+          "Si el pedido aparece en tu correo o en Pedidos, no vuelvas a confirmar. Reintenta el pago desde el recibo.",
+          "cart",
+        );
         return;
       }
-      toast({ title: "Error creando pedido", description: err.message || "Ocurrió un error inesperado.", variant: "destructive" });
+      toastStorefrontNotice(err, {
+        title: "No se pudo crear el pedido",
+        description: "Revisa tu bolsa e inténtalo de nuevo.",
+      });
     }
   };
 
+  const freshPreview = previewRevision === cartRevision ? preview : null;
   const fallbackTotal = (cart?.subtotal || 0) + (fulfillmentMethod === "delivery" && deliveryInfo?.eligible ? deliveryInfo.fee : 0);
-  const subtotal = preview?.subtotal ?? cart?.subtotal ?? 0;
-  const deliveryFee = preview?.deliveryFee ?? (fulfillmentMethod === "delivery" && deliveryInfo?.eligible ? deliveryInfo.fee : 0);
-  const discount = (preview?.promotionDiscountTotal ?? 0) + (preview?.discountAmount ?? 0) + (preview?.couponDiscount ?? 0);
-  const total = preview?.total ?? fallbackTotal;
+  const subtotal = freshPreview?.subtotal ?? cart?.subtotal ?? 0;
+  const deliveryFee = freshPreview?.deliveryFee ?? (fulfillmentMethod === "delivery" && deliveryInfo?.eligible ? deliveryInfo.fee : 0);
+  const discount = (freshPreview?.promotionDiscountTotal ?? 0) + (freshPreview?.discountAmount ?? 0) + (freshPreview?.couponDiscount ?? 0);
+  const total = freshPreview?.total ?? fallbackTotal;
   const minimumOrder = cart?.branch.minimumOrder ?? 0;
-  const minimumRemaining = Math.max(0, minimumOrder - (preview?.subtotal ?? cart?.subtotal ?? 0));
+  const minimumRemaining = Math.max(0, minimumOrder - (freshPreview?.subtotal ?? cart?.subtotal ?? 0));
   const selectedSlotAvailable = !isSlotsError && Boolean(
     slots?.some((slot) => sameSlot(slot.start, selectedSlot) && slot.available),
   );
@@ -450,13 +475,13 @@ export default function CheckoutPage() {
       setFulfillmentContext(checkoutDate, iso);
     }
   }, [checkoutDate, isLoadingSlots, isSlotsError, selectedSlot, setFulfillmentContext, slots]);
-  const priceChanges = (preview?.lines ?? []).flatMap((line) => {
+  const priceChanges = (freshPreview?.lines ?? []).flatMap((line) => {
     const cartLine = cart?.items.find((item) => item.productId === line.productId && item.quantity === line.quantity)
       ?? cart?.items.find((item) => item.productId === line.productId);
     if (!cartLine || Math.abs(cartLine.unitPrice - line.unitPrice) < 0.01) return [];
     return [`El precio de ${line.name} cambió de ${formatMxn(cartLine.unitPrice)} a ${formatMxn(line.unitPrice)}.`];
   });
-  const availabilityChanges = (preview?.lines ?? [])
+  const availabilityChanges = (freshPreview?.lines ?? [])
     .filter((line) => !line.available)
     .map((line) => line.reason || `${line.name} ya no está disponible.`);
 
@@ -781,8 +806,8 @@ export default function CheckoutPage() {
                   Agrega {formatMxn(minimumRemaining)} para el pedido mínimo de {formatMxn(minimumOrder)}.
                 </div>
               )}
-              {preview?.errors?.length ? (
-                <p className="mb-4 text-sm text-destructive">{preview.errors[0]}</p>
+              {freshPreview?.errors?.length ? (
+                <p className="mb-4 text-sm text-destructive">{freshPreview.errors[0]}</p>
               ) : null}
               {priceChanges.map((message) => (
                 <p key={message} className="mb-2 text-sm text-amber-950">{message}</p>

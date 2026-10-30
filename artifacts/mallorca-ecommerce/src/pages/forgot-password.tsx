@@ -14,7 +14,12 @@ async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data
     });
     const data = (await response.json().catch(() => ({}))) as T & { error?: string; message?: string };
     if (!response.ok) {
-      return { ok: false, error: data.error || "No se pudo completar la solicitud." };
+      const raw = data.error || data.message || "";
+      const looksTechnical = /HTTP\s+\d{3}|\b404\b|\b500\b|not found|internal server/i.test(raw);
+      return {
+        ok: false,
+        error: looksTechnical || !raw.trim() ? "No se pudo completar la solicitud." : raw.trim(),
+      };
     }
     return { ok: true, data };
   } catch {

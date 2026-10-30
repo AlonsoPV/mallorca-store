@@ -16,6 +16,7 @@ import {
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
 
 const MENUS_KEY = ["admin", "menus"] as const;
 const MAX_MENU_BYTES = 8 * 1024 * 1024;
@@ -31,8 +32,7 @@ type StoreMenu = {
 type MenuCatalog = { menus: StoreMenu[] };
 
 function errorMessage(error: unknown) {
-  const value = error as { error?: string; message?: string; data?: { error?: string } };
-  return value?.data?.error || value?.error || value?.message || "No se pudo guardar el menú.";
+  return sanitizeErrorCopy(error, "No se pudo guardar el menú.");
 }
 
 function formatUpdated(value: string) {
@@ -72,7 +72,7 @@ export default function AdminMenus() {
       toast({ title: "Menú actualizado" });
     },
     onError: (error) => {
-      toast({ title: errorMessage(error), variant: "destructive" });
+      toast({ title: errorMessage(error), variant: "notice" });
     },
     onSettled: () => setBusyKey(null),
   });
@@ -85,7 +85,7 @@ export default function AdminMenus() {
       toast({ title: "Menú eliminado" });
     },
     onError: (error) => {
-      toast({ title: errorMessage(error), variant: "destructive" });
+      toast({ title: errorMessage(error), variant: "notice" });
     },
     onSettled: () => setBusyKey(null),
   });

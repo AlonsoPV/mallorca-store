@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ArrowUpRight, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,15 +7,16 @@ import { ImageWithFallback } from "@/components/image-with-fallback";
 import { useCart } from "@/lib/cart-context";
 import { formatMxn } from "@/lib/availability-copy";
 import { track } from "@/lib/analytics";
-import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { isCartNotFoundError } from "@/lib/cart-recovery";
+import { isCartNotFoundError, storefrontNoticeFromError, type StorefrontNotice } from "@/lib/cart-recovery";
+import { StorefrontNoticeBanner } from "@/components/storefront-notice";
 import {
   getGetCartQueryKey,
   useDeleteCartItem,
   useGetCart,
   useUpdateCartItem,
 } from "@workspace/api-client-react";
+import { writeCartCache } from "@/lib/cart-cache";
 
 export function MiniCart() {
   const { cartId, miniCartOpen, setMiniCartOpen, closeMiniCart, clearCartSession } = useCart();
@@ -29,7 +30,7 @@ export function MiniCart() {
   const updateCartItem = useUpdateCartItem();
   const deleteCartItem = useDeleteCartItem();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const [notice, setNotice] = useState<StorefrontNotice | null>(null);
 
   useEffect(() => {
     if (!cartId || !cartError || !isCartNotFoundError(cartErrorValue)) return;
@@ -40,30 +41,38 @@ export function MiniCart() {
   useEffect(() => {
     if (miniCartOpen) {
       track("view_cart", { source: "mini_cart", quantity: cart?.quantity ?? 0, value: cart?.subtotal ?? 0 });
+    } else {
+      setNotice(null);
     }
   }, [miniCartOpen, cart?.quantity, cart?.subtotal]);
-
-  const refreshCart = () => {
-    if (cartId) queryClient.invalidateQueries({ queryKey: getGetCartQueryKey(cartId) });
-  };
 
   const handleUpdateQuantity = async (itemId: number, quantity: number) => {
     if (!cartId || quantity < 1) return;
     try {
-      await updateCartItem.mutateAsync({ id: cartId, itemId, data: { quantity } });
-      refreshCart();
-    } catch (error: any) {
-      toast({ title: "No pudimos actualizar", description: error?.message || "Revisa el inventario disponible.", variant: "destructive" });
+      const updated = await updateCartItem.mutateAsync({ id: cartId, itemId, data: { quantity } });
+      writeCartCache(queryClient, updated);
+    } catch (error: unknown) {
+      setNotice(
+        storefrontNoticeFromError(error, {
+          title: "No pudimos actualizar tu bolsa",
+          description: "Revisa cuántas piezas quedan e inténtalo de nuevo.",
+        }),
+      );
     }
   };
 
   const handleDeleteItem = async (itemId: number) => {
     if (!cartId) return;
     try {
-      await deleteCartItem.mutateAsync({ id: cartId, itemId });
-      refreshCart();
-    } catch (error: any) {
-      toast({ title: "No pudimos eliminarlo", description: error?.message || "Intenta de nuevo.", variant: "destructive" });
+      const updated = await deleteCartItem.mutateAsync({ id: cartId, itemId });
+      writeCartCache(queryClient, updated);
+    } catch (error: unknown) {
+      setNotice(
+        storefrontNoticeFromError(error, {
+          title: "No pudimos quitarlo",
+          description: "Inténtalo de nuevo en un momento.",
+        }),
+      );
     }
   };
 
@@ -78,6 +87,13 @@ export function MiniCart() {
         </SheetHeader>
         {cart && cart.items.length > 0 ? (
           <>
+            {notice ? (
+              <StorefrontNoticeBanner
+                notice={notice}
+                className="mt-4"
+                onDismiss={() => setNotice(null)}
+              />
+            ) : null}
             <div className="flex-1 divide-y divide-border overflow-y-auto py-2">
               {cart.items.map((item) => (
                 <div key={item.id} className="flex items-start gap-3 py-5">

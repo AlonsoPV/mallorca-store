@@ -22,19 +22,44 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { formatOrderTime, formatPriceMx, ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { sanitizeErrorCopy } from "@/lib/cart-recovery";
+import {
+  ArrowLeft,
+  Bell,
+  Boxes,
+  CalendarDays,
+  ClipboardList,
+  Clock3,
+  LayoutDashboard,
+  Package,
+  Settings2,
+  Users,
+} from "lucide-react";
 
-const tabs = [
-  "Resumen",
-  "Pedidos",
-  "Agenda",
-  "Productos",
-  "Inventario",
-  "Horarios",
-  "Equipo",
-  "Alertas",
-  "Configuración",
+const BRANCH_TABS = [
+  { label: "Resumen", icon: LayoutDashboard, group: "ops" },
+  { label: "Pedidos", icon: ClipboardList, group: "ops" },
+  { label: "Agenda", icon: CalendarDays, group: "ops" },
+  { label: "Inventario", icon: Boxes, group: "ops" },
+  { label: "Alertas", icon: Bell, group: "ops" },
+  { label: "Productos", icon: Package, group: "catalog" },
+  { label: "Horarios", icon: Clock3, group: "admin" },
+  { label: "Equipo", icon: Users, group: "admin" },
+  { label: "Configuración", icon: Settings2, group: "admin" },
 ] as const;
+
+/** Tab indices after operational reordering (Inventario/Alertas before Productos). */
+const TAB = {
+  resumen: 0,
+  pedidos: 1,
+  agenda: 2,
+  inventario: 3,
+  alertas: 4,
+  productos: 5,
+  horarios: 6,
+  equipo: 7,
+  configuracion: 8,
+} as const;
 
 const BRANCH_STATUS_LABEL: Record<string, string> = {
   active: "Activa",
@@ -144,7 +169,7 @@ export default function AdminBranchDetail() {
       toast({ title: "Configuración guardada" });
       await refresh();
     } catch (err: any) {
-      toast({ title: err?.payload?.error || "Error al guardar", variant: "destructive" });
+      toast({ title: "No se pudo guardar", description: sanitizeErrorCopy(err, "Inténtalo de nuevo."), variant: "notice" });
     }
   }
 
@@ -203,46 +228,109 @@ export default function AdminBranchDetail() {
             </div>
 
             <div className="grid grid-cols-2 gap-2 @min-[34rem]:grid-cols-4 @min-[34rem]:gap-3">
-              {[
-                ["Pedidos hoy", String(summary?.ordersToday ?? 0)],
-                ["Ventas hoy", formatPriceMx(summary?.salesToday ?? 0)],
-                ["Alertas", String(summary?.alertsOpen ?? 0)],
-                ["Agotados", String(summary?.outOfStock ?? 0)],
-              ].map(([label, value]) => (
-                <div key={label} className="min-w-0 border border-border bg-background px-3 py-3">
-                  <div className="text-[10px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted-foreground @min-[34rem]:text-[11px]">
-                    {label}
-                  </div>
-                  <div className="mt-2 text-2xl font-semibold leading-none tracking-tight tabular-nums">{value}</div>
-                </div>
-              ))}
-            </div>
-
-            <div
-              role="tablist"
-              aria-label="Secciones de la sucursal"
-              className="grid grid-cols-3 border-b border-border @min-[32rem]:grid-cols-5 @min-[58rem]:grid-cols-9"
-            >
-              {tabs.map((label, i) => (
+              {(
+                [
+                  {
+                    label: "Pedidos hoy",
+                    value: String(summary?.ordersToday ?? 0),
+                    goTo: TAB.pedidos,
+                  },
+                  {
+                    label: "Ventas hoy",
+                    value: formatPriceMx(summary?.salesToday ?? 0),
+                    goTo: TAB.pedidos,
+                  },
+                  {
+                    label: "Alertas",
+                    value: String(summary?.alertsOpen ?? 0),
+                    goTo: TAB.alertas,
+                    emphasize: (summary?.alertsOpen ?? 0) > 0,
+                  },
+                  {
+                    label: "Agotados",
+                    value: String(summary?.outOfStock ?? 0),
+                    goTo: TAB.inventario,
+                    emphasize: (summary?.outOfStock ?? 0) > 0,
+                  },
+                ] as const
+              ).map((item) => (
                 <button
-                  key={label}
+                  key={item.label}
                   type="button"
-                  role="tab"
-                  aria-selected={tab === i}
-                  onClick={() => setTab(i)}
+                  onClick={() => setTab(item.goTo)}
                   className={cn(
-                    "-mb-px border-b-2 px-2 py-2 text-center text-sm",
-                    tab === i
-                      ? "border-foreground font-medium text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground",
+                    "min-w-0 border border-border bg-background px-3 py-3 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40",
+                    tab === item.goTo && "border-foreground/40 bg-muted/30",
                   )}
                 >
-                  {label}
+                  <div className="text-[10px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted-foreground @min-[34rem]:text-[11px]">
+                    {item.label}
+                  </div>
+                  <div
+                    className={cn(
+                      "mt-2 text-2xl font-semibold leading-none tracking-tight tabular-nums",
+                      "emphasize" in item && item.emphasize && "text-amber-800",
+                    )}
+                  >
+                    {item.value}
+                  </div>
                 </button>
               ))}
             </div>
 
-            {tab === 0 && (
+            <nav
+              role="tablist"
+              aria-label="Secciones de la sucursal"
+              className="sticky top-0 z-10 -mx-1 flex gap-1 overflow-x-auto bg-muted/30 px-1 py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {BRANCH_TABS.map((item, i) => {
+                const Icon = item.icon;
+                const selected = tab === i;
+                const showDivider = i > 0 && BRANCH_TABS[i - 1].group !== item.group;
+                const badge =
+                  item.label === "Alertas" && (summary?.alertsOpen ?? 0) > 0
+                    ? summary.alertsOpen
+                    : item.label === "Pedidos" && (summary?.ordersToday ?? 0) > 0
+                      ? summary.ordersToday
+                      : null;
+                return (
+                  <div key={item.label} className="flex shrink-0 items-center gap-1">
+                    {showDivider ? (
+                      <span className="mx-0.5 h-6 w-px shrink-0 bg-border" aria-hidden />
+                    ) : null}
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setTab(i)}
+                      className={cn(
+                        "inline-flex h-10 items-center gap-2 px-3 text-sm font-medium whitespace-nowrap transition-colors",
+                        selected
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                      <span>{item.label}</span>
+                      {badge != null ? (
+                        <span
+                          className={cn(
+                            "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums",
+                            selected
+                              ? "bg-primary-foreground/20 text-primary-foreground"
+                              : "bg-amber-100 text-amber-900",
+                          )}
+                        >
+                          {badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                );
+              })}
+            </nav>
+
+            {tab === TAB.resumen && (
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <h2 className="font-semibold">Próximos pedidos</h2>
@@ -286,7 +374,7 @@ export default function AdminBranchDetail() {
               </div>
             )}
 
-            {tab === 1 && (
+            {tab === TAB.pedidos && (
               <DataTable
                 columns={["#", "Cliente", "Total", "Estado", ""]}
                 empty="No hay pedidos en esta sucursal."
@@ -307,7 +395,7 @@ export default function AdminBranchDetail() {
               />
             )}
 
-            {tab === 2 && (
+            {tab === TAB.agenda && (
               <DataTable
                 columns={["Hora", "Pedido", "Estado", ""]}
                 empty="No hay pedidos activos en agenda."
@@ -327,24 +415,7 @@ export default function AdminBranchDetail() {
               />
             )}
 
-            {tab === 3 && (
-              <DataTable
-                columns={["Producto", "Disponible", "Stock"]}
-                empty="No hay productos asignados."
-                emptyAction={
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/admin/productos">Asignar productos</Link>
-                  </Button>
-                }
-                rows={(Array.isArray(data.products) ? data.products : []).map((row: any) => [
-                  row.product?.name || "—",
-                  row.configuration?.available ? "Sí" : "No",
-                  row.configuration?.inventory ?? 0,
-                ])}
-              />
-            )}
-
-            {tab === 4 && (
+            {tab === TAB.inventario && (
               <DataTable
                 columns={["Producto", "SKU", "Stock", "Mínimo", "Estado"]}
                 empty="No hay inventario en esta sucursal."
@@ -363,7 +434,42 @@ export default function AdminBranchDetail() {
               />
             )}
 
-            {tab === 5 && (
+            {tab === TAB.alertas && (
+              <DataTable
+                columns={["Producto", "Estado", "Stock", "Fecha"]}
+                empty="No hay alertas abiertas."
+                emptyAction={
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/admin/alertas?branchId=${branchId}`}>Ver módulo de alertas</Link>
+                  </Button>
+                }
+                rows={(Array.isArray(data.alerts) ? data.alerts : []).map((row: any) => [
+                  row.product?.name || "—",
+                  row.alert?.state || row.alert?.type || "—",
+                  row.alert?.stock ?? "—",
+                  row.alert?.createdAt ? new Date(row.alert.createdAt).toLocaleString("es-MX") : "—",
+                ])}
+              />
+            )}
+
+            {tab === TAB.productos && (
+              <DataTable
+                columns={["Producto", "Disponible", "Stock"]}
+                empty="No hay productos asignados."
+                emptyAction={
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/admin/productos">Asignar productos</Link>
+                  </Button>
+                }
+                rows={(Array.isArray(data.products) ? data.products : []).map((row: any) => [
+                  row.product?.name || "—",
+                  row.configuration?.available ? "Sí" : "No",
+                  row.configuration?.inventory ?? 0,
+                ])}
+              />
+            )}
+
+            {tab === TAB.horarios && (
               <div className="space-y-6">
                 <div>
                   <h2 className="font-semibold mb-3">Horario semanal</h2>
@@ -396,7 +502,7 @@ export default function AdminBranchDetail() {
               </div>
             )}
 
-            {tab === 6 && (
+            {tab === TAB.equipo && (
               <div className="space-y-6">
                 <div className="rounded-lg border p-4 space-y-3">
                   <h2 className="font-semibold">Asignar usuario</h2>
@@ -434,7 +540,7 @@ export default function AdminBranchDetail() {
                           toast({ title: "Usuario asignado" });
                           await refresh();
                         } catch (err: any) {
-                          toast({ title: err?.payload?.error || "No se pudo asignar", variant: "destructive" });
+                          toast({ title: "No se pudo asignar", description: sanitizeErrorCopy(err, "Inténtalo de nuevo."), variant: "notice" });
                         }
                       }}
                     >
@@ -488,25 +594,7 @@ export default function AdminBranchDetail() {
               </div>
             )}
 
-            {tab === 7 && (
-              <DataTable
-                columns={["Producto", "Estado", "Stock", "Fecha"]}
-                empty="No hay alertas abiertas."
-                emptyAction={
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/alertas?branchId=${branchId}`}>Ver módulo de alertas</Link>
-                  </Button>
-                }
-                rows={(Array.isArray(data.alerts) ? data.alerts : []).map((row: any) => [
-                  row.product?.name || "—",
-                  row.alert?.state || row.alert?.type || "—",
-                  row.alert?.stock ?? "—",
-                  row.alert?.createdAt ? new Date(row.alert.createdAt).toLocaleString("es-MX") : "—",
-                ])}
-              />
-            )}
-
-            {tab === 8 && (
+            {tab === TAB.configuracion && (
               <div className="space-y-8 max-w-2xl">
                 <section className="space-y-3">
                   <h2 className="font-semibold">Métodos de recolección y entrega</h2>

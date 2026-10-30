@@ -5,16 +5,26 @@ import branchReformaAlt from "@assets/CDMX_MallorcaReforma-_MG_8424-scaled.jpg.w
 import mallorcaLogo from "@assets/mallorca_logo.webp";
 import productPanettone from "@assets/Panettone_tradicional.webp";
 import productPanettoneChoco from "@assets/Panettone_chocolate.webp";
-
-function publicImage(file: string) {
-  return `${import.meta.env.BASE_URL}images/${file}`;
-}
-
-const seasonalFallback = publicImage("chile-en-nogada-2.webp");
-const storeBanner = publicImage("pasteleria-mallorca-3.webp");
-const branchInterior1 = publicImage("pasteleria-mallorca-1.webp");
-const branchInterior2 = publicImage("pasteleria-mallorca-2.webp");
-const productPasteleria = publicImage("pasteleria-mallorca-4.webp");
+import seasonalFallback from "@/assets/photos/chile-en-nogada-2.webp";
+import storeBanner from "@/assets/photos/pasteleria-mallorca-3.webp";
+import branchInterior1 from "@/assets/photos/pasteleria-mallorca-1.webp";
+import branchInterior2 from "@/assets/photos/pasteleria-mallorca-2.webp";
+import productPasteleria from "@/assets/photos/pasteleria-mallorca-4.webp";
+import stock01 from "@/assets/stock/temporada-01.webp";
+import stock02 from "@/assets/stock/temporada-02.webp";
+import stock03 from "@/assets/stock/temporada-03.webp";
+import stock04 from "@/assets/stock/temporada-04.webp";
+import stock05 from "@/assets/stock/temporada-05.webp";
+import stock06 from "@/assets/stock/temporada-06.webp";
+import stock07 from "@/assets/stock/temporada-07.webp";
+import stock08 from "@/assets/stock/temporada-08.webp";
+import stock09 from "@/assets/stock/temporada-09.webp";
+import stock10 from "@/assets/stock/temporada-10.webp";
+import stock11 from "@/assets/stock/temporada-11.webp";
+import stock12 from "@/assets/stock/temporada-12.webp";
+import stock13 from "@/assets/stock/temporada-13.webp";
+import stock34 from "@/assets/stock/temporada-34.webp";
+import stock45 from "@/assets/stock/temporada-45.webp";
 
 export const storeLogo = mallorcaLogo;
 export const storeHistoryPhoto = historyPhoto;
@@ -23,8 +33,26 @@ export const storeBannerImage = storeBanner;
 /** Hero de fondo para la página de sucursales */
 export const storeBranchesHero = branchInterior1;
 
+const STOCK: Record<number, string> = {
+  1: stock01,
+  2: stock02,
+  3: stock03,
+  4: stock04,
+  5: stock05,
+  6: stock06,
+  7: stock07,
+  8: stock08,
+  9: stock09,
+  10: stock10,
+  11: stock11,
+  12: stock12,
+  13: stock13,
+  34: stock34,
+  45: stock45,
+};
+
 function stockPhoto(index: number) {
-  return `${import.meta.env.BASE_URL}images/stock/temporada-${String(index).padStart(2, "0")}.webp`;
+  return STOCK[index] ?? seasonalFallback;
 }
 
 /** Fotos horizontales de FotosStock: banner inicial. */
@@ -35,11 +63,10 @@ export const storeHeroSlides = HERO_STOCK.map((index) => ({
   alt: "Mesa de temporada Pastelería Mallorca",
 }));
 
-/** Retratos de FotosStock, sin las horizontales del banner. */
-const GALLERY_STOCK = [
-  1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
-  29, 30, 31, 32, 33, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-] as const;
+export const storeHeroLcpSrc = storeHeroSlides[0]?.src ?? "";
+
+/** Retratos de FotosStock, sin las horizontales del banner. El carrusel no necesita las 40. */
+const GALLERY_STOCK = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13] as const;
 
 const MOSAIC_KICKERS = ["Temporada", "Dulce", "De la casa", "Salado"] as const;
 
