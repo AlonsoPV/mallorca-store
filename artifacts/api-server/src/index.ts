@@ -1,6 +1,9 @@
 import { startOrderEmailWorker } from "./lib/order-emails";
 import app from "./app";
+import { assertLocalDevAuthAllowed } from "./lib/local-dev-guard";
 import { logger } from "./lib/logger";
+
+assertLocalDevAuthAllowed();
 
 const rawPort = process.env["PORT"];
 

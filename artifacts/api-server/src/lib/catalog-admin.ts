@@ -14,6 +14,7 @@ import {
   promotionBranchesTable,
   tagsTable,
 } from "@workspace/db";
+import { likeContainsPattern } from "./like-pattern";
 import {
   addProductCategories,
   addProductTags,
@@ -125,10 +126,12 @@ export async function buildProductExportCsv(options: {
   if (options.status) filters.push(eq(productsTable.status, options.status as any));
   if (options.ids?.length) filters.push(inArray(productsTable.id, options.ids));
   if (options.search) {
-    const q = `%${options.search.toLowerCase()}%`;
-    filters.push(
-      sql`(lower(${productsTable.name}) like ${q} or lower(${productsTable.sku}) like ${q})`,
-    );
+    const q = likeContainsPattern(options.search.toLowerCase());
+    if (q) {
+      filters.push(
+        sql`(lower(${productsTable.name}) like ${q} or lower(${productsTable.sku}) like ${q})`,
+      );
+    }
   }
 
   const products = await db

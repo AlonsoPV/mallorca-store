@@ -10,7 +10,7 @@ export const LOCAL_DEV_USER = {
   firstName: "Admin",
   lastName: "Local",
   primaryEmailAddress: {
-    emailAddress: "alpeva96@gmail.com",
+    emailAddress: "local-admin@mallorca.local",
   },
 } as const;
 

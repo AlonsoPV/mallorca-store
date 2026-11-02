@@ -33,11 +33,11 @@ test("matches captcha ignoring spaces and case", () => {
 
 test("matches local credentials by username or email", () => {
   const allowed = {
-    identifiers: ["admin", "alpeva96@gmail.com"],
+    identifiers: ["admin", "local-admin@mallorca.local"],
     password: "mallorca-local",
   };
   assert.equal(credentialsMatch("Admin", "mallorca-local", allowed), true);
-  assert.equal(credentialsMatch("  alpeva96@gmail.com ", "mallorca-local", allowed), true);
+  assert.equal(credentialsMatch("  local-admin@mallorca.local ", "mallorca-local", allowed), true);
   assert.equal(credentialsMatch("admin", "wrong", allowed), false);
   assert.equal(credentialsMatch("otro", "mallorca-local", allowed), false);
 });

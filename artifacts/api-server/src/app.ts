@@ -9,7 +9,9 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
+import { isAllowedCorsOrigin } from "./lib/cors-origins";
 import { logger } from "./lib/logger";
+import { securityHeaders } from "./lib/security-headers";
 
 const app: Express = express();
 app.set("trust proxy", 1);
@@ -34,7 +36,15 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-app.use(cors({ credentials: true, origin: true }));
+app.use(securityHeaders);
+app.use(
+  cors({
+    credentials: true,
+    origin(origin, callback) {
+      callback(null, isAllowedCorsOrigin(origin));
+    },
+  }),
+);
 app.use(
   express.json({
     verify: (req, _res, buf) => {

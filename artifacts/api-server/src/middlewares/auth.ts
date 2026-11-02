@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 import { db, usersTable, branchUserAssignmentsTable, type User } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { isLocalDevAuthFlagOn } from "../lib/local-dev-guard";
 
 declare global {
   namespace Express {
@@ -70,8 +71,7 @@ export function shouldPromoteInitialAdmin(
 
 function isLocalDevAuthEnabled(): boolean {
   if (process.env.NODE_ENV !== "development") return false;
-  const flag = process.env.LOCAL_DEV_AUTH?.trim().toLowerCase();
-  return flag === "1" || flag === "true";
+  return isLocalDevAuthFlagOn();
 }
 
 function claimString(value: unknown): string | undefined {

@@ -33,8 +33,10 @@ import {
 import { loadProductCategorySummaries, loadProductCrossSellIds } from "./product-aggregate";
 import { loadReservedByBranchProductIds, sellableUnits } from "./reserved-stock";
 import { serializeAdminBranchAvailability } from "./admin-product-serialize";
+import { filterByAccessibleBranches } from "./branch-scope.ts";
 import { filterCrossSellCards } from "./catalog-cross-sell.ts";
 import { isReadyForLead, itemLeadMinutes } from "./fulfillment-schedule.ts";
+import { likeContainsPattern } from "./like-pattern.ts";
 
 export function serializeBranch(branch: Branch) {
   const status = (branch as Branch & { status?: string }).status;
@@ -250,13 +252,15 @@ export async function listProductCards(filters: ProductFilters = {}) {
   }
 
   if (filters.search) {
-    const term = `%${filters.search}%`;
-    const searchCondition = or(
-      ilike(productsTable.name, term),
-      ilike(productsTable.sku, term),
-      ilike(productsTable.shortDescription, term),
-    );
-    if (searchCondition) conditions.push(searchCondition);
+    const term = likeContainsPattern(filters.search);
+    if (term) {
+      const searchCondition = or(
+        ilike(productsTable.name, term),
+        ilike(productsTable.sku, term),
+        ilike(productsTable.shortDescription, term),
+      );
+      if (searchCondition) conditions.push(searchCondition);
+    }
   }
 
   if (filters.featured !== undefined) {
@@ -541,7 +545,10 @@ export async function loadFilteredCrossSellProducts(
   return filterCrossSellCards(productIds, cards, branchId);
 }
 
-export async function getAdminProductDetail(productId: number) {
+export async function getAdminProductDetail(
+  productId: number,
+  options?: { branchIds?: number[] | null },
+) {
   const [row] = await db
     .select({
       product: productsTable,
@@ -560,6 +567,10 @@ export async function getAdminProductDetail(productId: number) {
   });
   const categoriesByProduct = await loadProductCategorySummaries([product.id]);
   const promotionsByProduct = await activePromotionCandidates([product.id]);
+  const availabilityFilter = [
+    eq(branchProductsTable.productId, product.id),
+    options?.branchIds?.length ? inArray(branchProductsTable.branchId, options.branchIds) : undefined,
+  ].filter(Boolean) as SQL[];
   const availabilityRows = await db
     .select({
       branchProduct: branchProductsTable,
@@ -570,13 +581,17 @@ export async function getAdminProductDetail(productId: number) {
     })
     .from(branchProductsTable)
     .innerJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
-    .where(eq(branchProductsTable.productId, product.id));
+    .where(and(...availabilityFilter));
 
   const reservedByBp = await loadReservedByBranchProductIds(
     availabilityRows.map(({ branchProduct }) => branchProduct.id),
   );
 
-  const availability = availabilityRows.map(
+  const scopedAvailabilityRows = filterByAccessibleBranches(
+    availabilityRows,
+    options?.branchIds === undefined ? null : options.branchIds,
+  );
+  const availability = scopedAvailabilityRows.map(
     ({ branchProduct, branchId, branchSlug, branchName, branchPrep }) =>
       serializeAdminBranchAvailability({
         branchId,

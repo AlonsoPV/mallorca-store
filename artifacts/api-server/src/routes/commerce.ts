@@ -31,6 +31,8 @@ import {
 } from "../lib/catalog";
 import { buildBranchPreviewItems } from "../lib/branch-preview";
 import { getRequestUser, requireAuth } from "../middlewares/auth";
+import { rateLimit } from "../lib/rate-limit";
+import { secretsMatch } from "../lib/secure-compare";
 import { findUserByIdentifier } from "../lib/admin-users";
 import { verifyPassword } from "../lib/password";
 import { confirmPasswordReset, requestPasswordReset } from "../lib/password-reset";
@@ -594,7 +596,7 @@ router.post("/orders/:id/payment", async (req, res): Promise<void> => {
   const canAccess =
     order &&
     ((order.userId != null && order.userId === user?.id) ||
-      order.guestAccessToken === body.data.guestAccessToken);
+      secretsMatch(order.guestAccessToken, body.data.guestAccessToken));
   if (!canAccess || !order) { res.status(404).json({ error: "Order not found" }); return; }
   const provider = order.paymentMethod === "PAYPAL"
     ? "PAYPAL"
@@ -658,7 +660,7 @@ async function sendPaymentSync(req: Request, res: Response, guestToken?: string)
     const canAccess =
       order &&
       ((order.userId != null && order.userId === user?.id) ||
-        (accessToken != null && order.guestAccessToken === accessToken));
+        secretsMatch(order.guestAccessToken, accessToken));
     if (!canAccess || !order) { res.status(404).json({ error: "Order not found" }); return; }
     const provider = order.paymentMethod === "PAYPAL"
       ? "PAYPAL"
@@ -710,7 +712,10 @@ function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-router.post("/webhooks/payments/:provider", async (req, res): Promise<void> => {
+router.post(
+  "/webhooks/payments/:provider",
+  rateLimit({ name: "payment-webhook", windowMs: 60_000, max: 120 }),
+  async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.provider) ? req.params.provider[0] : req.params.provider;
   const provider = gatewayCodeFromPath(raw ?? "");
   if (!provider) { res.status(404).json({ error: "Unknown provider" }); return; }
@@ -758,7 +763,7 @@ async function sendOrder(req: any, res: any, guest = false, mode: "details" | "r
   const p = (guest ? GetGuestOrderDetailsParams : GetOrderDetailsParams).safeParse(req.params); if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
   const token = guest ? (p.data as { id: string; token: string }).token : undefined;
   try {
-    const order = await findOrderWithItems(p.data.id); if (!order || (guest ? order.guestAccessToken !== token : (await getRequestUser(req))?.id !== order.userId)) { res.status(404).json({ error: "Order not found" }); return; }
+    const order = await findOrderWithItems(p.data.id); if (!order || (guest ? !secretsMatch(order.guestAccessToken, token) : (await getRequestUser(req))?.id !== order.userId)) { res.status(404).json({ error: "Order not found" }); return; }
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
     if (mode !== "details") {
@@ -812,7 +817,7 @@ router.get("/orders/:id/confirmation", requireAuth, (req, res) => sendOrder(req,
 router.get("/guest/orders/:id/:token/confirmation", (req, res) => sendOrder(req, res, true, "confirmation"));
 router.get("/orders/:id", requireAuth, (req, res) => sendOrder(req, res));
 router.get("/guest/orders/:id/:token", (req, res) => sendOrder(req, res, true));
-router.post("/auth/local-login", async (req, res): Promise<void> => {
+router.post("/auth/local-login", rateLimit({ name: "local-login", windowMs: 15 * 60_000, max: 10 }), async (req, res): Promise<void> => {
   const localDev = process.env.LOCAL_DEV_AUTH?.trim().toLowerCase();
   if (process.env.NODE_ENV !== "development" || (localDev !== "1" && localDev !== "true")) {
     res.status(404).json({ error: "Not found" });
@@ -866,7 +871,7 @@ router.post("/auth/resolve-username", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
+router.post("/auth/password-reset/request", rateLimit({ name: "password-reset-request", windowMs: 15 * 60_000, max: 8 }), async (req, res): Promise<void> => {
   const body = RequestPasswordResetBody.safeParse(req.body);
   if (!body.success || !body.data.identifier.trim()) {
     res.status(400).json({ error: "Escribe tu usuario o correo." });
@@ -880,7 +885,7 @@ router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-router.post("/auth/password-reset/confirm", async (req, res): Promise<void> => {
+router.post("/auth/password-reset/confirm", rateLimit({ name: "password-reset-confirm", windowMs: 15 * 60_000, max: 8 }), async (req, res): Promise<void> => {
   const body = ConfirmPasswordResetBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Enlace o contraseña no válidos." });

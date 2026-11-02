@@ -90,6 +90,7 @@ import {
   decideCompleteUnpaid,
   decideRecordPayment,
   encryptSecret,
+  MissingSecretsKeyError,
   gatewayCredentialsReady,
   inspectGatewayCredentials,
   loadGatewayCredentials,
@@ -111,6 +112,8 @@ import {
 } from "../lib/catalog";
 import { commitOrderReservations, releaseOrderReservations, reserveBranchProduct } from "../lib/inventory-hold";
 import { canAccessBranch, getAccessibleBranchIds, getRequestUser, hasGlobalBranchAccess } from "../middlewares/auth";
+import { filterByAccessibleBranches, productVisibleInScope } from "../lib/branch-scope";
+import { likeContainsPattern } from "../lib/like-pattern";
 import {
   allocateUsername,
   assignUserToBranch,
@@ -1084,22 +1087,38 @@ router.post("/admin/orders", async (req, res): Promise<void> => {
 router.get("/admin/customers/search", async (req, res): Promise<void> => {
   const q = SearchAdminCustomersQueryParams.safeParse(req.query);
   if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
-  const term = `%${q.data.q.trim()}%`;
+  const term = likeContainsPattern(q.data.q);
   const limit = q.data.limit ?? 20;
+  const accessible = await getAccessibleBranchIds(req);
+  if (!term || (accessible !== null && accessible.length === 0)) {
+    res.json(SearchAdminCustomersResponse.parse([]));
+    return;
+  }
 
-  const users = await db
-    .select()
-    .from(usersTable)
-    .where(
-      or(
-        ilike(usersTable.email, term),
-        ilike(usersTable.phone, term),
-        ilike(usersTable.firstName, term),
-        ilike(usersTable.lastName, term),
-        sql`concat(coalesce(${usersTable.firstName},''),' ',coalesce(${usersTable.lastName},'')) ilike ${term}`,
-      ),
-    )
-    .limit(limit);
+  const users = accessible === null
+    ? await db
+      .select()
+      .from(usersTable)
+      .where(
+        or(
+          ilike(usersTable.email, term),
+          ilike(usersTable.phone, term),
+          ilike(usersTable.firstName, term),
+          ilike(usersTable.lastName, term),
+          sql`concat(coalesce(${usersTable.firstName},''),' ',coalesce(${usersTable.lastName},'')) ilike ${term}`,
+        ),
+      )
+      .limit(limit)
+    : [];
+
+  const orderFilters = [
+    or(
+      ilike(ordersTable.customerName, term),
+      ilike(ordersTable.customerEmail, term),
+      ilike(ordersTable.customerPhone, term),
+    ),
+    accessible !== null ? inArray(ordersTable.branchId, accessible) : undefined,
+  ].filter(Boolean);
 
   const orderHits = await db
     .select({
@@ -1111,13 +1130,7 @@ router.get("/admin/customers/search", async (req, res): Promise<void> => {
       orderCount: sql<number>`count(*)::int`,
     })
     .from(ordersTable)
-    .where(
-      or(
-        ilike(ordersTable.customerName, term),
-        ilike(ordersTable.customerEmail, term),
-        ilike(ordersTable.customerPhone, term),
-      ),
-    )
+    .where(and(...orderFilters))
     .groupBy(
       ordersTable.customerName,
       ordersTable.customerEmail,
@@ -1168,7 +1181,9 @@ router.get("/admin/customers/search", async (req, res): Promise<void> => {
   res.json(SearchAdminCustomersResponse.parse([...byKey.values()].slice(0, limit)));
 });
 
-router.get("/admin/coupons", async (_req, res): Promise<void> => {
+router.get("/admin/coupons", async (req, res): Promise<void> => {
+  const user = await getRequestUser(req);
+  if (!user || !hasGlobalBranchAccess(user)) { res.status(403).json({ error: "Forbidden" }); return; }
   const rows = await db.select().from(couponsTable).orderBy(desc(couponsTable.createdAt));
   res.json(ListAdminCouponsResponse.parse(rows.map((row) => ({
     id: row.id,
@@ -1323,12 +1338,22 @@ router.put("/admin/payment-providers/:provider", async (req, res): Promise<void>
     .select()
     .from(paymentProviderSettingsTable)
     .where(eq(paymentProviderSettingsTable.provider, provider));
-  const accessTokenEncrypted = b.data.accessToken
-    ? encryptSecret(b.data.accessToken)
-    : existing?.accessTokenEncrypted ?? null;
-  const webhookSecretEncrypted = b.data.webhookSecret
-    ? encryptSecret(b.data.webhookSecret)
-    : existing?.webhookSecretEncrypted ?? null;
+  let accessTokenEncrypted: string | null;
+  let webhookSecretEncrypted: string | null;
+  try {
+    accessTokenEncrypted = b.data.accessToken
+      ? encryptSecret(b.data.accessToken)
+      : existing?.accessTokenEncrypted ?? null;
+    webhookSecretEncrypted = b.data.webhookSecret
+      ? encryptSecret(b.data.webhookSecret)
+      : existing?.webhookSecretEncrypted ?? null;
+  } catch (error) {
+    if (error instanceof MissingSecretsKeyError) {
+      res.status(503).json({ error: "PAYMENT_SECRETS_KEY no está configurada. No se pueden guardar credenciales." });
+      return;
+    }
+    throw error;
+  }
   const publicKey = b.data.publicKey === undefined ? existing?.publicKey ?? null : (b.data.publicKey || null);
   const sandbox = paymentSandboxFromEnv() ? true : (b.data.sandbox ?? existing?.sandbox ?? true);
   await db
@@ -1407,9 +1432,13 @@ async function assertMenuScope(req: Parameters<typeof getRequestUser>[0], res: {
   return parsed;
 }
 
-router.get("/admin/menus", async (_req, res): Promise<void> => {
+router.get("/admin/menus", async (req, res): Promise<void> => {
   try {
-    res.json({ menus: await listStoreMenus() });
+    const menus = await listStoreMenus();
+    const accessible = await getAccessibleBranchIds(req);
+    res.json({
+      menus: filterByAccessibleBranches(menus, accessible, { includeUnscoped: accessible === null }),
+    });
   } catch {
     res.status(503).json({ error: "Aplica la migración de menús (009_store_menus.sql)." });
   }
@@ -2598,7 +2627,10 @@ router.get("/admin/inventory", async (req, res): Promise<void> => {
   if (q.data.branchId != null) filters.push(eq(branchProductsTable.branchId, q.data.branchId));
   if (q.data.categoryId != null) filters.push(eq(productsTable.categoryId, q.data.categoryId));
   if (q.data.state) filters.push(eq(branchProductsTable.alertState, q.data.state));
-  if (q.data.search) filters.push(sql`(${productsTable.sku} ilike ${`%${q.data.search}%`} or ${productsTable.name} ilike ${`%${q.data.search}%`})`);
+  if (q.data.search) {
+    const term = likeContainsPattern(q.data.search);
+    if (term) filters.push(sql`(${productsTable.sku} ilike ${term} or ${productsTable.name} ilike ${term})`);
+  }
   const rows = await db.select({ branchProduct: branchProductsTable, branch: branchesTable, product: productsTable,
     reservedStock: sql<number>`coalesce((select sum(${inventoryReservationsTable.quantity}) from ${inventoryReservationsTable} where ${inventoryReservationsTable.branchProductId} = ${branchProductsTable.id} and ${inventoryReservationsTable.status} = 'active'), 0)::int` })
     .from(branchProductsTable).innerJoin(branchesTable, eq(branchProductsTable.branchId, branchesTable.id))
@@ -3952,7 +3984,9 @@ router.post("/admin/products", async (req, res): Promise<void> => {
     throw error;
   }
 
-  const detail = await getAdminProductDetail(product.id);
+  const detail = await getAdminProductDetail(product.id, {
+    branchIds: await getAccessibleBranchIds(req),
+  });
   publishCatalogChange(product.id, "product");
   res.status(201).json(CreateProductResponse.parse(detail));
 });
@@ -3975,8 +4009,15 @@ router.get("/admin/products/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const detail = await getAdminProductDetail(row.id);
-  if (!detail) {
+  const accessible = await getAccessibleBranchIds(req);
+  const detail = await getAdminProductDetail(row.id, { branchIds: accessible });
+  if (
+    !detail ||
+    !productVisibleInScope(
+      detail.availability.map((row) => row.branchId),
+      accessible,
+    )
+  ) {
     res.status(404).json({ error: "Producto no encontrado" });
     return;
   }
@@ -4087,7 +4128,9 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
     throw error;
   }
 
-  const detail = await getAdminProductDetail(product.id);
+  const detail = await getAdminProductDetail(product.id, {
+    branchIds: await getAccessibleBranchIds(req),
+  });
   publishCatalogChange(product.id, "product");
   res.json(UpdateProductResponse.parse(detail));
 });

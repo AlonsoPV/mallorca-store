@@ -475,9 +475,14 @@ function productSellable(product, branchId) {
   return row?.inventory ?? 0;
 }
 
+if (process.env.NODE_ENV === "production") {
+  console.error("[local-mock-api] refuse to run when NODE_ENV=production");
+  process.exit(1);
+}
+
 const localUser = {
   id: "user_local_dev_admin",
-  email: "alpeva96@gmail.com",
+  email: "local-admin@mallorca.local",
   username: "alonso",
   password: null,
   firstName: "Admin",
@@ -1157,6 +1162,7 @@ function generateMockPassword() {
 }
 
 function resolveLocalAuthUser(req) {
+  if (process.env.NODE_ENV === "production") return null;
   const header = String(req.headers.authorization || "");
   if (header.toLowerCase() === "bearer local-dev") return localUser;
   const match = /^bearer local-dev:(.+)$/i.exec(header);
@@ -3666,6 +3672,9 @@ async function syncProductsFromDatabase(client) {
     );
     const { Client } = requireFromDb("pg");
     connection = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
+    connection.on("error", (err) => {
+      console.error("[local-mock-api] database connection error", err.message);
+    });
     await connection.connect();
   }
   try {
@@ -3688,6 +3697,9 @@ async function hydrateBranchesFromDatabase() {
   );
   const { Client } = requireFromDb("pg");
   const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
+  client.on("error", (err) => {
+    console.error("[local-mock-api] database connection error", err.message);
+  });
   await client.connect();
   try {
     const { rows } = await client.query("select * from branches order by id");
@@ -3724,8 +3736,9 @@ hydrateBranchesFromDatabase()
   })
   .finally(() => {
     startCatalogSync();
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`[local-mock-api] listening on http://127.0.0.1:${server.address().port}`);
+    const bindHost = process.env.MOCK_BIND_HOST || "127.0.0.1";
+    server.listen(PORT, bindHost, () => {
+      console.log(`[local-mock-api] listening on http://${bindHost}:${server.address().port}`);
       console.log(`[local-mock-api] auth: Authorization: Bearer local-dev`);
     });
   });
