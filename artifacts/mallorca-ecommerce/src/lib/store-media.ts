@@ -100,7 +100,7 @@ export const storePanettoneCollabPhoto = panettoneChocoScaled;
 const panettoneBase = `${import.meta.env.BASE_URL}images/panettone`;
 
 /** Landing /panettone — video y galería Ton Cortés. */
-export const storePanettoneVideo = `${import.meta.env.BASE_URL}videos/mxw-panettone.mp4`;
+export const storePanettoneVideo = `${import.meta.env.BASE_URL}videos/panettone.mp4`;
 
 export const storePanettoneGallery = [
   {
