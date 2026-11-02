@@ -341,6 +341,29 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="bg-[var(--mallorca-cacao)] text-white">
+        <div className="container mx-auto flex flex-col items-start justify-between gap-5 px-5 py-8 sm:flex-row sm:items-center sm:gap-8 md:px-8 md:py-9">
+          <div className="max-w-xl">
+            <span className="mallorca-kicker text-[var(--mallorca-butter)]">Colaboración · Ton Cortés</span>
+            <p className="mallorca-display mt-2 text-[clamp(1.35rem,3.5vw,2rem)] leading-[1.05] tracking-[-0.02em]">
+              Hay sabores que no se explican,{" "}
+              <em className="font-serif italic text-[var(--mallorca-butter)]">se sienten</em>.
+            </p>
+          </div>
+          <Link
+            href="/panettone"
+            className="group inline-flex shrink-0 items-center gap-4 text-white"
+          >
+            <span className="border-b border-white/30 pb-1 text-[0.72rem] font-bold uppercase tracking-[0.18em] transition-colors group-hover:border-[var(--mallorca-butter)] group-hover:text-[var(--mallorca-butter)]">
+              Descubre el panettone
+            </span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--mallorca-red)] text-white transition-all duration-300 group-hover:scale-105 group-hover:bg-[var(--mallorca-red-dark)]">
+              <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </span>
+          </Link>
+        </div>
+      </section>
+
       {showFeatured ? (
       <section className="flex h-[100dvh] max-h-[100dvh] flex-col justify-center overflow-hidden bg-[var(--mallorca-cream)] py-8 md:py-10">
         <div className="container mx-auto px-5 md:px-8">

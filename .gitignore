@@ -58,3 +58,6 @@ Thumbs.db
 
 # Menús PDF subidos en el servidor local
 artifacts/api-server/data/
+
+# Fuente local del video (la copia servida va por Git LFS en public/videos)
+attached_assets/Pantettone/*.mp4

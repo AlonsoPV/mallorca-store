@@ -5,6 +5,7 @@ import branchReformaAlt from "@assets/CDMX_MallorcaReforma-_MG_8424-scaled.jpg.w
 import mallorcaLogo from "@assets/mallorca_logo.webp";
 import productPanettone from "@assets/Panettone_tradicional.webp";
 import productPanettoneChoco from "@assets/Panettone_chocolate.webp";
+import panettoneChocoScaled from "@assets/Pantettone/Panettone-Choco-scaled.webp";
 import seasonalFallback from "@/assets/photos/chile-en-nogada-2.webp";
 import storeBanner from "@/assets/photos/pasteleria-mallorca-3.webp";
 import branchInterior1 from "@/assets/photos/pasteleria-mallorca-1.webp";
@@ -92,6 +93,45 @@ export const storeProductFallbacks = {
   panettone: productPanettone,
   bolleria: productPasteleria,
 } as const;
+
+/** Colaboración Ton Cortés — panettone chocolate (home editorial). */
+export const storePanettoneCollabPhoto = panettoneChocoScaled;
+
+const panettoneBase = `${import.meta.env.BASE_URL}images/panettone`;
+
+/** Landing /panettone — video y galería Ton Cortés. */
+export const storePanettoneVideo = `${import.meta.env.BASE_URL}videos/mxw-panettone.mp4`;
+
+export const storePanettoneGallery = [
+  {
+    src: `${panettoneBase}/ton-cortes-01.webp`,
+    alt: "Ton Cortés frente a Pastelería Mallorca",
+  },
+  {
+    src: `${panettoneBase}/ton-cortes-02.webp`,
+    alt: "Ton Cortés oliendo una rebanada de panettone",
+  },
+  {
+    src: `${panettoneBase}/ton-cortes-03.webp`,
+    alt: "Ton Cortés con la caja del panettone Mallorca México",
+  },
+  {
+    src: `${panettoneBase}/ton-cortes-04.webp`,
+    alt: "Ton Cortés junto a cajas Mallorca México 2024",
+  },
+  {
+    src: `${panettoneBase}/ton-cortes-05.webp`,
+    alt: "Miga del panettone de Ton Cortés",
+  },
+  {
+    src: `${panettoneBase}/ton-cortes-06.webp`,
+    alt: "Retrato de Ton Cortés con filipina Mallorca México",
+  },
+  {
+    src: `${panettoneBase}/ton-cortes-07.webp`,
+    alt: "Ton Cortés, campeón mundial del panettone",
+  },
+] as const;
 
 export function branchLocalImage(slug: string) {
   return storeBranchImages[slug] || storeSeasonalFallback;

@@ -35,6 +35,7 @@ const OrderDetails = lazy(() => import('@/pages/order-details'));
 const Account = lazy(() => import('@/pages/account'));
 const PrivacyPage = lazy(() => import('@/pages/legal').then((m) => ({ default: m.PrivacyPage })));
 const TermsPage = lazy(() => import('@/pages/legal').then((m) => ({ default: m.TermsPage })));
+const PanettonePage = lazy(() => import('@/pages/panettone'));
 const NotFound = lazy(() => import('@/pages/not-found'));
 
 const AdminDashboard = lazy(() => import('@/pages/admin/dashboard'));
@@ -157,6 +158,7 @@ function AppRoutes() {
       <Route path="/producto/:slug">{() => <Page><ProductDetail /></Page>}</Route>
       <Route path="/sucursales">{() => <Page><Branches /></Page>}</Route>
       <Route path="/sucursales/:slug">{() => <Page><BranchDetail /></Page>}</Route>
+      <Route path="/panettone">{() => <Page><PanettonePage /></Page>}</Route>
       <Route path="/terminos-y-condiciones">{() => <Page><TermsPage /></Page>}</Route>
       <Route path="/aviso-de-privacidad">{() => <Page><PrivacyPage /></Page>}</Route>
 
