@@ -6,75 +6,105 @@ import mallorcaLogo from "@assets/mallorca_logo.webp";
 import productPanettone from "@assets/Panettone_tradicional.webp";
 import productPanettoneChoco from "@assets/Panettone_chocolate.webp";
 import panettoneChocoScaled from "@assets/Pantettone/Panettone-Choco-scaled.webp";
-import seasonalFallback from "@/assets/photos/chile-en-nogada-2.webp";
 import storeBanner from "@/assets/photos/pasteleria-mallorca-3.webp";
 import branchInterior1 from "@/assets/photos/pasteleria-mallorca-1.webp";
 import branchInterior2 from "@/assets/photos/pasteleria-mallorca-2.webp";
 import productPasteleria from "@/assets/photos/pasteleria-mallorca-4.webp";
-import stock01 from "@/assets/stock/temporada-01.webp";
-import stock02 from "@/assets/stock/temporada-02.webp";
-import stock03 from "@/assets/stock/temporada-03.webp";
-import stock04 from "@/assets/stock/temporada-04.webp";
-import stock05 from "@/assets/stock/temporada-05.webp";
-import stock06 from "@/assets/stock/temporada-06.webp";
-import stock07 from "@/assets/stock/temporada-07.webp";
-import stock08 from "@/assets/stock/temporada-08.webp";
-import stock09 from "@/assets/stock/temporada-09.webp";
-import stock10 from "@/assets/stock/temporada-10.webp";
-import stock11 from "@/assets/stock/temporada-11.webp";
-import stock12 from "@/assets/stock/temporada-12.webp";
-import stock13 from "@/assets/stock/temporada-13.webp";
-import stock34 from "@/assets/stock/temporada-34.webp";
-import stock45 from "@/assets/stock/temporada-45.webp";
+import navidad01 from "@/assets/stock/navidad-01.webp";
+import navidad02 from "@/assets/stock/navidad-02.webp";
+import navidad03 from "@/assets/stock/navidad-03.webp";
+import navidad04 from "@/assets/stock/navidad-04.webp";
+import navidad05 from "@/assets/stock/navidad-05.webp";
+import navidad06 from "@/assets/stock/navidad-06.webp";
+import navidad07 from "@/assets/stock/navidad-07.webp";
+import navidad08 from "@/assets/stock/navidad-08.webp";
+import navidad09 from "@/assets/stock/navidad-09.webp";
+import navidad10 from "@/assets/stock/navidad-10.webp";
+import navidad11 from "@/assets/stock/navidad-11.webp";
+import navidad12 from "@/assets/stock/navidad-12.webp";
+import navidad13 from "@/assets/stock/navidad-13.webp";
+import navidad14 from "@/assets/stock/navidad-14.webp";
+import navidad15 from "@/assets/stock/navidad-15.webp";
+import navidad16 from "@/assets/stock/navidad-16.webp";
+import navidad17 from "@/assets/stock/navidad-17.webp";
+import navidad18 from "@/assets/stock/navidad-18.webp";
+import navidad19 from "@/assets/stock/navidad-19.webp";
+import navidad20 from "@/assets/stock/navidad-20.webp";
+import navidad21 from "@/assets/stock/navidad-21.webp";
+import navidad22 from "@/assets/stock/navidad-22.webp";
+import navidad23 from "@/assets/stock/navidad-23.webp";
+import navidad24 from "@/assets/stock/navidad-24.webp";
+import navidad25 from "@/assets/stock/navidad-25.webp";
+import navidad26 from "@/assets/stock/navidad-26.webp";
+import navidad27 from "@/assets/stock/navidad-27.webp";
+import navidad28 from "@/assets/stock/navidad-28.webp";
+import navidad29 from "@/assets/stock/navidad-29.webp";
+import navidad30 from "@/assets/stock/navidad-30.webp";
 
 export const storeLogo = mallorcaLogo;
 export const storeHistoryPhoto = historyPhoto;
-export const storeSeasonalFallback = seasonalFallback;
+/** Fallback de temporada / Navidad Mallorca. */
+export const storeSeasonalFallback = navidad28;
 export const storeBannerImage = storeBanner;
 /** Hero de fondo para la página de sucursales */
 export const storeBranchesHero = branchInterior1;
 
-const STOCK: Record<number, string> = {
-  1: stock01,
-  2: stock02,
-  3: stock03,
-  4: stock04,
-  5: stock05,
-  6: stock06,
-  7: stock07,
-  8: stock08,
-  9: stock09,
-  10: stock10,
-  11: stock11,
-  12: stock12,
-  13: stock13,
-  34: stock34,
-  45: stock45,
+const NAVIDAD: Record<number, string> = {
+  1: navidad01,
+  2: navidad02,
+  3: navidad03,
+  4: navidad04,
+  5: navidad05,
+  6: navidad06,
+  7: navidad07,
+  8: navidad08,
+  9: navidad09,
+  10: navidad10,
+  11: navidad11,
+  12: navidad12,
+  13: navidad13,
+  14: navidad14,
+  15: navidad15,
+  16: navidad16,
+  17: navidad17,
+  18: navidad18,
+  19: navidad19,
+  20: navidad20,
+  21: navidad21,
+  22: navidad22,
+  23: navidad23,
+  24: navidad24,
+  25: navidad25,
+  26: navidad26,
+  27: navidad27,
+  28: navidad28,
+  29: navidad29,
+  30: navidad30,
 };
 
 function stockPhoto(index: number) {
-  return STOCK[index] ?? seasonalFallback;
+  return NAVIDAD[index] ?? storeSeasonalFallback;
 }
 
-/** Fotos horizontales de FotosStock: banner inicial. */
-const HERO_STOCK = [5, 34, 45] as const;
+/** Banner inicial — mesas y dulces de Navidad. */
+const HERO_STOCK = [1, 9, 28] as const;
 
 export const storeHeroSlides = HERO_STOCK.map((index) => ({
   src: stockPhoto(index),
-  alt: "Mesa de temporada Pastelería Mallorca",
+  alt: "Navidad en Pastelería Mallorca",
 }));
 
 export const storeHeroLcpSrc = storeHeroSlides[0]?.src ?? "";
 
-/** Retratos de FotosStock, sin las horizontales del banner. El carrusel no necesita las 40. */
-const GALLERY_STOCK = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13] as const;
+/** Galería / mosaico de temporada Navidad. */
+const GALLERY_STOCK = [2, 4, 11, 15, 16, 17, 18, 21, 22, 26, 29, 30] as const;
 
-const MOSAIC_KICKERS = ["Temporada", "Dulce", "De la casa", "Salado"] as const;
+const MOSAIC_KICKERS = ["Navidad", "Dulce", "De la casa", "Mesa"] as const;
 
 export const storeMosaicImages = GALLERY_STOCK.map((index, position) => ({
   src: stockPhoto(index),
-  alt: "Pan de temporada Pastelería Mallorca",
-  title: "De temporada",
+  alt: "Navidad Pastelería Mallorca",
+  title: "Navidad",
   kicker: MOSAIC_KICKERS[position % MOSAIC_KICKERS.length],
 }));
 
@@ -84,8 +114,8 @@ export const storeBranchImages: Record<string, string> = {
 };
 
 export const storeBranchGalleries: Record<string, string[]> = {
-  lomas: [branchLomas, branchInterior1, productPasteleria, stockPhoto(1), stockPhoto(2), stockPhoto(3), stockPhoto(4), stockPhoto(6)],
-  reforma: [branchReforma, branchReformaAlt, branchInterior2, stockPhoto(7), stockPhoto(8), stockPhoto(9), stockPhoto(10), stockPhoto(11)],
+  lomas: [branchLomas, branchInterior1, productPasteleria, stockPhoto(3), stockPhoto(5), stockPhoto(7), stockPhoto(12), stockPhoto(14)],
+  reforma: [branchReforma, branchReformaAlt, branchInterior2, stockPhoto(8), stockPhoto(13), stockPhoto(19), stockPhoto(23), stockPhoto(27)],
 };
 
 export const storeProductFallbacks = {

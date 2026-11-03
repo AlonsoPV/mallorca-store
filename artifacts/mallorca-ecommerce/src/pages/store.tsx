@@ -95,7 +95,7 @@ export default function Store() {
           <div className="order-1 relative min-h-[13.5rem] sm:min-h-[16rem] md:order-2 md:min-h-full">
             <img
               src={storeHeroSlides[0]?.src}
-              alt="Mesa de temporada Pastelería Mallorca"
+              alt="Navidad en Pastelería Mallorca"
               className="absolute inset-0 h-full w-full object-cover object-[center_40%]"
             />
           </div>
