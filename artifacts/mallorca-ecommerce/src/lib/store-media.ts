@@ -86,18 +86,27 @@ function stockPhoto(index: number) {
   return NAVIDAD[index] ?? storeSeasonalFallback;
 }
 
-/** Banner inicial — mesas y dulces de Navidad. */
-const HERO_STOCK = [1, 9, 28] as const;
+/**
+ * Banner inicial: solo paisajes ≥1200px de ancho (evita pixelado en viewport completo).
+ * Dimensiones reales de los assets NAVIDAD.
+ */
+const HERO_STOCK = [
+  { index: 9, width: 1200, height: 873 },
+  { index: 15, width: 1200, height: 907 },
+  { index: 26, width: 1200, height: 702 },
+] as const;
 
-export const storeHeroSlides = HERO_STOCK.map((index) => ({
-  src: stockPhoto(index),
+export const storeHeroSlides = HERO_STOCK.map((slide) => ({
+  src: stockPhoto(slide.index),
   alt: "Navidad en Pastelería Mallorca",
+  width: slide.width,
+  height: slide.height,
 }));
 
 export const storeHeroLcpSrc = storeHeroSlides[0]?.src ?? "";
 
 /** Galería / mosaico de temporada Navidad. */
-const GALLERY_STOCK = [2, 4, 11, 15, 16, 17, 18, 21, 22, 26, 29, 30] as const;
+const GALLERY_STOCK = [1, 2, 4, 11, 16, 17, 18, 21, 22, 28, 29, 30] as const;
 
 const MOSAIC_KICKERS = ["Navidad", "Dulce", "De la casa", "Mesa"] as const;
 

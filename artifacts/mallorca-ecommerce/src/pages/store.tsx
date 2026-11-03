@@ -96,7 +96,11 @@ export default function Store() {
             <img
               src={storeHeroSlides[0]?.src}
               alt="Navidad en Pastelería Mallorca"
-              className="absolute inset-0 h-full w-full object-cover object-[center_40%]"
+              width={storeHeroSlides[0]?.width}
+              height={storeHeroSlides[0]?.height}
+              sizes="(min-width: 768px) 50vw, 100vw"
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover object-center"
             />
           </div>
         </div>

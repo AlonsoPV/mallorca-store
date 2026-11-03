@@ -245,7 +245,7 @@ export default function ProductDetail() {
                   key={activeImage}
                   src={activeImage}
                   alt={product.name}
-                  className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
+                  className="h-full w-full object-contain bg-[var(--mallorca-sand)] p-3 transition-transform duration-700 hover:scale-[1.02] sm:p-4"
                   fallback={<div role="img" aria-label={`${product.name}: imagen no disponible`} className="flex h-full w-full items-center justify-center text-muted-foreground"><span className="font-serif italic text-lg">Imagen no disponible</span></div>}
                 />
 

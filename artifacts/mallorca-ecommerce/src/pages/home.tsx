@@ -238,8 +238,8 @@ export default function Home() {
               key={activeHero.src}
               src={activeHero.src}
               alt={activeHero.alt}
-              width={1920}
-              height={1080}
+              width={activeHero.width}
+              height={activeHero.height}
               sizes="100vw"
               fetchPriority={heroIndex === 0 ? "high" : "auto"}
               decoding="async"
@@ -504,17 +504,17 @@ export default function Home() {
                   href={`/producto/${seasonalHero.slug}`}
                   className="relative block overflow-hidden bg-[var(--mallorca-sand)]"
                 >
-                  <div className="h-[min(16rem,36dvh)] sm:h-[min(20rem,42dvh)] md:h-[min(26rem,56dvh)]">
+                  <div className="flex h-[min(16rem,36dvh)] items-center justify-center bg-[var(--mallorca-sand)] sm:h-[min(20rem,42dvh)] md:h-[min(26rem,56dvh)]">
                     <ImageWithFallback
                       key={seasonalHero.id}
                       src={seasonalHero.imageUrl || storeSeasonalFallback}
                       alt={seasonalHero.name}
-                      className="mallorca-image h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                      className="mallorca-image max-h-full max-w-full object-contain p-3 transition-transform duration-700 group-hover:scale-[1.03] sm:p-4 md:p-5"
                       fallback={
                         <img
                           src={storeSeasonalFallback}
                           alt={seasonalHero.name}
-                          className="mallorca-image h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                          className="mallorca-image max-h-full max-w-full object-contain p-3 transition-transform duration-700 group-hover:scale-[1.03] sm:p-4 md:p-5"
                         />
                       }
                     />
