@@ -118,7 +118,7 @@ export function mailboxSendConfig(
   };
 }
 
-/** Prefer app mailbox `system` (ecomm@…), then env Hostinger, then pedidos. */
+/** Prefer app mailbox `system` (mallorcasistema@…), then env Hostinger, then pedidos. */
 export function resolvePasswordResetMailbox(
   rows: StoredMailbox[],
   env: NodeJS.ProcessEnv = process.env,

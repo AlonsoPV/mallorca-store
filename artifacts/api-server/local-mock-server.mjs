@@ -534,7 +534,7 @@ async function previewPasswordResetEmail(user, resetUrl) {
     fileURLToPath(new URL(`${id}.json`, directory)),
     JSON.stringify(
       {
-        from: "Mallorca Ecommerce <ecomm@pasteleria-mallorca.mx>",
+        from: "Mallorca Sistema <mallorcasistema@emotionsites.com>",
         email: user.email,
         resetUrl,
         at: new Date().toISOString(),

@@ -106,7 +106,7 @@ export async function requestPasswordReset(
   const stored = await loadStoredMailboxes();
   const mailbox = resolvePasswordResetMailbox(stored, env);
   if (!mailbox) {
-    logger.warn("Password reset unavailable: ecomm@ / system mailbox not configured");
+    logger.warn("Password reset unavailable: system mailbox (mallorcasistema@) not configured");
     return { ok: false, error: UNAVAILABLE, status: 503 };
   }
 

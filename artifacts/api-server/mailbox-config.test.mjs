@@ -32,8 +32,8 @@ test("empty app rows fall back to env seeds without exposing a password", () => 
   const catalog = catalogMailboxes([], [
     {
       role: "system",
-      address: "ecomm@pasteleria-mallorca.mx",
-      displayName: "Mallorca Ecommerce",
+      address: "mallorcasistema@emotionsites.com",
+      displayName: "Mallorca Sistema",
       passwordConfigured: true,
     },
     {
@@ -47,7 +47,7 @@ test("empty app rows fall back to env seeds without exposing a password", () => 
   ]);
   assert.equal(catalog.ready, true);
   assert.equal(catalog.source, "env");
-  assert.equal(catalog.mailboxes.find((row) => row.role === "system")?.address, "ecomm@pasteleria-mallorca.mx");
+  assert.equal(catalog.mailboxes.find((row) => row.role === "system")?.address, "mallorcasistema@emotionsites.com");
   assert.equal(catalog.mailboxes.find((row) => row.role === "customer")?.passwordConfigured, true);
   assert.equal(formatMailboxFrom("pedidos@mallorca.mx", "Mallorca"), "Mallorca <pedidos@mallorca.mx>");
   assert.equal(parseFromDisplayName("Mallorca <pedidos@mallorca.mx>"), "Mallorca");

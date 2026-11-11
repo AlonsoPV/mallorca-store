@@ -42,14 +42,14 @@ Cada buzón de envío autentica con su propio usuario y contraseña. El remitent
 
 Sin los dos buzones de envío, el sistema no considera el correo configurado.
 
-La recuperación de contraseña del personal (`/recuperar-contrasena`) se envía desde **ecomm@pasteleria-mallorca.mx** (buzón Sistema en Admin → Correos, o variables `SMTP_ECOMM_*` / `ORDER_EMAIL_FROM_SYSTEM`). Exige `PUBLIC_APP_URL` para armar el enlace. Aplica también `lib/db/migrations/008_password_reset_tokens.sql` (o `pnpm --filter @workspace/db run push`).
+La recuperación de contraseña del personal (`/recuperar-contrasena`) se envía desde **mallorcasistema@emotionsites.com** (buzón Sistema en Admin → Correos, o variables `SMTP_ECOMM_*` / `ORDER_EMAIL_FROM_SYSTEM`). Exige `PUBLIC_APP_URL` para armar el enlace. Aplica también `lib/db/migrations/008_password_reset_tokens.sql` (o `pnpm --filter @workspace/db run push`).
 
 En Secrets / `.env` (desarrollo):
 
 ```
-SMTP_ECOMM_USER=ecomm@pasteleria-mallorca.mx
-SMTP_ECOMM_PASS=<contraseña Hostinger del buzón ecomm>
-ORDER_EMAIL_FROM_SYSTEM=Mallorca Ecommerce <ecomm@pasteleria-mallorca.mx>
+SMTP_ECOMM_USER=mallorcasistema@emotionsites.com
+SMTP_ECOMM_PASS=<contraseña Hostinger del buzón sistema>
+ORDER_EMAIL_FROM_SYSTEM=Mallorca Sistema <mallorcasistema@emotionsites.com>
 PUBLIC_APP_URL=https://tu-tienda
 ```
 

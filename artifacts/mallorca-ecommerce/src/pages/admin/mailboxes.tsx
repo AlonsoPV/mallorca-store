@@ -69,7 +69,7 @@ const PURPOSES: {
     role: "system",
     title: "Sistema / desarrollo",
     hint: "Correo de la tienda para recuperación de contraseña y avisos internos.",
-    example: "ecomm@pasteleria-mallorca.mx",
+    example: "mallorcasistema@emotionsites.com",
     needsPassword: true,
   },
   {
@@ -106,8 +106,8 @@ type FormState = {
 
 const emptyForm = (role: MailboxRole = "system"): FormState => ({
   role,
-  address: role === "system" ? "ecomm@pasteleria-mallorca.mx" : "",
-  displayName: role === "system" ? "Mallorca Ecommerce" : "",
+  address: role === "system" ? "mallorcasistema@emotionsites.com" : "",
+  displayName: role === "system" ? "Mallorca Sistema" : "",
   password: "",
   smtpHost: "smtp.hostinger.com",
   smtpPort: "465",
@@ -191,7 +191,7 @@ export default function AdminMailboxes() {
       <AdminPageShell>
         <AdminPageHeader
           title="Correos"
-          description="Registra los buzones de Hostinger. El de sistema (ecomm@pasteleria-mallorca.mx) envía la recuperación de contraseña; pedidos, sucursal y contacto cubren la compra."
+          description="Registra los buzones de Hostinger. El de sistema (mallorcasistema@emotionsites.com) envía la recuperación de contraseña; pedidos, sucursal y contacto cubren la compra."
           actions={
             <Button className="rounded-none" onClick={() => openAdd()}>
               <Plus className="mr-2 h-4 w-4" />
