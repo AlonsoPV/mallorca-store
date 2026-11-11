@@ -289,9 +289,6 @@ export function StoreLayout({ children }: { children: ReactNode }) {
               <Link href="/tienda" className={`transition-colors hover:text-primary ${location === "/tienda" ? "text-primary" : isHeroHeader ? "text-white" : "text-foreground"}`}>
                 COMPRA EN LÍNEA
               </Link>
-              <Link href="/tienda" className={`hidden transition-colors hover:text-primary xl:inline ${isHeroHeader ? "text-white" : "text-foreground"}`}>
-                PASTELERÍA
-              </Link>
               <Link href="/sucursales" className={`transition-colors hover:text-primary ${location === "/sucursales" ? "text-primary" : isHeroHeader ? "text-white" : "text-foreground"}`}>
                 SUCURSALES
               </Link>
