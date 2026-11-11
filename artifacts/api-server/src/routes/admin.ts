@@ -1394,8 +1394,9 @@ router.get("/admin/mailboxes", async (req, res): Promise<void> => {
   if (!user || user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
   try {
     res.json(await getMailboxCatalog());
-  } catch {
-    res.status(503).json({ error: "Aplica la migración de buzones (007_mailboxes.sql)." });
+  } catch (error) {
+    logger.error({ error }, "GET /admin/mailboxes failed");
+    res.status(503).json({ error: "No se pudieron cargar los buzones. Revisa la base de datos." });
   }
 });
 
@@ -1408,8 +1409,15 @@ router.put("/admin/mailboxes/:role", async (req, res): Promise<void> => {
   if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
   try {
     res.json(await upsertMailbox(role, parsed.data));
-  } catch {
-    res.status(503).json({ error: "Aplica la migración de buzones (007_mailboxes.sql)." });
+  } catch (error) {
+    if (error instanceof MissingSecretsKeyError) {
+      res.status(503).json({
+        error: "Configura PAYMENT_SECRETS_KEY para guardar contraseñas SMTP cifradas.",
+      });
+      return;
+    }
+    logger.error({ error, role }, "PUT /admin/mailboxes failed");
+    res.status(503).json({ error: "No se pudo guardar el buzón. Revisa la base de datos y PAYMENT_SECRETS_KEY." });
   }
 });
 

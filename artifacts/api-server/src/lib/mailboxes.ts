@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, mailboxesTable } from "@workspace/db";
+import { db, mailboxesTable, pool } from "@workspace/db";
 import {
   catalogMailboxes,
   DEV_SYSTEM_DISPLAY_NAME,
@@ -19,6 +19,30 @@ import {
 } from "../../order-email-transport.mjs";
 import { decryptSecret, encryptSecret } from "./payments/secrets";
 import { logger } from "./logger";
+import { pgCode } from "./pg-code";
+
+const MAILBOXES_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS mailboxes (
+  role text PRIMARY KEY,
+  address text NOT NULL DEFAULT '',
+  display_name text,
+  smtp_user text,
+  password_encrypted text,
+  smtp_host text NOT NULL DEFAULT 'smtp.hostinger.com',
+  smtp_port integer NOT NULL DEFAULT 465,
+  smtp_secure boolean NOT NULL DEFAULT true,
+  enabled boolean NOT NULL DEFAULT true,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+`;
+
+function isMissingMailboxesTable(error: unknown) {
+  return pgCode(error) === "42P01" || (error instanceof Error && /mailboxes/i.test(error.message));
+}
+
+async function ensureMailboxesTable() {
+  await pool.query(MAILBOXES_TABLE_SQL);
+}
 
 export type StoredMailbox = typeof mailboxesTable.$inferSelect;
 
@@ -76,8 +100,17 @@ export async function loadStoredMailboxes(): Promise<StoredMailbox[]> {
   try {
     return await db.select().from(mailboxesTable);
   } catch (error) {
-    logger.warn({ error }, "Mailboxes table is unavailable");
-    return [];
+    if (!isMissingMailboxesTable(error)) {
+      logger.warn({ error }, "Mailboxes table is unavailable");
+      return [];
+    }
+    try {
+      await ensureMailboxesTable();
+      return await db.select().from(mailboxesTable);
+    } catch (ensureError) {
+      logger.warn({ error: ensureError }, "Could not create mailboxes table");
+      return [];
+    }
   }
 }
 
@@ -144,10 +177,7 @@ export function resolvePasswordResetMailbox(
   );
 }
 
-export async function upsertMailbox(
-  role: MailboxRole,
-  input: MailboxUpdateInput,
-): Promise<MailboxCatalog> {
+async function writeMailbox(role: MailboxRole, input: MailboxUpdateInput) {
   const [existing] = await db
     .select()
     .from(mailboxesTable)
@@ -182,5 +212,18 @@ export async function upsertMailbox(
         updatedAt: new Date(),
       },
     });
+}
+
+export async function upsertMailbox(
+  role: MailboxRole,
+  input: MailboxUpdateInput,
+): Promise<MailboxCatalog> {
+  try {
+    await writeMailbox(role, input);
+  } catch (error) {
+    if (!isMissingMailboxesTable(error)) throw error;
+    await ensureMailboxesTable();
+    await writeMailbox(role, input);
+  }
   return getMailboxCatalog();
 }
