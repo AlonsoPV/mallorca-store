@@ -1,6 +1,7 @@
 import {
   emailFromAddress,
   emailReplyTo,
+  resolveMailbox,
   sendReceiptEmail,
   smtpConfigured,
 } from "../../order-email-transport.mjs";
@@ -30,15 +31,19 @@ export async function emailConfigured() {
   const origin = process.env.PUBLIC_APP_URL;
   if (!origin || !/^https?:\/\//.test(origin)) return false;
   try {
-    if ((await getMailboxCatalog()).ready) return true;
+    const catalog = await getMailboxCatalog();
+    // Full suite (pedidos+sucursal+contacto) or at least system/customer for receipts.
+    if (catalog.ready || catalog.customerReady) return true;
   } catch {
     // Mailboxes table may be missing before the migration.
   }
   return Boolean(
-    (smtpConfigured() || process.env.RESEND_API_KEY) &&
-      emailFromAddress("customer") &&
-      emailFromAddress("branch") &&
-      emailReplyTo("customer"),
+    resolveMailbox("system") ||
+      resolveMailbox("customer") ||
+      ((smtpConfigured() || process.env.RESEND_API_KEY) &&
+        emailFromAddress("customer") &&
+        emailFromAddress("branch") &&
+        emailReplyTo("customer")),
   );
 }
 async function branchRecipient(connection: Tx | typeof db, branchId: number) {
@@ -113,10 +118,26 @@ export async function orderEmailStatus(orderId: string) {
     })
     .from(orderEmailJobsTable)
     .where(eq(orderEmailJobsTable.orderId, orderId));
-  const configured = await emailConfigured();
+  let customerReady = false;
+  let branchReady = false;
+  try {
+    const catalog = await getMailboxCatalog();
+    customerReady = Boolean(catalog.ready || catalog.customerReady);
+    branchReady = Boolean(catalog.ready || catalog.branchReady);
+  } catch {
+    customerReady = await emailConfigured();
+    branchReady = customerReady && smtpConfigured();
+  }
+  if (!customerReady) {
+    customerReady = Boolean(resolveMailbox("system") || resolveMailbox("customer"));
+  }
+  if (!branchReady) {
+    branchReady = Boolean(resolveMailbox("branch"));
+  }
   const status = (audience: string) => {
     const job = jobs.find((j) => j.audience === audience);
     if (!job) return { status: "not_scheduled", sentAt: null };
+    const audienceReady = audience === "branch" ? branchReady : customerReady;
     return {
       status:
         job.status === "sent"
@@ -125,7 +146,7 @@ export async function orderEmailStatus(orderId: string) {
             ? "failed"
             : !job.recipient
               ? "missing_recipient"
-              : !configured
+              : !audienceReady
                 ? "not_configured"
                 : "pending",
       sentAt: job.sentAt,

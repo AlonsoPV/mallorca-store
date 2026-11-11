@@ -127,13 +127,10 @@ function roleForAudience(audience: string): MailboxRole {
   return "customer";
 }
 
-export function mailboxSendConfig(
-  audience: string,
-  rows: StoredMailbox[],
+function sendConfigFromRow(
+  row: StoredMailbox | undefined,
+  contact: StoredMailbox | undefined,
 ): MailboxSendConfig | null {
-  const role = roleForAudience(audience);
-  const row = rows.find((item) => item.role === role);
-  const contact = rows.find((item) => item.role === "contact");
   const pass = decryptSecret(row?.passwordEncrypted);
   const address = extractEmailAddress(row?.address);
   if (!row || row.enabled === false || !address || !pass) return null;
@@ -149,6 +146,27 @@ export function mailboxSendConfig(
       ? formatMailboxFrom(contact?.address, contact?.displayName)
       : undefined,
   };
+}
+
+export function mailboxSendConfig(
+  audience: string,
+  rows: StoredMailbox[],
+): MailboxSendConfig | null {
+  const role = roleForAudience(audience);
+  const contact = rows.find((item) => item.role === "contact");
+  const primary = sendConfigFromRow(
+    rows.find((item) => item.role === role),
+    contact,
+  );
+  if (primary) return primary;
+  // Comprobantes al cliente: si aún no hay buzón "pedidos", usar sistema.
+  if (role === "customer") {
+    return sendConfigFromRow(
+      rows.find((item) => item.role === "system"),
+      contact,
+    );
+  }
+  return null;
 }
 
 /** Prefer app mailbox `system` (mallorcasistema@…), then env Hostinger, then pedidos. */

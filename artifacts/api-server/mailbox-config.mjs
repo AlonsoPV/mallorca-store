@@ -66,6 +66,17 @@ export function mailboxesReady(mailboxes = []) {
   return extractEmailAddress(customer.address) !== extractEmailAddress(branch.address);
 }
 
+/** Customer receipt can send with pedidos SMTP, or fall back to sistema. */
+export function customerReceiptReady(mailboxes = []) {
+  const byRole = Object.fromEntries(mailboxes.map((row) => [row.role, row]));
+  return Boolean(byRole.customer?.configured || byRole.system?.configured);
+}
+
+export function branchNoticeReady(mailboxes = []) {
+  const byRole = Object.fromEntries(mailboxes.map((row) => [row.role, row]));
+  return Boolean(byRole.branch?.configured);
+}
+
 export function catalogMailboxes(storedRows = [], envSeeds = []) {
   const stored = listPublicMailboxes(storedRows);
   const fromEnv = listPublicMailboxes(envSeeds);
@@ -76,9 +87,12 @@ export function catalogMailboxes(storedRows = [], envSeeds = []) {
   });
   const appReady = mailboxesReady(stored.mailboxes);
   const ready = mailboxesReady(mailboxes);
+  const customerReady = customerReceiptReady(mailboxes);
   return {
     ready,
-    source: appReady ? "app" : ready ? "env" : "none",
+    customerReady,
+    branchReady: branchNoticeReady(mailboxes),
+    source: appReady ? "app" : ready ? "env" : customerReady ? "partial" : "none",
     mailboxes,
   };
 }

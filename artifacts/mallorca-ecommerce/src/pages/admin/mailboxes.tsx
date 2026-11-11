@@ -54,7 +54,9 @@ type PublicMailbox = {
 
 type MailboxCatalog = {
   ready: boolean;
-  source: "app" | "env" | "none";
+  customerReady?: boolean;
+  branchReady?: boolean;
+  source: "app" | "env" | "partial" | "none";
   mailboxes: PublicMailbox[];
 };
 
@@ -191,7 +193,7 @@ export default function AdminMailboxes() {
       <AdminPageShell>
         <AdminPageHeader
           title="Correos"
-          description="Registra los buzones de Hostinger. El de sistema (mallorcasistema@emotionsites.com) envía la recuperación de contraseña; pedidos, sucursal y contacto cubren la compra."
+          description="Registra los buzones de Hostinger. Con sistema (mallorcasistema@emotionsites.com) ya salen comprobantes y recuperación de contraseña. Pedidos, sucursal y contacto completan el flujo de compra."
           actions={
             <Button className="rounded-none" onClick={() => openAdd()}>
               <Plus className="mr-2 h-4 w-4" />
@@ -268,6 +270,16 @@ export default function AdminMailboxes() {
             {catalog.data.source === "app"
               ? "Los tres correos de Hostinger ya están registrados en la administración."
               : "El envío usa las variables del servidor. Puedes sustituirlas añadiendo los buzones aquí."}
+          </p>
+        ) : null}
+
+        {!catalog.isLoading &&
+        !catalog.isError &&
+        !catalog.data?.ready &&
+        catalog.data?.customerReady ? (
+          <p className="mt-4 text-sm text-muted-foreground">
+            Los comprobantes al cliente ya pueden salir con el buzón de sistema (o pedidos).
+            Añade sucursal y contacto cuando quieras completar avisos internos.
           </p>
         ) : null}
 

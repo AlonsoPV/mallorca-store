@@ -20,7 +20,9 @@ export type PublicMailbox = {
 
 export type MailboxCatalog = {
   ready: boolean;
-  source: "app" | "env" | "none";
+  customerReady: boolean;
+  branchReady: boolean;
+  source: "app" | "env" | "partial" | "none";
   mailboxes: PublicMailbox[];
 };
 
@@ -48,6 +50,8 @@ export function listPublicMailboxes(rows?: unknown[]): {
   mailboxes: PublicMailbox[];
 };
 export function mailboxesReady(mailboxes?: PublicMailbox[]): boolean;
+export function customerReceiptReady(mailboxes?: PublicMailbox[]): boolean;
+export function branchNoticeReady(mailboxes?: PublicMailbox[]): boolean;
 export function catalogMailboxes(
   storedRows?: unknown[],
   envSeeds?: unknown[],

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   catalogMailboxes,
+  customerReceiptReady,
   formatMailboxFrom,
   mailboxesReady,
   parseFromDisplayName,
@@ -16,6 +17,7 @@ test("app mailboxes are ready only with distinct pedidos, sucursal and contacto"
     { role: "contact", address: "contacto@mallorca.mx" },
   ]);
   assert.equal(catalog.ready, true);
+  assert.equal(catalog.customerReady, true);
   assert.equal(catalog.source, "app");
   assert.equal(catalog.mailboxes.find((row) => row.role === "customer")?.configured, true);
   assert.equal(
@@ -25,6 +27,29 @@ test("app mailboxes are ready only with distinct pedidos, sucursal and contacto"
       publicMailbox({ role: "contact", address: "contacto@mallorca.mx" }),
     ]),
     false,
+  );
+});
+
+test("system mailbox alone is enough for customer receipts", () => {
+  const catalog = catalogMailboxes([
+    {
+      role: "system",
+      address: "mallorcasistema@emotionsites.com",
+      passwordEncrypted: "v1:x",
+    },
+  ]);
+  assert.equal(catalog.ready, false);
+  assert.equal(catalog.customerReady, true);
+  assert.equal(catalog.source, "partial");
+  assert.equal(
+    customerReceiptReady([
+      publicMailbox({
+        role: "system",
+        address: "mallorcasistema@emotionsites.com",
+        passwordEncrypted: "v1:x",
+      }),
+    ]),
+    true,
   );
 });
 
