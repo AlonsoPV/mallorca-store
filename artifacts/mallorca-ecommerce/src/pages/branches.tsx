@@ -7,6 +7,8 @@ import { formatBranchPostalLines } from "@/lib/availability-copy";
 import { branchImageFor, branchLocalImage, storeBranchesHero } from "@/lib/store-media";
 import { cn } from "@/lib/utils";
 import { branchLinks } from "@/lib/branch-links";
+import { PageSeo } from "@/components/seo/page-seo";
+import { SEO_PAGES } from "@/lib/seo";
 
 const WEEKDAY_INDEX: Record<string, number> = {
   sunday: 0,
@@ -45,6 +47,12 @@ export default function Branches() {
 
   return (
     <StoreLayout>
+      <PageSeo
+        title={SEO_PAGES.branches.title}
+        description={SEO_PAGES.branches.description}
+        path={SEO_PAGES.branches.path}
+        brand={false}
+      />
       <section className="relative isolate flex h-[calc(100dvh-var(--store-header-height,4.5rem))] max-h-[calc(100dvh-var(--store-header-height,4.5rem))] flex-col overflow-hidden bg-[var(--mallorca-cacao)] px-5 py-6 text-[var(--mallorca-ivory)] sm:py-7 md:px-8 md:py-8">
         <img
           src={storeBranchesHero}

@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { toastStorefrontNotice } from "@/components/storefront-notice";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { PageSeo } from "@/components/seo/page-seo";
 
 export default function AccountPage() {
   const { data: user, isLoading: isLoadingUser } = useGetMe();
@@ -69,6 +70,7 @@ export default function AccountPage() {
 
   return (
     <StoreLayout>
+      <PageSeo title="Mi cuenta" path="/cuenta" noindex />
       <div className="container mx-auto px-4 py-5 md:py-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
           <div>

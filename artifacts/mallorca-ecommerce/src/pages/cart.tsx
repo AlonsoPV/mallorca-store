@@ -12,6 +12,7 @@ import { track } from "@/lib/analytics";
 import { ImageWithFallback } from "@/components/image-with-fallback";
 import { isCartNotFoundError, storefrontNoticeFromError, type StorefrontNotice } from "@/lib/cart-recovery";
 import { StorefrontNoticeBanner } from "@/components/storefront-notice";
+import { PageSeo } from "@/components/seo/page-seo";
 
 export default function CartPage() {
   const { cartId, clearCartSession } = useCart();
@@ -98,6 +99,7 @@ export default function CartPage() {
 
   return (
     <StoreLayout>
+      <PageSeo title="Carrito" path="/carrito" noindex />
       <div className="container mx-auto px-4 py-5 md:py-8 pb-28 lg:pb-12">
         <span className="mallorca-kicker text-primary">Casi listo</span>
         <h1 className="mallorca-display mb-4 mt-0 text-3xl md:text-4xl">Tu bolsa</h1>

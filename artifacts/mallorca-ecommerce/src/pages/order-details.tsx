@@ -34,6 +34,7 @@ import {
   statusLabels,
   canRetryOnlinePayment,
 } from "../../../../lib/purchase-result.mjs";
+import { PageSeo } from "@/components/seo/page-seo";
 
 const PAYMENT_RETURN_COPY: Record<string, string> = {
   ok: "Estamos confirmando el cobro con PayPal. No cierres esta ventana; el estado se actualiza solo.",
@@ -297,6 +298,7 @@ export default function OrderDetailsPage() {
         : Clock;
   return (
     <StoreLayout>
+      <PageSeo title="Detalle del pedido" path="/pedido" noindex />
       <div className="mx-auto max-w-5xl px-4 py-10 md:py-16">
         <header className="mb-8 border border-border bg-secondary/20 p-6 text-center md:p-10">
           <Icon className="mx-auto mb-4 h-12 w-12 text-primary" />

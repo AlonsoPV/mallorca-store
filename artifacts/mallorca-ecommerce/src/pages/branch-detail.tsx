@@ -11,6 +11,8 @@ import { formatBranchPostalLines } from "@/lib/availability-copy";
 import { cn } from "@/lib/utils";
 import { branchGalleryFallback, branchImageFor, branchLocalImage } from "@/lib/store-media";
 import { branchLinks } from "@/lib/branch-links";
+import { PageSeo } from "@/components/seo/page-seo";
+import { SITE_NAME_SHORT } from "@/lib/seo";
 
 const WEEKDAY_INDEX: Record<string, number> = {
   sunday: 0,
@@ -161,18 +163,27 @@ export default function BranchDetail() {
         }
       : null,
   ].filter((item): item is ContactRow => item != null);
+  const seoTitle =
+    branch.seoTitle?.trim() ||
+    `${branch.name}${branch.city ? ` · ${branch.city}` : ""} | ${SITE_NAME_SHORT}`;
+  const seoDescription =
+    branch.metaDescription?.trim() ||
+    branch.description ||
+    (branch as { shortDescription?: string | null }).shortDescription ||
+    `Visita ${branch.name}. Horarios, mapa y pedidos online en Pastelería Mallorca.`;
+  const seoImage = branch.ogImageUrl || heroImage;
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "Restaurant",
+    "@type": "Bakery",
     name: branch.name,
-    description: (branch as any).metaDescription || branch.description || (branch as any).shortDescription,
-    image: (branch as any).ogImageUrl || heroImage || undefined,
+    description: seoDescription,
+    image: seoImage || undefined,
     telephone: branch.phone,
     email: branch.email,
     url: typeof window !== "undefined" ? window.location.href : undefined,
     address: {
       "@type": "PostalAddress",
-      streetAddress: (branch as any).street || branch.address,
+      streetAddress: (branch as { street?: string | null }).street || branch.address,
       addressLocality: branch.city,
       addressRegion: branch.state,
       postalCode: branch.postalCode,
@@ -186,7 +197,14 @@ export default function BranchDetail() {
 
   return (
     <StoreLayout>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PageSeo
+        title={seoTitle}
+        description={seoDescription}
+        path={`/sucursales/${branch.slug}`}
+        image={seoImage}
+        brand={false}
+        jsonLd={jsonLd}
+      />
       {/* Branch Hero */}
       <div className="relative h-[40dvh] min-h-[300px] w-full bg-foreground flex items-end">
         <ImageWithFallback

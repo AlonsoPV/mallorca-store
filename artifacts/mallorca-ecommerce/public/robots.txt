@@ -1,2 +1,16 @@
 User-agent: *
 Allow: /
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /carrito
+Disallow: /checkout
+Disallow: /cuenta
+Disallow: /pedido/
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /recuperar-contrasena
+Disallow: /recuperar-contrasena/
+
+Sitemap: https://pasteleria-mallorca.mx/sitemap.xml
+Sitemap: https://pasteleria-mallorca.mx/api/sitemap.xml

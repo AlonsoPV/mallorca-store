@@ -20,6 +20,8 @@ import { formatMxn, formatLeadTime, productAvailabilityCopy } from "@/lib/availa
 import { track } from "@/lib/analytics";
 import { isStaleCartMutationError } from "@/lib/cart-recovery";
 import { toastStorefrontNotice } from "@/components/storefront-notice";
+import { PageSeo } from "@/components/seo/page-seo";
+import { SITE_NAME_SHORT, absoluteUrl } from "@/lib/seo";
 
 const PRODUCT_PRICE_REFRESH_INTERVAL_MS = 30_000;
 
@@ -107,6 +109,7 @@ export default function ProductDetail() {
   if (isError || !product) {
     return (
       <StoreLayout>
+        <PageSeo title="Producto no encontrado" path="/tienda" noindex brand />
         <div className="container mx-auto px-4 py-32 text-center">
           <h2 className="font-serif text-3xl mb-4">Producto no encontrado</h2>
           <p className="text-muted-foreground mb-8">El producto que buscas no existe o ha sido retirado.</p>
@@ -153,6 +156,31 @@ export default function ProductDetail() {
     (!branchId || (currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) >= quantity)) &&
     (!selectedTime || scheduleAvailable),
   );
+  const productDescription = (
+    product.shortDescription ||
+    product.description ||
+    `${product.name} de Pastelería Mallorca. Pedido online con retiro o entrega en CDMX.`
+  ).replace(/\s+/g, " ").trim().slice(0, 160);
+  const productImage = product.imageUrl || product.gallery?.[0] || null;
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: productDescription,
+    image: productImage ? absoluteUrl(productImage) : undefined,
+    sku: product.sku,
+    brand: { "@type": "Brand", name: SITE_NAME_SHORT },
+    offers: {
+      "@type": "Offer",
+      priceCurrency: "MXN",
+      price: String(currentPrice),
+      availability:
+        !branchId || (currentBranchAvailability?.available && (currentBranchAvailability.inventory ?? 0) > 0)
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+      url: typeof window !== "undefined" ? window.location.href : undefined,
+    },
+  };
 
   const handleAddToCart = async () => {
     try {
@@ -231,6 +259,15 @@ export default function ProductDetail() {
 
   return (
     <StoreLayout>
+      <PageSeo
+        title={`${product.name} | ${SITE_NAME_SHORT}`}
+        description={productDescription}
+        path={`/producto/${product.slug}`}
+        image={productImage}
+        brand={false}
+        type="product"
+        jsonLd={productJsonLd}
+      />
       <section className="flex min-h-[calc(100dvh-var(--store-header-height,4.5rem))] flex-col md:h-[calc(100dvh-var(--store-header-height,4.5rem))] md:max-h-[calc(100dvh-var(--store-header-height,4.5rem))] md:overflow-hidden">
         <div className="container mx-auto flex min-h-0 flex-1 flex-col px-4 py-4 pb-24 md:px-6 md:py-5 md:pb-5">
           <Link href="/tienda" className="editorial-link mb-3 shrink-0 text-sm font-medium text-muted-foreground hover:text-primary md:mb-4">

@@ -12,6 +12,7 @@ import {
 } from "@/lib/sign-in-security";
 import { LOCAL_DEV_USER } from "@/lib/local-dev-user";
 import { storeLogo } from "@/lib/store-media";
+import { PageSeo } from "@/components/seo/page-seo";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const clerkConfigured = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
@@ -205,6 +206,7 @@ export default function SignInPage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-background px-4 py-10">
+      <PageSeo title="Iniciar sesión" path="/sign-in" noindex />
       <div className="w-full max-w-[440px] text-center">
         <Link href="/" className="inline-flex justify-center" aria-label="Pastelería Mallorca">
           <img

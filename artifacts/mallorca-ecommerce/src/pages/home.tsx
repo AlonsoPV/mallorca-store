@@ -24,6 +24,8 @@ import {
   storeMosaicImages,
   storeSeasonalFallback,
 } from "@/lib/store-media";
+import { PageSeo } from "@/components/seo/page-seo";
+import { SEO_PAGES, SITE_NAME, absoluteUrl, siteOrigin } from "@/lib/seo";
 
 const HERO_SLIDES = storeHeroSlides;
 const fallbackMenuHref = `${import.meta.env.BASE_URL}menu.pdf`;
@@ -222,8 +224,37 @@ export default function Home() {
 
   const activeHero = HERO_SLIDES[heroIndex] ?? HERO_SLIDES[0];
 
+  const homeJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: SITE_NAME,
+        url: siteOrigin(),
+        logo: absoluteUrl("/logo.svg"),
+      },
+      {
+        "@type": "WebSite",
+        name: SITE_NAME,
+        url: siteOrigin(),
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${siteOrigin()}/tienda?search={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
+
   return (
     <StoreLayout>
+      <PageSeo
+        title={SEO_PAGES.home.title}
+        description={SEO_PAGES.home.description}
+        path={SEO_PAGES.home.path}
+        brand={false}
+        jsonLd={homeJsonLd}
+      />
       <section
         className="relative isolate flex h-[100dvh] max-h-[100dvh] min-h-[100dvh] flex-col overflow-hidden bg-[var(--mallorca-cacao)] text-white"
         onMouseMove={handleHeroMove}

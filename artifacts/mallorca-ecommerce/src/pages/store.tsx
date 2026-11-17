@@ -8,6 +8,8 @@ import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 import { storeHeroSlides } from "@/lib/store-media";
+import { PageSeo } from "@/components/seo/page-seo";
+import { SEO_PAGES } from "@/lib/seo";
 
 export default function Store() {
   const [, setLocation] = useLocation();
@@ -66,8 +68,23 @@ export default function Store() {
     setIsMobileFiltersOpen(false);
   };
 
+  const categoryName = categories?.find((item) => item.slug === categorySlug)?.name;
+  const storeTitle = categoryName
+    ? `${categoryName} | Pastelería Mallorca México`
+    : SEO_PAGES.store.title;
+  const storeDescription = categoryName
+    ? `Compra ${categoryName.toLowerCase()} de Pastelería Mallorca online. Retiro en sucursal o entrega en CDMX.`
+    : SEO_PAGES.store.description;
+
   return (
     <StoreLayout>
+      <PageSeo
+        title={storeTitle}
+        description={storeDescription}
+        path="/tienda"
+        brand={false}
+        noindex={Boolean(debouncedSearch)}
+      />
       <section className="bg-[var(--mallorca-burgundy)] text-primary-foreground">
         <div className="grid md:min-h-[26rem] md:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.95fr)]">
           <div className="order-2 flex flex-col justify-between gap-8 px-5 py-8 sm:px-8 sm:py-10 md:order-1 md:px-10 md:py-12 lg:px-14">

@@ -1,10 +1,12 @@
 import { Link } from "wouter";
 import { StoreLayout } from "@/components/layout/store-layout";
 import { Button } from "@/components/ui/button";
+import { PageSeo } from "@/components/seo/page-seo";
 
 export default function NotFound() {
   return (
     <StoreLayout>
+      <PageSeo title="Página no encontrada" path="/404" noindex />
       <div className="container mx-auto flex min-h-[70dvh] flex-col items-center justify-center px-4 py-16 text-center">
         <span className="mallorca-kicker text-primary">Mallorca</span>
         <h1 className="mallorca-display mt-3 max-w-xl text-[clamp(2.25rem,6vw,4rem)] leading-[0.92]">

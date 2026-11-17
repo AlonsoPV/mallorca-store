@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { PaymentProviderLogo, paymentProviderTitle } from "@/components/payment-provider-logo";
+import { PageSeo } from "@/components/seo/page-seo";
 import { MapPin, ArrowLeft, Loader2, Clock, AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -525,6 +526,7 @@ export default function CheckoutPage() {
 
   return (
     <StoreLayout>
+      <PageSeo title="Checkout" path="/checkout" noindex />
       <div className="container mx-auto px-4 py-5 md:py-8 pb-32 lg:pb-12">
         <Link href="/carrito" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />

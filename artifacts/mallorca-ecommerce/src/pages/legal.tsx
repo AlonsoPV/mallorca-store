@@ -5,6 +5,8 @@ import { StoreLayout } from "@/components/layout/store-layout";
 import { parseLegalDoc } from "@/lib/legal-doc";
 import termsRaw from "../../../../docs/TYC.md?raw";
 import privacyRaw from "../../../../docs/aviso.md?raw";
+import { PageSeo } from "@/components/seo/page-seo";
+
 
 const LINK_PATTERN = /https?:\/\/[^\s)]+?(?=[.,;:]?(?:\s|$))|[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 
@@ -36,21 +38,27 @@ function linkify(text: string): ReactNode[] {
 type LegalPageProps = {
   raw: string;
   kicker: string;
+  path: string;
   other: { href: string; label: string };
 };
 
-function LegalPage({ raw, kicker, other }: LegalPageProps) {
+function LegalPage({ raw, kicker, path, other }: LegalPageProps) {
   const doc = useMemo(() => parseLegalDoc(raw), [raw]);
   const sections = doc.blocks.filter((block) => block.type === "section");
   const showIndex = sections.length >= 3;
 
   useEffect(() => {
-    document.title = `${doc.title} · Pastelería Mallorca`;
     window.scrollTo(0, 0);
   }, [doc.title]);
 
   return (
     <StoreLayout>
+      <PageSeo
+        title={`${doc.title} · Pastelería Mallorca`}
+        description={`${doc.title} de Pastelería Mallorca México.`}
+        path={path}
+        brand={false}
+      />
       <section className="border-b border-[var(--mallorca-cacao)]/10 bg-[var(--mallorca-cream)] px-5 py-14 sm:py-16 md:px-8 md:py-20">
         <div className={showIndex ? "container mx-auto max-w-5xl" : "container mx-auto max-w-3xl"}>
           <span className="mallorca-kicker text-[var(--mallorca-red)]">{kicker}</span>
@@ -150,6 +158,7 @@ export function TermsPage() {
     <LegalPage
       raw={termsRaw}
       kicker="Legal"
+      path="/terminos-y-condiciones"
       other={{ href: "/aviso-de-privacidad", label: "Aviso de privacidad" }}
     />
   );
@@ -160,6 +169,7 @@ export function PrivacyPage() {
     <LegalPage
       raw={privacyRaw}
       kicker="Legal"
+      path="/aviso-de-privacidad"
       other={{ href: "/terminos-y-condiciones", label: "Términos y condiciones" }}
     />
   );

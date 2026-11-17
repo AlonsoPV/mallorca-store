@@ -8,15 +8,13 @@ import {
   storePanettoneVideo,
 } from "@/lib/store-media";
 import { cn } from "@/lib/utils";
+import { PageSeo } from "@/components/seo/page-seo";
+import { SEO_PAGES } from "@/lib/seo";
 
 export default function PanettonePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(true);
-
-  useEffect(() => {
-    document.title = "Panettone · Ton Cortés · Pastelería Mallorca";
-  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -34,6 +32,13 @@ export default function PanettonePage() {
 
   return (
     <StoreLayout>
+      <PageSeo
+        title={SEO_PAGES.panettone.title}
+        description={SEO_PAGES.panettone.description}
+        path={SEO_PAGES.panettone.path}
+        image={SEO_PAGES.panettone.image}
+        brand={false}
+      />
       {/* 1. Hero */}
       <section className="relative isolate flex min-h-[min(100dvh,52rem)] flex-col justify-end overflow-hidden bg-[var(--mallorca-cacao)] text-white">
         <img

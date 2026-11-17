@@ -27,6 +27,87 @@ import { listStoreMenus, readStoreMenuFile } from "../lib/store-menus";
 
 const router: IRouter = Router();
 
+function sitemapOrigin() {
+  const raw = String(process.env.PUBLIC_APP_URL || process.env.STOREFRONT_PUBLIC_URL || "")
+    .trim()
+    .replace(/\/$/, "");
+  if (raw && /^https?:\/\//i.test(raw)) return raw;
+  return "https://pasteleria-mallorca.mx";
+}
+
+function xmlEscape(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+router.get("/sitemap.xml", async (_req, res): Promise<void> => {
+  try {
+    const origin = sitemapOrigin();
+    const [branches, products] = await Promise.all([
+      db
+        .select({ slug: branchesTable.slug })
+        .from(branchesTable)
+        .where(eq(branchesTable.active, true))
+        .orderBy(asc(branchesTable.id)),
+      db
+        .select({ slug: productsTable.slug })
+        .from(productsTable)
+        .where(eq(productsTable.status, "active"))
+        .orderBy(asc(productsTable.id)),
+    ]);
+
+    const staticPaths = [
+      { path: "/", priority: "1.0", changefreq: "weekly" },
+      { path: "/tienda", priority: "0.9", changefreq: "daily" },
+      { path: "/sucursales", priority: "0.8", changefreq: "weekly" },
+      { path: "/panettone", priority: "0.9", changefreq: "weekly" },
+      { path: "/terminos-y-condiciones", priority: "0.2", changefreq: "yearly" },
+      { path: "/aviso-de-privacidad", priority: "0.2", changefreq: "yearly" },
+    ];
+
+    const urls = [
+      ...staticPaths.map((item) => ({
+        loc: `${origin}${item.path}`,
+        priority: item.priority,
+        changefreq: item.changefreq,
+      })),
+      ...branches.map((branch) => ({
+        loc: `${origin}/sucursales/${encodeURIComponent(branch.slug)}`,
+        priority: "0.8",
+        changefreq: "weekly",
+      })),
+      ...products.map((product) => ({
+        loc: `${origin}/producto/${encodeURIComponent(product.slug)}`,
+        priority: "0.7",
+        changefreq: "daily",
+      })),
+    ];
+
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map(
+    (url) => `  <url>
+    <loc>${xmlEscape(url.loc)}</loc>
+    <changefreq>${url.changefreq}</changefreq>
+    <priority>${url.priority}</priority>
+  </url>`,
+  )
+  .join("\n")}
+</urlset>
+`;
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.status(200).send(body);
+  } catch {
+    res.status(503).type("text/plain").send("Sitemap unavailable");
+  }
+});
+
 router.get("/catalog/events", (req, res): void => {
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream");

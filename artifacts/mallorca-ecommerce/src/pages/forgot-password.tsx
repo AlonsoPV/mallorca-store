@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { storeLogo } from "@/lib/store-media";
+import { PageSeo } from "@/components/seo/page-seo";
 
 async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
@@ -30,6 +31,7 @@ async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-background px-4 py-10">
+      <PageSeo title="Recuperar contraseña" path="/recuperar-contrasena" noindex />
       <div className="w-full max-w-[440px] text-center">
         <Link href="/" className="inline-flex justify-center" aria-label="Pastelería Mallorca">
           <img
