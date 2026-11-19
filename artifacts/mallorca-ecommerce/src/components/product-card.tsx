@@ -113,7 +113,7 @@ export function ProductCard({ product, className, showBranchAvailability = false
           <ImageWithFallback
             src={product.imageUrl}
             alt={product.name}
-            className="mallorca-image h-full w-full object-contain p-2 transition-transform duration-700 ease-out group-hover:scale-[1.025] sm:p-3"
+            className="mallorca-image h-full w-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.025]"
             loading="lazy"
             fallback={<div role="img" aria-label={`${product.name}: imagen no disponible`} className="flex h-full w-full items-center justify-center bg-secondary/50 text-muted-foreground"><span className="font-serif italic text-sm">Imagen no disponible</span></div>}
           />
